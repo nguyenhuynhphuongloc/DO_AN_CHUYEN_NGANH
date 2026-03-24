@@ -7,7 +7,26 @@ export const Users: CollectionConfig = {
   },
   auth: true,
   fields: [
-    // Email added by default
-    // Add more fields as needed
+    {
+      name: 'name',
+      type: 'text',
+      label: 'Họ và tên',
+    },
+    {
+      name: 'currency',
+      type: 'select',
+      label: 'Đơn vị tiền tệ',
+      options: [
+        { label: 'VND (₫)', value: 'VND' },
+        { label: 'USD ($)', value: 'USD' },
+      ],
+      defaultValue: 'VND',
+    },
+    {
+      name: 'avatar',
+      type: 'upload',
+      relationTo: 'media',
+      label: 'Ảnh đại diện',
+    },
   ],
 }
