@@ -1,0 +1,22 @@
+.codex/
+openspec
+
+# Node and Next.js
+node_modules/
+.next/
+dist/
+coverage/
+
+# Python
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+
+
+# Prisma and uploads
+*.db
+*.sqlite
+microservices/receipt-service/uploads/*
+!microservices/receipt-service/uploads/.gitkeep
+
