@@ -1,4 +1,4 @@
-import { AuthResponse, Category, DashboardSummary, Receipt, Transaction, Wallet } from './types';
+import { AuthResponse, Category, DashboardSummary, ParsedReceiptFields, Receipt, Transaction, Wallet } from './types';
 
 function resolveApiUrl(publicUrl: string | undefined, internalUrl: string | undefined, fallback: string) {
   if (typeof window === 'undefined') {
@@ -85,12 +85,13 @@ export async function getReceipt(id: string): Promise<Receipt> {
   return parseJson<Receipt>(response);
 }
 
-export async function parseReceipt(id: string) {
-  const response = await fetch(`${receiptApiUrl}/receipts/${id}/parse`, {
+export async function parseReceipt(id: string, options?: { force?: boolean }) {
+  const query = options?.force ? '?force=true' : '';
+  const response = await fetch(`${receiptApiUrl}/receipts/${id}/parse${query}`, {
     method: 'POST',
   });
 
-  return parseJson<{ receipt: Receipt; extracted_fields: Record<string, string | number | null> }>(response);
+  return parseJson<{ receipt: Receipt; extracted_fields: ParsedReceiptFields }>(response);
 }
 
 export async function saveReceiptFeedback(

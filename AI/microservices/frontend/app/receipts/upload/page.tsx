@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { ChangeEvent, FormEvent, useState } from 'react';
 import { Shell } from '@/components/shell';
-import { uploadReceipt } from '@/lib/api';
+import { parseReceipt, uploadReceipt } from '@/lib/api';
 
 export default function UploadReceiptPage() {
   const router = useRouter();
@@ -23,6 +23,11 @@ export default function UploadReceiptPage() {
 
     try {
       const receipt = await uploadReceipt(file);
+      try {
+        await parseReceipt(receipt.receipt.id);
+      } catch {
+        // The review page can retry queueing if the first enqueue attempt fails.
+      }
       router.push(`/receipts/${receipt.receipt.id}/review`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');

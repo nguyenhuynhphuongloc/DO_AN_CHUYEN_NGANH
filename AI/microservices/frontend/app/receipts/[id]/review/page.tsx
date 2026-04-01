@@ -5,7 +5,34 @@ import { FormEvent, useEffect, useState } from 'react';
 import { ReceiptOcrDebugPanel } from '@/components/receipt-ocr-debug-panel';
 import { Shell } from '@/components/shell';
 import { confirmReceipt, getCategories, getReceipt, getWallets, parseReceipt, saveReceiptFeedback } from '@/lib/api';
-import { Category, Receipt, Wallet } from '@/lib/types';
+import { Category, Receipt, ReceiptJob, Wallet } from '@/lib/types';
+
+const ACTIVE_PARSE_JOB_STATUSES = new Set(['queued', 'preprocessing', 'ocr_running', 'extracting']);
+
+
+function getLatestParseJob(receipt: Receipt | null): ReceiptJob | null {
+  if (!receipt) {
+    return null;
+  }
+  return receipt.jobs.find((job) => job.job_type === 'parse') ?? null;
+}
+
+
+function isReceiptProcessing(receipt: Receipt | null): boolean {
+  const parseJob = getLatestParseJob(receipt);
+  if (parseJob && ACTIVE_PARSE_JOB_STATUSES.has(parseJob.status)) {
+    return true;
+  }
+  return receipt ? ACTIVE_PARSE_JOB_STATUSES.has(receipt.receipt.status) : false;
+}
+
+function toDateInputValue(value: string | null | undefined) {
+  return value ?? '';
+}
+
+function toIsoDate(value: string) {
+  return new Date(`${value}T00:00:00`).toISOString();
+}
 
 export default function ReceiptReviewPage() {
   const showOcrDebug = true;
@@ -18,7 +45,7 @@ export default function ReceiptReviewPage() {
   const [categoryId, setCategoryId] = useState('');
   const [type, setType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE');
   const [merchantName, setMerchantName] = useState('');
-  const [amount, setAmount] = useState('0');
+  const [amount, setAmount] = useState('');
   const [transactionDate, setTransactionDate] = useState('');
   const [description, setDescription] = useState('');
   const [feedback, setFeedback] = useState('');
@@ -28,13 +55,11 @@ export default function ReceiptReviewPage() {
   function syncFromReceipt(receiptData: Receipt) {
     const extraction = receiptData.extraction_result;
     setReceipt(receiptData);
-    setMerchantName(extraction?.merchant_name ?? '');
-    setAmount(String(extraction?.total_amount ?? 0));
-    setTransactionDate(
-      extraction?.transaction_date
-        ? new Date(`${extraction.transaction_date}T00:00:00`).toISOString().slice(0, 16)
-        : new Date().toISOString().slice(0, 16),
-    );
+    if (extraction) {
+      setMerchantName(extraction.merchant_name ?? '');
+      setAmount(extraction.total_amount !== null && extraction.total_amount !== undefined ? String(extraction.total_amount) : '');
+      setTransactionDate(toDateInputValue(extraction.transaction_date));
+    }
     setFeedback(receiptData.latest_feedback?.feedback_note ?? '');
   }
 
@@ -60,16 +85,58 @@ export default function ReceiptReviewPage() {
     void load();
   }, [receiptId]);
 
+  useEffect(() => {
+    if (!isReceiptProcessing(receipt)) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        const receiptData = await getReceipt(receiptId);
+        syncFromReceipt(receiptData);
+        const parseJob = getLatestParseJob(receiptData);
+        if (parseJob?.status === 'failed') {
+          setStatus(parseJob.error_message ?? 'Receipt parse failed');
+          setError(parseJob.error_message ?? 'Receipt parse failed');
+          return;
+        }
+        if (parseJob?.status === 'ready_for_review' || receiptData.receipt.status === 'ready_for_review') {
+          setStatus('Receipt ready for review');
+          return;
+        }
+        setStatus(`Processing receipt: ${parseJob?.status ?? receiptData.receipt.status}`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to refresh receipt status');
+      }
+    }, 3000);
+
+    return () => window.clearInterval(intervalId);
+  }, [receipt, receiptId]);
+
   async function handleParse() {
     setStatus('Parsing receipt...');
     setError('');
     try {
       const payload = await parseReceipt(receiptId);
       syncFromReceipt(payload.receipt);
-      setMerchantName(String(payload.extracted_fields.merchant_name ?? ''));
-      setAmount(String(payload.extracted_fields.total_amount ?? 0));
-      setTransactionDate(new Date(String(payload.extracted_fields.transaction_date)).toISOString().slice(0, 16));
-      setStatus('OCR parsing complete');
+      if (payload.extracted_fields.merchant_name !== null && payload.extracted_fields.merchant_name !== undefined) {
+        setMerchantName(String(payload.extracted_fields.merchant_name));
+      }
+      if (payload.extracted_fields.total_amount !== null && payload.extracted_fields.total_amount !== undefined) {
+        setAmount(String(payload.extracted_fields.total_amount));
+      }
+      if (payload.extracted_fields.transaction_date) {
+        setTransactionDate(toDateInputValue(payload.extracted_fields.transaction_date));
+      }
+      const parseJob = getLatestParseJob(payload.receipt);
+      const detectedLines = payload.receipt.ocr_debug?.line_details?.length ?? 0;
+      setStatus(
+        parseJob && ACTIVE_PARSE_JOB_STATUSES.has(parseJob.status)
+          ? `Receipt queued: ${parseJob.status}`
+          : detectedLines > 0
+            ? 'OCR parsing complete'
+            : 'OCR parsing complete, but no readable text was detected',
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to parse receipt');
     }
@@ -79,10 +146,11 @@ export default function ReceiptReviewPage() {
     try {
       const updated = await saveReceiptFeedback(receiptId, {
         feedback,
-        merchant_name: merchantName,
-        transaction_date: new Date(transactionDate).toISOString(),
-        total_amount: Number(amount),
-        currency: receipt?.extraction_result?.currency ?? 'VND',
+        merchant_name: merchantName || undefined,
+        transaction_date: transactionDate ? toIsoDate(transactionDate) : undefined,
+        total_amount: amount ? Number(amount) : undefined,
+        tax_amount: receipt?.extraction_result?.tax_amount ?? undefined,
+        currency: receipt?.extraction_result?.currency ?? undefined,
       });
       syncFromReceipt(updated);
       setStatus('Feedback saved');
@@ -96,6 +164,18 @@ export default function ReceiptReviewPage() {
     setStatus('Confirming receipt...');
     setError('');
 
+    if (!transactionDate) {
+      setError('Transaction date is required before confirmation');
+      setStatus('Review requires a manual transaction date');
+      return;
+    }
+
+    if (!amount) {
+      setError('Amount is required before confirmation');
+      setStatus('Review requires a manual amount');
+      return;
+    }
+
     try {
       const updated = await confirmReceipt(receiptId, {
         wallet_id: walletId,
@@ -103,8 +183,8 @@ export default function ReceiptReviewPage() {
         type,
         amount: Number(amount),
         description,
-        merchant_name: merchantName,
-        transaction_date: new Date(transactionDate).toISOString(),
+        merchant_name: merchantName || undefined,
+        transaction_date: toIsoDate(transactionDate),
       });
       syncFromReceipt(updated);
       setStatus(updated.finance_warning ?? 'Receipt confirmed and transaction created');
@@ -112,6 +192,9 @@ export default function ReceiptReviewPage() {
       setError(err instanceof Error ? err.message : 'Unable to confirm receipt');
     }
   }
+
+  const latestParseJob = getLatestParseJob(receipt);
+  const processingReceipt = isReceiptProcessing(receipt);
 
   return (
     <Shell>
@@ -134,14 +217,28 @@ export default function ReceiptReviewPage() {
           <button
             type="button"
             onClick={handleParse}
-            className="mt-6 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white"
+            className="mt-6 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+            disabled={processingReceipt}
           >
-            Run OCR parse
+            {processingReceipt ? 'Parsing in background...' : 'Run OCR parse'}
           </button>
           <div className="mt-6 space-y-2 text-sm text-neutral-600">
             <p>OCR provider: {receipt?.ocr_result?.ocr_provider ?? 'Not parsed yet'}</p>
             <p>Review status: {receipt?.extraction_result?.review_status ?? 'Not parsed yet'}</p>
+            <p>Model language: {receipt?.ocr_debug?.model_lang ?? 'N/A'}</p>
+            <p>Model device: {receipt?.ocr_debug?.model_device ?? 'N/A'}</p>
+            <p>Parse job: {latestParseJob?.status ?? 'Not queued yet'}</p>
           </div>
+          {processingReceipt ? (
+            <p className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
+              Receipt parsing is running in the background. The page will refresh automatically when review data is ready.
+            </p>
+          ) : null}
+          {latestParseJob?.status === 'failed' ? (
+            <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {latestParseJob.error_message ?? 'Receipt parse failed'}
+            </p>
+          ) : null}
           <div className="mt-6">
             <label className="mb-2 block text-sm font-medium">Feedback</label>
             <textarea
@@ -181,13 +278,14 @@ export default function ReceiptReviewPage() {
                 step="0.01"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
+                placeholder="Enter confirmed total"
               />
             </label>
             <label className="block">
               <span className="mb-2 block text-sm font-medium">Transaction date</span>
               <input
                 className="w-full rounded-2xl border border-neutral-200 px-4 py-3 outline-none focus:border-accent"
-                type="datetime-local"
+                type="date"
                 value={transactionDate}
                 onChange={(event) => setTransactionDate(event.target.value)}
               />
@@ -240,6 +338,7 @@ export default function ReceiptReviewPage() {
               onChange={(event) => setDescription(event.target.value)}
             />
           </label>
+
           {error ? <p className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p> : null}
           <button
             className="mt-6 rounded-full bg-accent px-5 py-3 text-sm font-semibold text-white"

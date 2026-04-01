@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -75,11 +76,27 @@ class ReceiptMetadataResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ReceiptOcrLineDebugResponse(BaseModel):
+    text: str
+    normalized_text: str | None = None
+    confidence: float | None = None
+    box: list[int] | list[list[int]] | None = None
+    angle: float | None = None
+
+
 class ReceiptOcrDebugResponse(BaseModel):
     raw_text: str | None
+    normalized_text: str | None = None
     lines: list[str]
+    normalized_lines: list[str] = []
+    confidences: list[float] = []
+    line_details: list[ReceiptOcrLineDebugResponse] = []
     provider: str | None
     confidence_score: float | None
+    model_lang: str | None = None
+    model_device: str | None = None
+    preprocessing: dict[str, Any] | None = None
+    doc_preprocessor: dict[str, Any] | None = None
 
 
 class ReceiptDetailResponse(BaseModel):
@@ -95,7 +112,7 @@ class ReceiptDetailResponse(BaseModel):
 
 class ParseReceiptResponse(BaseModel):
     receipt: ReceiptDetailResponse
-    extracted_fields: dict[str, str | float | None]
+    extracted_fields: dict[str, Any]
 
 
 class ReceiptFeedbackRequest(BaseModel):

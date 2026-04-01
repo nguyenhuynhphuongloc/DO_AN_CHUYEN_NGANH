@@ -4,10 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.receipts import router as receipts_router
 from app.core.config import settings
 from app.db.base import Base
+from app.db.runtime_schema import ensure_runtime_schema
 from app.db.session import engine
 from app.models import Receipt, ReceiptExtraction, ReceiptFeedback, ReceiptJob, ReceiptOcrResult  # noqa: F401
 
 Base.metadata.create_all(bind=engine)
+ensure_runtime_schema(engine)
 
 app = FastAPI(title="receipt-service", version="0.1.0")
 

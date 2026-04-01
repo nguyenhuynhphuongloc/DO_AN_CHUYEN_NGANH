@@ -10,3 +10,6 @@ Pillow
 python-multipart
 httpx
 python-dotenv
+paddleocr
+opencv-python
+paddlepaddle
