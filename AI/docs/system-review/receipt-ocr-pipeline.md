@@ -33,6 +33,7 @@ Writes:
 
 - local file under `RECEIPT_UPLOAD_DIR`
 - `receipts` row with:
+  - `user_id` from authenticated JWT `sub`
   - `file_name`
   - `original_url`
   - `mime_type`
@@ -43,7 +44,7 @@ Writes:
 Failure points:
 
 - empty file
-- invalid/missing default user ID
+- missing/invalid bearer token
 - disk write failure
 
 ### 2. Save file
@@ -208,6 +209,7 @@ Implementation:
 Writes:
 
 - `receipt_feedback`
+- `receipt_feedback.user_id` from authenticated JWT `sub`
 - updated values back into `receipt_extractions`
 - `receipts.status=reviewed`
 
@@ -234,11 +236,13 @@ Writes:
 External call:
 
 - `receipt-service` sends a transaction creation request to `finance-service`
+- the inbound bearer token is forwarded so `finance-service` can create the transaction under the same authenticated user context
 
 Current business behavior:
 
 - confirm can create a transaction even if it drives balance negative
 - if overspending happens, a warning is returned to the frontend
+- confirm is limited to the authenticated owner of the receipt
 
 ## Database Table Mapping
 
@@ -273,3 +277,4 @@ Current business behavior:
 - local file storage is not durable across environments
 - extraction still depends heavily on OCR text quality
 - date and total heuristics are simple and brittle
+- first-run OCR model download and warm-up can block the single receipt-service worker for a long request

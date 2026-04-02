@@ -1,18 +1,16 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/library';
+import { AuthenticatedUser } from 'src/common/auth/authenticated-user.interface';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateWalletDto } from './dto/create-wallet.dto';
 
 @Injectable()
 export class WalletsService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly configService: ConfigService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(user: AuthenticatedUser) {
     const wallets = await this.prisma.wallet.findMany({
+      where: { userId: user.userId },
       include: {
         transactions: true,
       },
@@ -29,15 +27,10 @@ export class WalletsService {
     }));
   }
 
-  async create(body: CreateWalletDto) {
-    const defaultUserId = this.configService.get<string>('FINANCE_DEFAULT_USER_ID');
-    if (!defaultUserId) {
-      throw new InternalServerErrorException('FINANCE_DEFAULT_USER_ID is required to create wallets');
-    }
-
+  async create(user: AuthenticatedUser, body: CreateWalletDto) {
     const wallet = await this.prisma.wallet.create({
       data: {
-        userId: defaultUserId,
+        userId: user.userId,
         name: body.name,
         balance: new Decimal(body.initialBalance),
         currency: body.currency ?? 'VND',

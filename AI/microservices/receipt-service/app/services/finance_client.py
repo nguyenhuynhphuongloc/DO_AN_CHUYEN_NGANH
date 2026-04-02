@@ -14,10 +14,14 @@ def create_finance_transaction(
     description: str | None,
     merchant_name: str | None,
     transaction_date: datetime,
+    access_token: str,
 ) -> dict[str, str | None]:
     try:
         response = requests.post(
             f"{settings.finance_service_url}/transactions",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+            },
             json={
                 "walletId": wallet_id,
                 "categoryId": category_id,

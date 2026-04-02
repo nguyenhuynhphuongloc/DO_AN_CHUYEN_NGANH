@@ -30,6 +30,7 @@ receipt-service
 - Technology: Next.js App Router + TypeScript + Tailwind CSS
 - Main responsibility: user-facing screens for login, dashboard, transactions, receipt upload, and receipt review
 - Main integration file: `microservices/frontend/lib/api.ts`
+- Auth behavior: stores JWT after login and attaches `Authorization: Bearer <access_token>` to protected finance and receipt requests
 
 Routes:
 
@@ -53,6 +54,7 @@ Routes:
 
 - Technology: NestJS + Prisma
 - Main responsibility: wallets, categories, transactions, dashboard summary
+- Auth behavior: validates JWT locally and scopes protected reads and writes by authenticated user
 - Main endpoints:
   - `GET /wallets`
   - `POST /wallets`
@@ -65,6 +67,7 @@ Routes:
 
 - Technology: FastAPI + SQLAlchemy
 - Main responsibility: receipt upload, OCR, extraction, feedback, confirm-to-finance flow
+- Auth behavior: validates JWT locally, enforces receipt ownership, and forwards the caller bearer token to `finance-service` during confirm
 - Main endpoints:
   - `POST /receipts/upload`
   - `GET /receipts/{id}`
@@ -78,11 +81,12 @@ Routes:
 
 - Browser calls services over REST.
 - Public browser URLs use `NEXT_PUBLIC_*` variables.
-- Server-side Next.js uses `INTERNAL_*` service URLs inside Docker.
+- Protected finance and receipt calls are made from client-side authenticated flows because the active session is stored in browser local storage.
 
 ### Service-to-service
 
 - `receipt-service` calls `finance-service` via REST when a reviewed receipt is confirmed.
+- The original caller bearer token is forwarded during receipt confirmation so `finance-service` can validate the same user context.
 
 ## Current Data Flow
 
@@ -91,11 +95,14 @@ Routes:
 1. Frontend sends login request to `auth-service`
 2. `auth-service` validates user and returns access token + refresh token
 3. Frontend stores tokens in local storage
+4. Frontend attaches the access token to protected finance and receipt requests
+5. `finance-service` and `receipt-service` validate JWT locally and derive the acting user from `sub`
 
 Important note:
 
-- JWT exists, but downstream services are not yet protected by user-aware auth middleware.
-- `finance-service` and `receipt-service` still rely on default user IDs or shared data assumptions.
+- Downstream services now enforce JWT-based user context for protected operations.
+- Dashboard, wallets, transactions, receipts, receipt feedback, and receipt confirmation are now scoped by authenticated ownership.
+- Finance and receipt services must keep `JWT_ACCESS_SECRET` aligned with `auth-service`.
 
 ### Receipt-to-transaction flow
 
@@ -105,7 +112,7 @@ Important note:
 4. `receipt-service` preprocesses image, runs PaddleOCR, stores OCR result, extracts structured fields, stores extraction
 5. Frontend review page allows user edits and feedback
 6. Frontend confirms receipt
-7. `receipt-service` calls `finance-service` to create a transaction
+7. `receipt-service` verifies ownership and calls `finance-service` with the same bearer token to create a transaction
 8. `finance-service` updates wallet balance and stores transaction
 
 ## Operational Shape
@@ -129,10 +136,11 @@ Health endpoints:
 - Receipt flow is end-to-end functional.
 - Each service owns its own database.
 - Docker startup order is explicit and practical.
+- JWT-based user context is enforced across frontend, finance-service, and receipt-service.
+- Receipt confirmation preserves authenticated user context into finance-service.
 
 ### What is still fragile
 
-- Cross-service authentication is not enforced.
-- Frontend stores auth tokens but does not use them for finance or receipt calls.
 - Receipt parsing is synchronous and CPU-heavy.
 - Receipt storage depends on local filesystem paths.
+- Frontend protected data loading depends on browser-side session storage rather than an SSR-friendly session mechanism.

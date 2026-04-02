@@ -1,14 +1,16 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useState } from 'react';
 import { ReceiptOcrDebugPanel } from '@/components/receipt-ocr-debug-panel';
 import { Shell } from '@/components/shell';
 import { confirmReceipt, getCategories, getReceipt, getWallets, parseReceipt, saveReceiptFeedback } from '@/lib/api';
+import { MissingAuthSessionError } from '@/lib/auth-storage';
 import { Category, Receipt, Wallet } from '@/lib/types';
 
 export default function ReceiptReviewPage() {
   const showOcrDebug = true;
+  const router = useRouter();
   const params = useParams<{ id: string }>();
   const receiptId = params.id;
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -53,12 +55,17 @@ export default function ReceiptReviewPage() {
         setCategoryId(categoryData[0]?.id ?? '');
         setStatus('Receipt loaded');
       } catch (err) {
+        if (err instanceof MissingAuthSessionError) {
+          router.replace('/login');
+          return;
+        }
+
         setError(err instanceof Error ? err.message : 'Unable to load receipt');
       }
     }
 
     void load();
-  }, [receiptId]);
+  }, [receiptId, router]);
 
   async function handleParse() {
     setStatus('Parsing receipt...');
@@ -71,6 +78,11 @@ export default function ReceiptReviewPage() {
       setTransactionDate(new Date(String(payload.extracted_fields.transaction_date)).toISOString().slice(0, 16));
       setStatus('OCR parsing complete');
     } catch (err) {
+      if (err instanceof MissingAuthSessionError) {
+        router.replace('/login');
+        return;
+      }
+
       setError(err instanceof Error ? err.message : 'Unable to parse receipt');
     }
   }
@@ -87,6 +99,11 @@ export default function ReceiptReviewPage() {
       syncFromReceipt(updated);
       setStatus('Feedback saved');
     } catch (err) {
+      if (err instanceof MissingAuthSessionError) {
+        router.replace('/login');
+        return;
+      }
+
       setError(err instanceof Error ? err.message : 'Unable to save feedback');
     }
   }
@@ -109,6 +126,11 @@ export default function ReceiptReviewPage() {
       syncFromReceipt(updated);
       setStatus(updated.finance_warning ?? 'Receipt confirmed and transaction created');
     } catch (err) {
+      if (err instanceof MissingAuthSessionError) {
+        router.replace('/login');
+        return;
+      }
+
       setError(err instanceof Error ? err.message : 'Unable to confirm receipt');
     }
   }
@@ -118,7 +140,9 @@ export default function ReceiptReviewPage() {
       <section className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.9fr)]">
         <aside className="rounded-[2rem] border border-black/5 bg-white/85 p-6 shadow-sm">
           <p className="text-sm uppercase tracking-[0.3em] text-accent">Receipt details</p>
-          <h2 className="mt-2 text-2xl font-semibold">{receipt?.receipt.file_name ?? 'Loading...'}</h2>
+          <h2 className="mt-2 text-2xl font-semibold break-words max-w-full">
+             {receipt?.receipt.file_name ?? 'Loading...'}
+          </h2>
           <p className="mt-4 text-sm text-neutral-600">Status: {receipt?.receipt.status ?? 'unknown'}</p>
           <p className="mt-2 text-sm text-neutral-600">{status}</p>
           {receipt?.finance_transaction_id ? (

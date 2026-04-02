@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/library';
+import { AuthenticatedUser } from 'src/common/auth/authenticated-user.interface';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 
@@ -15,8 +16,9 @@ function formatOverspendAmount(amount: number) {
 export class TransactionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(user: AuthenticatedUser) {
     const transactions = await this.prisma.transaction.findMany({
+      where: { userId: user.userId },
       include: {
         wallet: true,
         category: true,
@@ -41,7 +43,7 @@ export class TransactionsService {
     }));
   }
 
-  async create(body: CreateTransactionDto) {
+  async create(user: AuthenticatedUser, body: CreateTransactionDto) {
     const wallet = await this.prisma.wallet.findUnique({
       where: { id: body.walletId },
     });
@@ -50,12 +52,20 @@ export class TransactionsService {
       throw new NotFoundException('Wallet not found');
     }
 
+    if (wallet.userId !== user.userId) {
+      throw new ForbiddenException('Wallet does not belong to the authenticated user');
+    }
+
     const category = await this.prisma.category.findUnique({
       where: { id: body.categoryId },
     });
 
     if (!category) {
       throw new NotFoundException('Category not found');
+    }
+
+    if (category.userId && category.userId !== user.userId && !category.isSystem) {
+      throw new ForbiddenException('Category does not belong to the authenticated user');
     }
 
     const currentBalance = Number(wallet.balance);
@@ -73,7 +83,7 @@ export class TransactionsService {
       }),
       this.prisma.transaction.create({
         data: {
-          userId: wallet.userId,
+          userId: user.userId,
           walletId: body.walletId,
           categoryId: body.categoryId,
           type: toDatabaseTransactionType(body.type),

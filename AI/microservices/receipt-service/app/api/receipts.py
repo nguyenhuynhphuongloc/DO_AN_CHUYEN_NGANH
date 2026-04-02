@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.auth import AuthenticatedUser, get_current_user
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.receipt import (
@@ -37,7 +38,7 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-def _load_receipt(receipt_id: str, db: Session) -> Receipt:
+def _load_receipt(receipt_id: str, db: Session, user_id: UUID | None = None) -> Receipt:
     receipt = (
         db.query(Receipt)
         .options(
@@ -51,6 +52,8 @@ def _load_receipt(receipt_id: str, db: Session) -> Receipt:
     )
     if receipt is None:
         raise HTTPException(status_code=404, detail="Receipt not found")
+    if user_id is not None and receipt.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Receipt does not belong to the authenticated user")
     return receipt
 
 
@@ -118,10 +121,11 @@ def _mark_parse_failed(
 
 
 @router.post("/upload", response_model=ReceiptDetailResponse)
-async def upload_receipt(file: UploadFile = File(...), db: Session = Depends(get_db)) -> ReceiptDetailResponse:
-    if not settings.receipt_default_user_id:
-        raise HTTPException(status_code=500, detail="RECEIPT_DEFAULT_USER_ID is required")
-
+async def upload_receipt(
+    file: UploadFile = File(...),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ReceiptDetailResponse:
     upload_dir = Path(settings.receipt_upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
@@ -136,7 +140,7 @@ async def upload_receipt(file: UploadFile = File(...), db: Session = Depends(get
 
     timestamp = _now()
     receipt = Receipt(
-        user_id=UUID(settings.receipt_default_user_id),
+        user_id=current_user.user_id,
         file_name=file.filename or stored_file_name,
         original_url=str(destination),
         mime_type=file.content_type,
@@ -154,13 +158,21 @@ async def upload_receipt(file: UploadFile = File(...), db: Session = Depends(get
 
 
 @router.get("/{receipt_id}", response_model=ReceiptDetailResponse)
-def get_receipt(receipt_id: str, db: Session = Depends(get_db)) -> ReceiptDetailResponse:
-    return _serialize_receipt(_load_receipt(receipt_id, db))
+def get_receipt(
+    receipt_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ReceiptDetailResponse:
+    return _serialize_receipt(_load_receipt(receipt_id, db, current_user.user_id))
 
 
 @router.post("/{receipt_id}/parse", response_model=ParseReceiptResponse)
-def parse_receipt(receipt_id: str, db: Session = Depends(get_db)) -> ParseReceiptResponse:
-    receipt = _load_receipt(receipt_id, db)
+def parse_receipt(
+    receipt_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ParseReceiptResponse:
+    receipt = _load_receipt(receipt_id, db, current_user.user_id)
     now = _now()
 
     ocr_job = _get_or_create_job(db, receipt.id, "ocr")
@@ -273,7 +285,7 @@ def parse_receipt(receipt_id: str, db: Session = Depends(get_db)) -> ParseReceip
     receipt.updated_at = now
     db.commit()
 
-    refreshed = _load_receipt(receipt_id, db)
+    refreshed = _load_receipt(receipt_id, db, current_user.user_id)
     return ParseReceiptResponse(receipt=_serialize_receipt(refreshed), extracted_fields=extraction_payload)
 
 
@@ -281,12 +293,10 @@ def parse_receipt(receipt_id: str, db: Session = Depends(get_db)) -> ParseReceip
 def save_feedback(
     receipt_id: str,
     payload: ReceiptFeedbackRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ReceiptDetailResponse:
-    if not settings.receipt_default_user_id:
-        raise HTTPException(status_code=500, detail="RECEIPT_DEFAULT_USER_ID is required")
-
-    receipt = _load_receipt(receipt_id, db)
+    receipt = _load_receipt(receipt_id, db, current_user.user_id)
     now = _now()
 
     if receipt.extraction is None:
@@ -307,7 +317,7 @@ def save_feedback(
 
     feedback = ReceiptFeedback(
         receipt_id=receipt.id,
-        user_id=UUID(settings.receipt_default_user_id),
+        user_id=current_user.user_id,
         original_data_json=original_data,
         corrected_data_json=corrected_data,
         feedback_note=payload.feedback,
@@ -331,16 +341,17 @@ def save_feedback(
     receipt.updated_at = now
 
     db.commit()
-    return _serialize_receipt(_load_receipt(receipt_id, db))
+    return _serialize_receipt(_load_receipt(receipt_id, db, current_user.user_id))
 
 
 @router.post("/{receipt_id}/confirm", response_model=ReceiptDetailResponse)
 def confirm_receipt(
     receipt_id: str,
     payload: ReceiptConfirmRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ReceiptDetailResponse:
-    receipt = _load_receipt(receipt_id, db)
+    receipt = _load_receipt(receipt_id, db, current_user.user_id)
     now = _now()
 
     finance_result = create_finance_transaction(
@@ -351,6 +362,7 @@ def confirm_receipt(
         description=payload.description,
         merchant_name=payload.merchant_name,
         transaction_date=payload.transaction_date,
+        access_token=current_user.token,
     )
     finance_transaction_id = finance_result["id"]
     finance_warning = finance_result["warning"]
@@ -378,7 +390,7 @@ def confirm_receipt(
     db.commit()
 
     return _serialize_receipt(
-        _load_receipt(receipt_id, db),
+        _load_receipt(receipt_id, db, current_user.user_id),
         finance_transaction_id=finance_transaction_id,
         finance_warning=finance_warning,
     )

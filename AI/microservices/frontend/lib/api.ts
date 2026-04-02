@@ -1,3 +1,4 @@
+import { requireAccessToken } from './auth-storage';
 import { AuthResponse, Category, DashboardSummary, Receipt, Transaction, Wallet } from './types';
 
 function resolveApiUrl(publicUrl: string | undefined, internalUrl: string | undefined, fallback: string) {
@@ -38,6 +39,26 @@ async function parseJson<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
+function createHeaders(
+  headers?: HeadersInit,
+  options?: {
+    json?: boolean;
+    auth?: boolean;
+  },
+) {
+  const nextHeaders = new Headers(headers);
+
+  if (options?.json) {
+    nextHeaders.set('Content-Type', 'application/json');
+  }
+
+  if (options?.auth) {
+    nextHeaders.set('Authorization', `Bearer ${requireAccessToken()}`);
+  }
+
+  return nextHeaders;
+}
+
 export async function login(email: string, password: string): Promise<AuthResponse> {
   const response = await fetch(`${authApiUrl}/auth/login`, {
     method: 'POST',
@@ -49,22 +70,34 @@ export async function login(email: string, password: string): Promise<AuthRespon
 }
 
 export async function getDashboardSummary(): Promise<DashboardSummary> {
-  const response = await fetch(`${financeApiUrl}/dashboard/summary`, { cache: 'no-store' });
+  const response = await fetch(`${financeApiUrl}/dashboard/summary`, {
+    cache: 'no-store',
+    headers: createHeaders(undefined, { auth: true }),
+  });
   return parseJson<DashboardSummary>(response);
 }
 
 export async function getTransactions(): Promise<Transaction[]> {
-  const response = await fetch(`${financeApiUrl}/transactions`, { cache: 'no-store' });
+  const response = await fetch(`${financeApiUrl}/transactions`, {
+    cache: 'no-store',
+    headers: createHeaders(undefined, { auth: true }),
+  });
   return parseJson<Transaction[]>(response);
 }
 
 export async function getWallets(): Promise<Wallet[]> {
-  const response = await fetch(`${financeApiUrl}/wallets`, { cache: 'no-store' });
+  const response = await fetch(`${financeApiUrl}/wallets`, {
+    cache: 'no-store',
+    headers: createHeaders(undefined, { auth: true }),
+  });
   return parseJson<Wallet[]>(response);
 }
 
 export async function getCategories(): Promise<Category[]> {
-  const response = await fetch(`${financeApiUrl}/categories`, { cache: 'no-store' });
+  const response = await fetch(`${financeApiUrl}/categories`, {
+    cache: 'no-store',
+    headers: createHeaders(undefined, { auth: true }),
+  });
   return parseJson<Category[]>(response);
 }
 
@@ -75,19 +108,24 @@ export async function uploadReceipt(file: File): Promise<Receipt> {
   const response = await fetch(`${receiptApiUrl}/receipts/upload`, {
     method: 'POST',
     body: formData,
+    headers: createHeaders(undefined, { auth: true }),
   });
 
   return parseJson<Receipt>(response);
 }
 
 export async function getReceipt(id: string): Promise<Receipt> {
-  const response = await fetch(`${receiptApiUrl}/receipts/${id}`, { cache: 'no-store' });
+  const response = await fetch(`${receiptApiUrl}/receipts/${id}`, {
+    cache: 'no-store',
+    headers: createHeaders(undefined, { auth: true }),
+  });
   return parseJson<Receipt>(response);
 }
 
 export async function parseReceipt(id: string) {
   const response = await fetch(`${receiptApiUrl}/receipts/${id}/parse`, {
     method: 'POST',
+    headers: createHeaders(undefined, { auth: true }),
   });
 
   return parseJson<{ receipt: Receipt; extracted_fields: Record<string, string | number | null> }>(response);
@@ -106,7 +144,7 @@ export async function saveReceiptFeedback(
 ): Promise<Receipt> {
   const response = await fetch(`${receiptApiUrl}/receipts/${id}/feedback`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: createHeaders(undefined, { json: true, auth: true }),
     body: JSON.stringify(payload),
   });
 
@@ -127,7 +165,7 @@ export async function confirmReceipt(
 ): Promise<Receipt> {
   const response = await fetch(`${receiptApiUrl}/receipts/${id}/confirm`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: createHeaders(undefined, { json: true, auth: true }),
     body: JSON.stringify(payload),
   });
 

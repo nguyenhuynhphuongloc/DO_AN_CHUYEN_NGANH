@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     receipt_upload_dir: str = "uploads"
     finance_service_url: str = "http://localhost:8002"
     frontend_url: str = "http://localhost:3000"
-    receipt_default_user_id: str = ""
+    jwt_access_secret: str = "dev-access-secret"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

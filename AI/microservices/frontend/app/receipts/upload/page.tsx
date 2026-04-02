@@ -1,15 +1,22 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ChangeEvent, FormEvent, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { Shell } from '@/components/shell';
 import { uploadReceipt } from '@/lib/api';
+import { getAccessToken, MissingAuthSessionError } from '@/lib/auth-storage';
 
 export default function UploadReceiptPage() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!getAccessToken()) {
+      router.replace('/login');
+    }
+  }, [router]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,6 +32,11 @@ export default function UploadReceiptPage() {
       const receipt = await uploadReceipt(file);
       router.push(`/receipts/${receipt.receipt.id}/review`);
     } catch (err) {
+      if (err instanceof MissingAuthSessionError) {
+        router.replace('/login');
+        return;
+      }
+
       setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setLoading(false);

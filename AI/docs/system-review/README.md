@@ -1,6 +1,6 @@
 # System Review
 
-This folder captures the current-state overview of the personal finance microservice system before further improvements.
+This folder captures the current-state overview of the personal finance microservice system after the JWT auth-context enforcement update.
 
 Contents:
 
@@ -11,5 +11,6 @@ Contents:
 Scope:
 
 - service responsibilities and communication
+- authenticated user context and cross-service JWT behavior
 - receipt OCR pipeline and database mapping
 - current strengths, weaknesses, and roadmap priorities

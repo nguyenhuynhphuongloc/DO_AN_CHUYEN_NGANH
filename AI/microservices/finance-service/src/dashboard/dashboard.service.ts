@@ -1,25 +1,33 @@
 import { Injectable } from '@nestjs/common';
+import { AuthenticatedUser } from 'src/common/auth/authenticated-user.interface';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSummary() {
+  async getSummary(user: AuthenticatedUser) {
     const [walletCount, transactionCount, walletAggregate, groupedTransactions, recentTransactions] =
       await Promise.all([
-        this.prisma.wallet.count(),
-        this.prisma.transaction.count(),
+        this.prisma.wallet.count({
+          where: { userId: user.userId },
+        }),
+        this.prisma.transaction.count({
+          where: { userId: user.userId },
+        }),
         this.prisma.wallet.aggregate({
+          where: { userId: user.userId },
           _sum: { balance: true },
         }),
         this.prisma.transaction.groupBy({
+          where: { userId: user.userId },
           by: ['type'],
           _sum: {
             amount: true,
           },
         }),
         this.prisma.transaction.findMany({
+          where: { userId: user.userId },
           take: 5,
           include: {
             category: true,

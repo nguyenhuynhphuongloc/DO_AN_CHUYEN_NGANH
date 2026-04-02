@@ -4,6 +4,8 @@
 
 - Clear microservice separation by domain
 - Working end-to-end receipt flow
+- JWT-authenticated user context is enforced across frontend, finance-service, and receipt-service
+- Ownership checks now block cross-user access to receipts and finance data
 - Real PaddleOCR integration is already active
 - Receipt database mapping is closely aligned with the existing ERD
 - OCR debug panel is isolated and removable
@@ -14,9 +16,9 @@
 
 ### Identity and access control
 
-- frontend stores JWT but does not attach it to finance or receipt requests
-- finance and receipt operations are not yet scoped by authenticated user context
-- default-user settings still drive important writes
+- frontend session still lives only in browser local storage, which limits SSR-friendly auth handling
+- finance-service and receipt-service must keep JWT verification config aligned with auth-service
+- categories remain reference data and are not modeled as fully user-isolated resources
 
 ### OCR limitations
 
@@ -104,6 +106,8 @@
 - parse failures update receipt and job states to `failed`
 - large images are resized before OCR
 - finance-service errors are surfaced to the frontend
+- missing or invalid bearer tokens now fail with `401`
+- cross-user receipt and wallet access now fails with `403`
 
 ### Remaining risks
 
@@ -131,13 +135,13 @@
 
 ## Priority 1
 
-- enforce authenticated user context across all services
 - improve OCR accuracy for Vietnamese and rotated receipts
 - strengthen total/date/merchant extraction heuristics
 - move parsing toward background-job execution
 
 ## Priority 2
 
+- move frontend auth toward a session model that also works cleanly for SSR-protected pages
 - replace startup `create_all()` with migration-based receipt DB management
 - introduce typed enums and stricter internal status contracts
 - improve review UX with clearer parse progress and confidence display
