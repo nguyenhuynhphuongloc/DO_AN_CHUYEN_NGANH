@@ -51,7 +51,7 @@ export default function UploadReceiptPage() {
         <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
           <label className="block rounded-3xl border border-dashed border-neutral-300 bg-neutral-50 p-8 text-center">
             <span className="block text-lg font-medium">Choose an image file</span>
-            <span className="mt-2 block text-sm text-neutral-500">PNG, JPG, or any file for placeholder parsing.</span>
+            <span className="mt-2 block text-sm text-neutral-500">PNG or JPG files are queued for background OCR immediately after upload.</span>
             <input
               className="mt-4 block w-full"
               type="file"
@@ -65,7 +65,7 @@ export default function UploadReceiptPage() {
             type="submit"
             disabled={loading}
           >
-            {loading ? 'Uploading...' : 'Upload receipt'}
+            {loading ? 'Uploading and queueing...' : 'Upload receipt'}
           </button>
         </form>
       </section>

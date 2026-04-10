@@ -2,7 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-ENV PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True
+ARG PADDLE_PACKAGE="paddlepaddle==3.3.1"
+
+ENV PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True \
+    PYTHONUNBUFFERED=1
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -15,7 +18,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir "${PADDLE_PACKAGE}"
 
 COPY . .
 

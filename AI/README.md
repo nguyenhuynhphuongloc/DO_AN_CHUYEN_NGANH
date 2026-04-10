@@ -26,14 +26,16 @@ This repository contains a capstone MVP for a personal finance management platfo
 cd microservices/auth-service && npm install
 cd ../finance-service && npm install
 cd ../frontend && npm install
-cd ../receipt-service && pip install -r requirements.txt
+cd ../receipt-service && pip install -r requirements.txt && pip install paddlepaddle==3.3.1
 ```
 
 Receipt OCR runtime notes:
 
 - The first PaddleOCR-backed parse may take longer because model assets are downloaded and initialized.
 - Local Docker builds for `receipt-service` install additional native libraries required by PaddleOCR and OpenCV.
-- Keep `receipt-service` running between parse requests so the OCR model stays warm in memory.
+- Keep the dedicated receipt worker running between parse requests so the OCR model stays warm in memory.
+- Set `OCR_DEVICE=cpu` to force CPU mode, `OCR_DEVICE=gpu` to require GPU first with CPU fallback, or keep `OCR_DEVICE=auto` to prefer GPU when available.
+- For a GPU-enabled Python environment, replace the CPU wheel with a compatible GPU PaddlePaddle package before starting the worker.
 
 4. Run Prisma generation and migrations for the NestJS services:
 
@@ -55,6 +57,7 @@ npm run seed
 cd microservices/auth-service && npm run start:dev
 cd microservices/finance-service && npm run start:dev
 cd microservices/receipt-service && python -m uvicorn app.main:app --reload --port 8003
+cd microservices/receipt-service && python -m app.worker
 cd microservices/frontend && npm run dev
 ```
 
@@ -65,6 +68,30 @@ You can start the full stack with Docker Compose from the repository root:
 ```bash
 docker compose up --build
 ```
+
+The compose stack now includes both `receipt-service` and `receipt-worker`. Upload requests return immediately after queueing a parse job, and the worker performs preprocessing, OCR, and extraction asynchronously.
+
+To force CPU OCR in Docker:
+
+```bash
+set RECEIPT_OCR_DEVICE=cpu
+docker compose up --build receipt-service receipt-worker
+```
+
+To try GPU OCR on a host with Docker GPU support and a compatible PaddlePaddle GPU package:
+
+```bash
+set RECEIPT_PADDLE_PACKAGE=paddlepaddle-gpu
+set RECEIPT_OCR_DEVICE=gpu
+docker compose build receipt-service receipt-worker
+docker compose run --rm --gpus all receipt-worker
+```
+
+Verify the effective device from worker logs:
+
+- `Initialized PaddleOCR on GPU`
+- `PaddleOCR GPU initialization failed, falling back to CPU: ...`
+- `Initialized PaddleOCR on CPU`
 
 By default, the Docker services do not run `prisma db push` or seed scripts automatically. This avoids destructive schema changes against existing cloud databases. If you want a one-time schema sync for an empty dedicated database, enable it explicitly:
 
@@ -109,6 +136,7 @@ The password is intentionally plain text for the MVP seed flow only. Do not reus
 - Log in from the frontend with the seeded test user.
 - Create a wallet and a manual transaction through the API or UI.
 - Upload a receipt, run the PaddleOCR parse flow, edit the extracted fields, and confirm it.
+- Keep the review page open while `receipt-worker` advances the job through `queued`, `preprocessing`, `ocr_running`, `extracting`, and `ready_for_review`.
 - Confirm the created receipt generates a transaction in `finance-service`.
 
 ## Build verification completed in this repository

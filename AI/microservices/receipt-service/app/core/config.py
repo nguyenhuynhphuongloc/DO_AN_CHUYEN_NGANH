@@ -8,6 +8,12 @@ class Settings(BaseSettings):
     finance_service_url: str = "http://localhost:8002"
     frontend_url: str = "http://localhost:3000"
     jwt_access_secret: str = "dev-access-secret"
+    worker_poll_interval_seconds: float = 2.0
+    worker_batch_size: int = 1
+    ocr_device: str = "auto"
+    ocr_cpu_threads: int = 2
+    ocr_language: str = "en"
+    ocr_enable_mkldnn: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

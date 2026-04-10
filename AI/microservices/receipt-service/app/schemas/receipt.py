@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ReceiptOcrResultResponse(BaseModel):
@@ -80,6 +80,7 @@ class ReceiptOcrDebugResponse(BaseModel):
     lines: list[str]
     provider: str | None
     confidence_score: float | None
+    device: str | None = None
 
 
 class ReceiptDetailResponse(BaseModel):
@@ -88,14 +89,15 @@ class ReceiptDetailResponse(BaseModel):
     ocr_debug: ReceiptOcrDebugResponse | None = None
     extraction_result: ReceiptExtractionResponse | None
     latest_feedback: ReceiptFeedbackResponse | None = None
-    jobs: list[ReceiptJobResponse] = []
+    jobs: list[ReceiptJobResponse] = Field(default_factory=list)
+    active_job: ReceiptJobResponse | None = None
     finance_transaction_id: str | None = None
     finance_warning: str | None = None
 
 
 class ParseReceiptResponse(BaseModel):
     receipt: ReceiptDetailResponse
-    extracted_fields: dict[str, str | float | None]
+    extracted_fields: dict | None
 
 
 class ReceiptFeedbackRequest(BaseModel):
@@ -104,7 +106,7 @@ class ReceiptFeedbackRequest(BaseModel):
     transaction_date: datetime | None = None
     total_amount: float | None = None
     tax_amount: float | None = None
-    currency: str | None = "VND"
+    currency: str | None = None
 
 
 class ReceiptConfirmRequest(BaseModel):

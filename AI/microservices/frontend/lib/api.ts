@@ -1,5 +1,5 @@
 import { requireAccessToken } from './auth-storage';
-import { AuthResponse, Category, DashboardSummary, Receipt, Transaction, Wallet } from './types';
+import { AuthResponse, Category, DashboardSummary, Receipt, ReceiptStructuredExtraction, Transaction, Wallet } from './types';
 
 function resolveApiUrl(publicUrl: string | undefined, internalUrl: string | undefined, fallback: string) {
   if (typeof window === 'undefined') {
@@ -122,13 +122,18 @@ export async function getReceipt(id: string): Promise<Receipt> {
   return parseJson<Receipt>(response);
 }
 
-export async function parseReceipt(id: string) {
-  const response = await fetch(`${receiptApiUrl}/receipts/${id}/parse`, {
+export async function parseReceipt(id: string, options?: { force?: boolean }) {
+  const searchParams = new URLSearchParams();
+  if (options?.force) {
+    searchParams.set('force', 'true');
+  }
+
+  const response = await fetch(`${receiptApiUrl}/receipts/${id}/parse${searchParams.size ? `?${searchParams}` : ''}`, {
     method: 'POST',
     headers: createHeaders(undefined, { auth: true }),
   });
 
-  return parseJson<{ receipt: Receipt; extracted_fields: Record<string, string | number | null> }>(response);
+  return parseJson<{ receipt: Receipt; extracted_fields: ReceiptStructuredExtraction | Record<string, unknown> | null }>(response);
 }
 
 export async function saveReceiptFeedback(

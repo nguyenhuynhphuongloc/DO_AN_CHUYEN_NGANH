@@ -1,10 +1,9 @@
-import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.auth import AuthenticatedUser, get_current_user
@@ -12,10 +11,7 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.models.receipt import (
     Receipt,
-    ReceiptExtraction,
     ReceiptFeedback,
-    ReceiptJob,
-    ReceiptOcrResult,
     compute_image_hash,
 )
 from app.schemas.receipt import (
@@ -25,13 +21,10 @@ from app.schemas.receipt import (
     ReceiptFeedbackRequest,
     ReceiptOcrDebugResponse,
 )
-from app.services.extraction_service import extract_all
 from app.services.finance_client import create_finance_transaction
-from app.services.image_preprocess import preprocess_image
-from app.services.ocr_service import get_ocr_service
+from app.services.receipt_queue import enqueue_parse_job, get_active_parse_job
 
 router = APIRouter(prefix="/receipts", tags=["receipts"])
-logger = logging.getLogger(__name__)
 
 
 def _now() -> datetime:
@@ -64,6 +57,7 @@ def _serialize_receipt(
 ) -> ReceiptDetailResponse:
     latest_feedback = receipt.feedback_items[0] if receipt.feedback_items else None
     ocr_debug = None
+    active_job = get_active_parse_job(receipt)
 
     if receipt.ocr_result is not None:
         raw_json = receipt.ocr_result.raw_json or {}
@@ -73,6 +67,7 @@ def _serialize_receipt(
             lines=[str(line) for line in lines] if isinstance(lines, list) else [],
             provider=receipt.ocr_result.ocr_provider,
             confidence_score=float(receipt.ocr_result.confidence_score) if receipt.ocr_result.confidence_score is not None else None,
+            device=str(raw_json.get("device")) if raw_json.get("device") else None,
         )
 
     return ReceiptDetailResponse(
@@ -82,42 +77,32 @@ def _serialize_receipt(
         extraction_result=receipt.extraction,
         latest_feedback=latest_feedback,
         jobs=receipt.jobs,
+        active_job=active_job,
         finance_transaction_id=finance_transaction_id,
         finance_warning=finance_warning,
     )
 
 
-def _get_or_create_job(db: Session, receipt_id: UUID, job_type: str) -> ReceiptJob:
-    job = (
-        db.query(ReceiptJob)
-        .filter(ReceiptJob.receipt_id == receipt_id, ReceiptJob.job_type == job_type)
-        .order_by(ReceiptJob.created_at.desc())
-        .first()
-    )
-    if job is None:
-        job = ReceiptJob(receipt_id=receipt_id, job_type=job_type)
-        db.add(job)
-        db.flush()
-    return job
+def _merge_corrected_extraction_payload(original_data: dict | None, corrected_fields: dict, *, status: str) -> dict:
+    payload = dict(original_data or {})
+    fields = dict(payload.get("fields") or {})
+    fields.update(corrected_fields)
+    payload["fields"] = fields
 
+    needs_review_fields = set(payload.get("needs_review_fields") or [])
+    for field_name, field_value in corrected_fields.items():
+        if field_value in (None, ""):
+            needs_review_fields.add(field_name)
+        else:
+            needs_review_fields.discard(field_name)
 
-def _mark_parse_failed(
-    db: Session,
-    receipt: Receipt,
-    ocr_job: ReceiptJob,
-    extract_job: ReceiptJob,
-    error_message: str,
-) -> None:
-    now = _now()
-    receipt.status = "failed"
-    receipt.updated_at = now
-    ocr_job.status = "failed"
-    ocr_job.finished_at = now
-    ocr_job.error_message = error_message
-    extract_job.status = "failed"
-    extract_job.finished_at = now
-    extract_job.error_message = error_message
-    db.commit()
+    if needs_review_fields:
+        payload["needs_review_fields"] = sorted(needs_review_fields)
+    else:
+        payload.pop("needs_review_fields", None)
+
+    payload["review_status"] = status
+    return payload
 
 
 @router.post("/upload", response_model=ReceiptDetailResponse)
@@ -152,6 +137,8 @@ async def upload_receipt(
         updated_at=timestamp,
     )
     db.add(receipt)
+    db.flush()
+    enqueue_parse_job(db, receipt)
     db.commit()
 
     return _serialize_receipt(_load_receipt(str(receipt.id), db))
@@ -169,123 +156,16 @@ def get_receipt(
 @router.post("/{receipt_id}/parse", response_model=ParseReceiptResponse)
 def parse_receipt(
     receipt_id: str,
+    force: bool = Query(default=False),
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ParseReceiptResponse:
     receipt = _load_receipt(receipt_id, db, current_user.user_id)
-    now = _now()
-
-    ocr_job = _get_or_create_job(db, receipt.id, "ocr")
-    extract_job = _get_or_create_job(db, receipt.id, "extract")
-    ocr_job.status = "running"
-    ocr_job.started_at = now
-    extract_job.status = "running"
-    extract_job.started_at = now
-    receipt.status = "processing"
-    receipt.updated_at = now
-    db.commit()
-    db.refresh(receipt)
-    db.refresh(ocr_job)
-    db.refresh(extract_job)
-
-    source_path = Path(receipt.original_url)
-    if not source_path.exists():
-        error_message = "Stored receipt image is missing from the uploads folder"
-        _mark_parse_failed(db, receipt, ocr_job, extract_job, error_message)
-        raise HTTPException(status_code=404, detail=error_message)
-
-    processed_dir = source_path.parent / "processed"
-    processed_path = processed_dir / f"{source_path.stem}-processed.png"
-
-    try:
-        preprocess_image(str(source_path), str(processed_path))
-        ocr_payload = get_ocr_service().extract_text(str(processed_path))
-        extracted_fields = extract_all(
-            lines=list(ocr_payload.get("lines", [])),
-            raw_text=str(ocr_payload.get("raw_text", "")),
-        )
-    except Exception as exc:
-        logger.exception("Receipt parse failed for receipt %s", receipt.id)
-        error_message = str(exc) or "Receipt OCR failed"
-        _mark_parse_failed(db, receipt, ocr_job, extract_job, error_message)
-        raise HTTPException(status_code=422, detail="Unable to parse receipt image") from exc
-
-    merchant_name = extracted_fields["merchant_name"]
-    transaction_date = (
-        datetime.fromisoformat(str(extracted_fields["transaction_date"])).date()
-        if extracted_fields["transaction_date"]
-        else None
-    )
-    total_amount = Decimal(str(extracted_fields["total_amount"])) if extracted_fields["total_amount"] is not None else None
-    confidence = min(max(float(ocr_payload.get("confidence", 0.0)), 0.0), 1.0)
-    confidence_decimal = Decimal(f"{confidence:.4f}")
-
-    raw_json = {
-        "lines": list(ocr_payload.get("lines", [])),
-        "confidences": list(ocr_payload.get("confidences", [])),
-        "processed_image_path": str(processed_path),
-    }
-
-    if receipt.ocr_result is None:
-        receipt.ocr_result = ReceiptOcrResult(
-            receipt_id=receipt.id,
-            ocr_provider="paddleocr",
-            raw_text=str(ocr_payload.get("raw_text", "")),
-            raw_json=raw_json,
-            confidence_score=confidence_decimal,
-            created_at=now,
-        )
-    else:
-        receipt.ocr_result.ocr_provider = "paddleocr"
-        receipt.ocr_result.raw_text = str(ocr_payload.get("raw_text", ""))
-        receipt.ocr_result.raw_json = raw_json
-        receipt.ocr_result.confidence_score = confidence_decimal
-
-    extraction_payload = {
-        "merchant_name": merchant_name,
-        "transaction_date": transaction_date.isoformat() if transaction_date else None,
-        "total_amount": float(total_amount) if total_amount is not None else None,
-        "tax_amount": 0.0 if total_amount is not None else None,
-        "currency": str(extracted_fields.get("currency") or "VND"),
-    }
-
-    if receipt.extraction is None:
-        receipt.extraction = ReceiptExtraction(
-            receipt_id=receipt.id,
-            merchant_name=merchant_name,
-            transaction_date=transaction_date,
-            total_amount=total_amount,
-            tax_amount=Decimal("0") if total_amount is not None else None,
-            currency=extraction_payload["currency"],
-            extracted_json=extraction_payload,
-            confidence_score=confidence_decimal,
-            review_status="needs_review",
-            created_at=now,
-            updated_at=now,
-        )
-    else:
-        receipt.extraction.merchant_name = merchant_name
-        receipt.extraction.transaction_date = transaction_date
-        receipt.extraction.total_amount = total_amount
-        receipt.extraction.tax_amount = Decimal("0") if total_amount is not None else None
-        receipt.extraction.currency = extraction_payload["currency"]
-        receipt.extraction.extracted_json = extraction_payload
-        receipt.extraction.confidence_score = confidence_decimal
-        receipt.extraction.review_status = "needs_review"
-        receipt.extraction.updated_at = now
-
-    ocr_job.status = "success"
-    ocr_job.finished_at = now
-    ocr_job.error_message = None
-    extract_job.status = "success"
-    extract_job.finished_at = now
-    extract_job.error_message = None
-    receipt.status = "parsed"
-    receipt.processed_at = now
-    receipt.updated_at = now
+    enqueue_parse_job(db, receipt, force=force)
     db.commit()
 
     refreshed = _load_receipt(receipt_id, db, current_user.user_id)
+    extraction_payload = refreshed.extraction.extracted_json if refreshed.extraction is not None else None
     return ParseReceiptResponse(receipt=_serialize_receipt(refreshed), extracted_fields=extraction_payload)
 
 
@@ -310,9 +190,17 @@ def save_feedback(
             if payload.transaction_date is not None
             else (receipt.extraction.transaction_date.isoformat() if receipt.extraction.transaction_date else None)
         ),
-        "total_amount": payload.total_amount if payload.total_amount is not None else float(receipt.extraction.total_amount or 0),
-        "tax_amount": payload.tax_amount if payload.tax_amount is not None else float(receipt.extraction.tax_amount or 0),
-        "currency": payload.currency or receipt.extraction.currency or "VND",
+        "total_amount": (
+            payload.total_amount
+            if payload.total_amount is not None
+            else (float(receipt.extraction.total_amount) if receipt.extraction.total_amount is not None else None)
+        ),
+        "tax_amount": (
+            payload.tax_amount
+            if payload.tax_amount is not None
+            else (float(receipt.extraction.tax_amount) if receipt.extraction.tax_amount is not None else None)
+        ),
+        "currency": payload.currency if payload.currency is not None else receipt.extraction.currency,
     }
 
     feedback = ReceiptFeedback(
@@ -334,7 +222,11 @@ def save_feedback(
     receipt.extraction.total_amount = Decimal(str(corrected_data["total_amount"])) if corrected_data["total_amount"] is not None else None
     receipt.extraction.tax_amount = Decimal(str(corrected_data["tax_amount"])) if corrected_data["tax_amount"] is not None else None
     receipt.extraction.currency = corrected_data["currency"]
-    receipt.extraction.extracted_json = corrected_data
+    receipt.extraction.extracted_json = _merge_corrected_extraction_payload(
+        original_data,
+        corrected_data,
+        status="reviewed",
+    )
     receipt.extraction.review_status = "reviewed"
     receipt.extraction.updated_at = now
     receipt.status = "reviewed"
@@ -372,15 +264,16 @@ def confirm_receipt(
         receipt.extraction.transaction_date = payload.transaction_date.date()
         receipt.extraction.total_amount = Decimal(str(payload.amount))
         receipt.extraction.review_status = "confirmed"
-        extracted_json = receipt.extraction.extracted_json or {}
-        extracted_json.update(
+        extracted_json = _merge_corrected_extraction_payload(
+            receipt.extraction.extracted_json,
             {
                 "merchant_name": payload.merchant_name,
                 "transaction_date": payload.transaction_date.date().isoformat(),
                 "total_amount": payload.amount,
-                "finance_transaction_id": finance_transaction_id,
-            }
+            },
+            status="confirmed",
         )
+        extracted_json["finance_transaction_id"] = finance_transaction_id
         receipt.extraction.extracted_json = extracted_json
         receipt.extraction.updated_at = now
 

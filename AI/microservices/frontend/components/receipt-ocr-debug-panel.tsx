@@ -12,6 +12,7 @@ export function ReceiptOcrDebugPanel({ ocrDebug }: ReceiptOcrDebugPanelProps) {
       <p className="text-sm uppercase tracking-[0.3em] text-accent">OCR Raw Text (Debug)</p>
       <div className="mt-4 grid gap-3 text-sm text-neutral-600 sm:grid-cols-2">
         <p>Provider: {ocrDebug?.provider ?? 'Unknown'}</p>
+        <p>Device: {ocrDebug?.device ?? 'Unknown'}</p>
         <p>
           Confidence:{' '}
           {ocrDebug?.confidence_score !== null && ocrDebug?.confidence_score !== undefined

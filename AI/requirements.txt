@@ -1,12 +1,48 @@
+# === CORE API ===
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
-underthesea
-scikit-learn
-pandas
-numpy
-pytesseract
-Pillow
+
+# === DATA / UTIL ===
+python-dotenv
 python-multipart
 httpx
-python-dotenv
+
+# === IMAGE & OCR ===
+paddleocr
+pillow
+opencv-python-headless
+
+# === PADDLE (CHỌN 1) ===
+# CPU version:
+# paddlepaddle
+
+# GPU version (uncomment when using GPU):
+paddlepaddle-gpu
+
+# === NLP / TEXT (optional hiện tại) ===
+underthesea
+scikit-learn
+
+# === DATA PROCESSING ===
+pandas
+numpy
+
+# === LEGACY OCR (optional fallback) ===
+pytesseract
+
+# === WORKER / QUEUE (optional nâng cấp) ===
+redis
+rq
+
+# === LOGGING & RELIABILITY ===
+loguru
+tenacity
+
+# === FUTURE AI / KIE ===
+transformers
+datasets
+torch
+
+# === PERFORMANCE (optional) ===
+orjson

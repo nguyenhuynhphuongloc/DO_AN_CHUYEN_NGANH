@@ -55,6 +55,8 @@ services:
   receipt-service:
     build:
       context: ./microservices/receipt-service
+      args:
+        PADDLE_PACKAGE: ${RECEIPT_PADDLE_PACKAGE:-paddlepaddle==3.3.1}
     env_file:
       - ./microservices/receipt-service/.env
     environment:
@@ -62,6 +64,7 @@ services:
       FINANCE_SERVICE_URL: http://finance-service:8002
       FRONTEND_URL: http://localhost:3000
       RECEIPT_UPLOAD_DIR: uploads
+      OCR_DEVICE: ${RECEIPT_OCR_DEVICE:-auto}
     ports:
       - "8003:8003"
     volumes:
@@ -81,6 +84,27 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  receipt-worker:
+    build:
+      context: ./microservices/receipt-service
+      args:
+        PADDLE_PACKAGE: ${RECEIPT_PADDLE_PACKAGE:-paddlepaddle==3.3.1}
+    command: ["python", "-m", "app.worker"]
+    env_file:
+      - ./microservices/receipt-service/.env
+    environment:
+      FINANCE_SERVICE_URL: http://finance-service:8002
+      FRONTEND_URL: http://localhost:3000
+      RECEIPT_UPLOAD_DIR: uploads
+      OCR_DEVICE: ${RECEIPT_OCR_DEVICE:-auto}
+      WORKER_POLL_INTERVAL_SECONDS: ${RECEIPT_WORKER_POLL_INTERVAL_SECONDS:-2}
+      WORKER_BATCH_SIZE: ${RECEIPT_WORKER_BATCH_SIZE:-1}
+    volumes:
+      - receipt_uploads:/app/uploads
+    depends_on:
+      receipt-service:
+        condition: service_healthy
 
   frontend:
     build:

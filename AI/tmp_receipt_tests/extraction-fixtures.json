@@ -1,0 +1,132 @@
+[
+  {
+    "name": "clear-simple",
+    "lines": [
+      "GREEN CAFE",
+      "12 River Road",
+      "Receipt #GC-2001",
+      "02/04/2026 07:45",
+      "Breakfast Set 85,000",
+      "Total 85,000",
+      "Cash"
+    ]
+  },
+  {
+    "name": "restaurant-svc-vat-total",
+    "lines": [
+      "SUNSET BISTRO",
+      "22 Lake View Street",
+      "Table 12",
+      "Guest 04",
+      "Date: 03/04/2026 19:40",
+      "Seafood Pasta 2 x 120,000 240,000",
+      "Sparkling Water 2 x 25,000 50,000",
+      "Subtotal 290,000",
+      "SVC 29,000",
+      "VAT 31,900",
+      "Grand Total 350,900",
+      "Paid by Visa"
+    ]
+  },
+  {
+    "name": "blurry-like-ocr-noise",
+    "lines": [
+      "MART 88",
+      "Inv0ice N0 B12-7",
+      "Dale 02:04:2026",
+      "Mi1k Tea 45.000",
+      "Sub t0tal 45.000",
+      "T0tal 45.000"
+    ]
+  },
+  {
+    "name": "long-receipt",
+    "lines": [
+      "FAMILY RESTAURANT",
+      "88 Central Avenue",
+      "Receipt No: FR-9901",
+      "2026/04/02 19:30",
+      "Soup 45,000",
+      "Rice 25,000",
+      "Tea 10,000",
+      "Chicken 85,000",
+      "Vegetables 35,000",
+      "Dessert 20,000",
+      "Service Charge 11,000",
+      "VAT 23,100",
+      "Grand Total 254,100",
+      "Paid by QR"
+    ]
+  },
+  {
+    "name": "subtotal-tax-discount",
+    "lines": [
+      "THE COFFEE HOUSE",
+      "123 Main Street",
+      "Receipt No: TC12345",
+      "Date: 02/04/2026 18:20",
+      "Latte 2 x 45,000 90,000",
+      "Cake 1 x 35,000 35,000",
+      "Subtotal 125,000",
+      "VAT 12,500",
+      "Discount -10,000",
+      "Grand Total 127,500",
+      "Payment Visa"
+    ]
+  },
+  {
+    "name": "payment-method",
+    "lines": [
+      "FRESH MART",
+      "45 Market Road",
+      "Invoice #A-8891",
+      "2026-04-02",
+      "Apple Juice 25.50",
+      "Bread 12.00",
+      "Amount Due 37.50",
+      "Paid by Mastercard"
+    ]
+  },
+  {
+    "name": "noisy-promo-footer",
+    "lines": [
+      "WELCOME TO SUPER SALE CENTER",
+      "www.supersale.example",
+      "Phone 0123 456 789",
+      "CITY STORE",
+      "Table 08",
+      "Guest 02",
+      "03-04-2026",
+      "Noodles 55,000",
+      "Service Charge 5,000",
+      "Total 60,000",
+      "THANK YOU SEE YOU AGAIN"
+    ]
+  },
+  {
+    "name": "missing-merchant-line",
+    "lines": [
+      "WELCOME",
+      "www.weekend-sale.example",
+      "Phone 0900 555 888",
+      "Receipt No: M-2001",
+      "03/04/2026",
+      "Snack Box 35,000",
+      "Total 35,000",
+      "Cash"
+    ]
+  },
+  {
+    "name": "ocr-corrupted-separators",
+    "lines": [
+      "CITY MART",
+      "Inv0ice N0 CM-44",
+      "Date 03:04:2026",
+      "Noodle Pack 12.500",
+      "Fruit Tea 18.500",
+      "Sub t0tal 31.000",
+      "T0tal 31.000",
+      "Paid by QR"
+    ]
+  }
+]
