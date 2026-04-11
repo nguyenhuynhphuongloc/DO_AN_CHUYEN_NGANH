@@ -1,0 +1,147 @@
+services:
+  auth-service:
+    build:
+      context: ./microservices/auth-service
+    env_file:
+      - ./microservices/auth-service/.env
+    environment:
+      PORT: 8001
+      FRONTEND_URL: http://localhost:3000
+      RUN_DB_PUSH: "false"
+      RUN_SEED: "false"
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  finance-service:
+    build:
+      context: ./microservices/finance-service
+    env_file:
+      - ./microservices/finance-service/.env
+    environment:
+      PORT: 8002
+      FRONTEND_URL: http://localhost:3000
+      RUN_DB_PUSH: "false"
+      RUN_SEED: "false"
+    ports:
+      - "8002:8002"
+    depends_on:
+      auth-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  receipt-service:
+    build:
+      context: ./microservices/receipt-service
+      args:
+        PADDLE_PACKAGE: ${RECEIPT_PADDLE_PACKAGE:-paddlepaddle==3.3.1}
+    env_file:
+      - ./microservices/receipt-service/.env
+    environment:
+      PORT: 8003
+      FINANCE_SERVICE_URL: http://finance-service:8002
+      FRONTEND_URL: http://localhost:3000
+      RECEIPT_UPLOAD_DIR: uploads
+      OCR_DEVICE: ${RECEIPT_OCR_DEVICE:-auto}
+    ports:
+      - "8003:8003"
+    volumes:
+      - receipt_uploads:/app/uploads
+    depends_on:
+      finance-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/health')"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  receipt-worker:
+    build:
+      context: ./microservices/receipt-service
+      args:
+        PADDLE_PACKAGE: ${RECEIPT_PADDLE_PACKAGE:-paddlepaddle==3.3.1}
+    command: ["python", "-m", "app.worker"]
+    env_file:
+      - ./microservices/receipt-service/.env
+    environment:
+      FINANCE_SERVICE_URL: http://finance-service:8002
+      FRONTEND_URL: http://localhost:3000
+      RECEIPT_UPLOAD_DIR: uploads
+      OCR_DEVICE: ${RECEIPT_OCR_DEVICE:-auto}
+      WORKER_POLL_INTERVAL_SECONDS: ${RECEIPT_WORKER_POLL_INTERVAL_SECONDS:-2}
+      WORKER_BATCH_SIZE: ${RECEIPT_WORKER_BATCH_SIZE:-1}
+    volumes:
+      - receipt_uploads:/app/uploads
+    depends_on:
+      receipt-service:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./microservices/frontend
+      args:
+        NEXT_PUBLIC_AUTH_API_URL: http://localhost:8001
+        NEXT_PUBLIC_FINANCE_API_URL: http://localhost:8002
+        NEXT_PUBLIC_RECEIPT_API_URL: http://localhost:8003
+        INTERNAL_AUTH_API_URL: http://auth-service:8001
+        INTERNAL_FINANCE_API_URL: http://finance-service:8002
+        INTERNAL_RECEIPT_API_URL: http://receipt-service:8003
+    env_file:
+      - ./microservices/frontend/.env
+    environment:
+      NEXT_PUBLIC_AUTH_API_URL: http://localhost:8001
+      NEXT_PUBLIC_FINANCE_API_URL: http://localhost:8002
+      NEXT_PUBLIC_RECEIPT_API_URL: http://localhost:8003
+      INTERNAL_AUTH_API_URL: http://auth-service:8001
+      INTERNAL_FINANCE_API_URL: http://finance-service:8002
+      INTERNAL_RECEIPT_API_URL: http://receipt-service:8003
+    ports:
+      - "3000:3000"
+    depends_on:
+      receipt-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  receipt_uploads:

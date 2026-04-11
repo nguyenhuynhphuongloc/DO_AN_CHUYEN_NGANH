@@ -1,12 +1,10 @@
+# === CORE API ===
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
-underthesea
-scikit-learn
-pandas
-numpy
-pytesseract
-Pillow
+
+# === DATA / UTIL ===
+python-dotenv
 python-multipart
 httpx
 python-dotenv
