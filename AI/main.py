@@ -31,33 +31,37 @@ async def root():
 
 @app.post("/api/nlp/parse", response_model=TransactionExtract)
 async def parse_natural_language(req: NLPRequest):
-    # This will be implemented in nlp_service.py
     from services.nlp_service import extract_transaction_info
     result = extract_transaction_info(req.text)
     return result
 
 @app.post("/api/nlp/query")
 async def query_natural_language(req: NLPRequest):
-    # Natural language query for stats
     return {"query": req.text, "answer": "Tính năng đang được phát triển"}
 
 @app.post("/api/ai/predict")
 async def predict_spending(data: List[dict]):
-    # Spending prediction logic
     from services.prediction_service import predict_future_spending
     result = predict_future_spending(data)
     return result
 
 @app.post("/api/ai/anomaly")
 async def detect_anomalies(data: List[dict]):
-    # Anomaly detection logic
     from services.prediction_service import detect_anomalies_in_data
     result = detect_anomalies_in_data(data)
     return result
 
+@app.post("/api/ai/advisor")
+async def get_financial_advisor_advice(req: Request):
+    from services.advisor_service import get_financial_advice
+    data = await req.json()
+    query = data.get("text", "")
+    context = data.get("context", {})
+    result = get_financial_advice(query, context)
+    return result
+
 @app.post("/api/ocr/receipt")
 async def scan_receipt(request: Request):
-    # OCR from uploaded file
     from services.ocr_service import process_receipt_image
     body = await request.body()
     result = process_receipt_image(body)

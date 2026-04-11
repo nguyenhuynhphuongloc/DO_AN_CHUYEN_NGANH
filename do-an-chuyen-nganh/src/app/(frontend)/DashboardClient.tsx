@@ -6,6 +6,17 @@ import {
 } from 'recharts'
 import { format } from 'date-fns'
 import { vi } from 'date-fns/locale'
+import { 
+  MdTrendingUp, 
+  MdTrendingDown, 
+  MdAccountBalanceWallet,
+  MdPieChart,
+  MdReceipt,
+  MdArrowUpward,
+  MdArrowDownward,
+  MdArrowForward
+} from 'react-icons/md'
+import CategoryIcon from '@/components/CategoryIcon'
 
 interface CategoryBreakdown {
   name: string
@@ -53,21 +64,27 @@ export default function DashboardClient({
         <div className="stat-card income">
           <div className="stat-card-header">
             <span className="stat-card-label">Tổng thu nhập</span>
-            <div className="stat-card-icon income">📈</div>
+            <div className="stat-card-icon income">
+              <MdTrendingUp size={24} />
+            </div>
           </div>
           <div className="stat-card-value income">{formatCurrency(totalIncome)}</div>
         </div>
         <div className="stat-card expense">
           <div className="stat-card-header">
             <span className="stat-card-label">Tổng chi tiêu</span>
-            <div className="stat-card-icon expense">📉</div>
+            <div className="stat-card-icon expense">
+              <MdTrendingDown size={24} />
+            </div>
           </div>
           <div className="stat-card-value expense">{formatCurrency(totalExpense)}</div>
         </div>
         <div className="stat-card balance">
           <div className="stat-card-header">
             <span className="stat-card-label">Số dư</span>
-            <div className="stat-card-icon balance">💰</div>
+            <div className="stat-card-icon balance">
+              <MdAccountBalanceWallet size={24} />
+            </div>
           </div>
           <div className="stat-card-value balance">{formatCurrency(balance)}</div>
         </div>
@@ -79,15 +96,15 @@ export default function DashboardClient({
           <div className="chart-card-title">Thu - Chi 6 tháng gần nhất</div>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="month" stroke="#94a3b8" fontSize={12} />
               <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(v) => `${(v / 1000000).toFixed(0)}tr`} />
               <Tooltip
                 contentStyle={{
-                  background: '#1e293b',
-                  border: '1px solid #334155',
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
                   borderRadius: '8px',
-                  color: '#f1f5f9',
+                  color: '#1e293b',
                 }}
                 formatter={(value) => formatCurrency(Number(value))}
               />
@@ -121,10 +138,10 @@ export default function DashboardClient({
                 </Pie>
                 <Tooltip
                   contentStyle={{
-                    background: '#1e293b',
-                    border: '1px solid #334155',
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
                     borderRadius: '8px',
-                    color: '#f1f5f9',
+                    color: '#1e293b',
                   }}
                   formatter={(value) => formatCurrency(Number(value))}
                 />
@@ -132,7 +149,9 @@ export default function DashboardClient({
             </ResponsiveContainer>
           ) : (
             <div className="empty-state" style={{ padding: '40px' }}>
-              <div className="empty-state-icon">📊</div>
+              <div className="empty-state-icon">
+                <MdPieChart size={48} color="var(--bg-secondary)" />
+              </div>
               <p className="empty-state-desc">Chưa có dữ liệu chi tiêu</p>
             </div>
           )}
@@ -143,8 +162,8 @@ export default function DashboardClient({
       <div className="card">
         <div className="card-header">
           <h3 className="card-title">Giao dịch gần đây</h3>
-          <a href="/transactions" className="btn btn-secondary" style={{ fontSize: '13px', padding: '8px 16px' }}>
-            Xem tất cả →
+          <a href="/transactions" className="btn btn-secondary" style={{ fontSize: '13px', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            Xem tất cả <MdArrowForward size={16} />
           </a>
         </div>
         {recentTransactions.length > 0 ? (
@@ -165,15 +184,16 @@ export default function DashboardClient({
                   return (
                     <tr key={t.id}>
                       <td>
-                        <span className={`type-badge ${t.type}`}>
-                          {t.type === 'income' ? '↗ Thu' : '↘ Chi'}
+                        <span className={`type-badge ${t.type}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', width: 'fit-content' }}>
+                          {t.type === 'income' ? <MdArrowUpward size={14} /> : <MdArrowDownward size={14} />}
+                          {t.type === 'income' ? 'Thu' : 'Chi'}
                         </span>
                       </td>
                       <td>{t.description || '—'}</td>
                       <td>
                         {cat ? (
                           <span className="category-tag">
-                            {cat.icon} {cat.name}
+                            <CategoryIcon icon={cat.icon} size={16} /> {cat.name}
                           </span>
                         ) : '—'}
                       </td>
@@ -195,10 +215,14 @@ export default function DashboardClient({
           </div>
         ) : (
           <div className="empty-state">
-            <div className="empty-state-icon">💸</div>
+            <div className="empty-state-icon">
+              <MdReceipt size={48} color="var(--bg-secondary)" />
+            </div>
             <h3 className="empty-state-title">Chưa có giao dịch nào</h3>
             <p className="empty-state-desc">Bắt đầu bằng cách thêm giao dịch đầu tiên</p>
-            <a href="/transactions" className="btn btn-primary">Thêm giao dịch</a>
+            <a href="/transactions" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <MdReceipt size={18} /> Thêm giao dịch
+            </a>
           </div>
         )}
       </div>

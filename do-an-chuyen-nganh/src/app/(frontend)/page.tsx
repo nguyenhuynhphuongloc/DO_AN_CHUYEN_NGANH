@@ -4,8 +4,9 @@ import { redirect } from 'next/navigation'
 import config from '@/payload.config'
 import Sidebar from '@/components/Sidebar'
 import DashboardClient from '@/app/(frontend)/DashboardClient'
+import MonthFilter from '@/components/MonthFilter'
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ month?: string; year?: string }> }) {
   const headers = await getHeaders()
   const payloadConfig = await config
   const payload = await getPayload({ config: payloadConfig })
@@ -15,10 +16,14 @@ export default async function DashboardPage() {
     redirect('/auth/login')
   }
 
-  // Get stats for current month
+  const { month, year } = await searchParams
   const now = new Date()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()
+  const selectedMonth = month ? parseInt(month) : now.getMonth() + 1
+  const selectedYear = year ? parseInt(year) : now.getFullYear()
+
+  // Get stats for selected month
+  const startOfMonth = new Date(selectedYear, selectedMonth - 1, 1).toISOString()
+  const endOfMonth = new Date(selectedYear, selectedMonth, 0, 23, 59, 59).toISOString()
 
   const transactions = await payload.find({
     collection: 'transactions' as any,
@@ -68,11 +73,12 @@ export default async function DashboardPage() {
     depth: 1,
   })
 
-  // Chart data (last 6 months)
+  // Chart data (6 months up to selected month)
   const chartData: { month: string; income: number; expense: number }[] = []
   for (let i = 5; i >= 0; i--) {
-    const sd = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const ed = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59)
+    const d = new Date(selectedYear, selectedMonth - 1 - i, 1)
+    const sd = new Date(d.getFullYear(), d.getMonth(), 1)
+    const ed = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59)
 
     const monthTx = await payload.find({
       collection: 'transactions' as any,
@@ -101,9 +107,14 @@ export default async function DashboardPage() {
       <Sidebar user={user} />
       <main className="main-content">
         <div className="page-container">
-          <div className="page-header">
-            <h1 className="page-title">Xin chào, {user.name || user.email}! 👋</h1>
-            <p className="page-subtitle">Tổng quan tài chính tháng {now.getMonth() + 1}/{now.getFullYear()}</p>
+          <div className="page-header" style={{ marginBottom: '24px' }}>
+            <div>
+              <h1 className="page-title">Xin chào, {user.name || user.email}!</h1>
+              <p className="page-subtitle">Tổng quan tài chính của bạn</p>
+            </div>
+            <div style={{ marginTop: '16px' }}>
+              <MonthFilter currentMonth={selectedMonth} currentYear={selectedYear} />
+            </div>
           </div>
 
           <DashboardClient

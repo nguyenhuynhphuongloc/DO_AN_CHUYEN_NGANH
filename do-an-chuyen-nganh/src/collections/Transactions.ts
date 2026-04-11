@@ -9,22 +9,25 @@ export const Transactions: CollectionConfig = {
   access: {
     read: ({ req: { user } }) => {
       if (!user) return false
+      if (user.role === 'admin') return true
       return { user: { equals: user.id } }
     },
     create: ({ req: { user } }) => Boolean(user),
     update: ({ req: { user } }) => {
       if (!user) return false
+      if (user.role === 'admin') return true
       return { user: { equals: user.id } }
     },
     delete: ({ req: { user } }) => {
       if (!user) return false
+      if (user.role === 'admin') return true
       return { user: { equals: user.id } }
     },
   },
   hooks: {
-    beforeChange: [
+    beforeValidate: [
       ({ req, operation, data }) => {
-        if (operation === 'create' && req.user) {
+        if (operation === 'create' && req.user && data) {
           data.user = req.user.id
         }
         return data

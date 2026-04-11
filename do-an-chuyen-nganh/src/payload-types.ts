@@ -129,6 +129,7 @@ export interface UserAuthOperations {
  */
 export interface User {
   id: number;
+  role: 'admin' | 'user';
   name?: string | null;
   currency?: ('VND' | 'USD') | null;
   avatar?: (number | null) | Media;
@@ -306,6 +307,7 @@ export interface PayloadMigration {
  * via the `definition` "users_select".
  */
 export interface UsersSelect<T extends boolean = true> {
+  role?: T;
   name?: T;
   currency?: T;
   avatar?: T;

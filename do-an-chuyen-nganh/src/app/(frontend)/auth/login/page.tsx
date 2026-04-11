@@ -43,7 +43,6 @@ export default function LoginPage() {
         <div className="auth-logo">
           <div className="auth-logo-icon">💰</div>
           <h1 className="auth-title">Đăng nhập</h1>
-          <p className="auth-subtitle">Chào mừng bạn quay lại FinTrack</p>
         </div>
 
         {error && <div className="auth-error">{error}</div>}

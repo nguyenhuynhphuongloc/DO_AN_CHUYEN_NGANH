@@ -1,6 +1,7 @@
 'use client'
 import React, { useState } from 'react'
 import Sidebar from '@/components/Sidebar'
+import { MdDocumentScanner, MdTrendingUp, MdCloudUpload } from 'react-icons/md'
 
 export default function ScanPage() {
   const [file, setFile] = useState<File | null>(null)
@@ -42,7 +43,9 @@ export default function ScanPage() {
       <main className="main-content">
         <div className="page-container">
           <div className="page-header">
-            <h1 className="page-title">Quét hóa đơn 📸</h1>
+            <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              Quét hóa đơn <MdDocumentScanner size={32} color="var(--primary)" />
+            </h1>
             <p className="page-subtitle">Sử dụng AI để tự động trích xuất thông tin từ hóa đơn</p>
           </div>
 
@@ -61,11 +64,11 @@ export default function ScanPage() {
 
               <button 
                 className="btn btn-primary" 
-                style={{ marginTop: '20px', width: '100%', justifyContent: 'center' }}
+                style={{ marginTop: '20px', width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '8px' }}
                 onClick={handleUpload}
                 disabled={!file || loading}
               >
-                {loading ? 'Đang phân tích...' : 'Bắt đầu quét'}
+                {loading ? 'Đang phân tích...' : <><MdCloudUpload size={20} /> Bắt đầu quét</>}
               </button>
             </div>
 
@@ -75,8 +78,11 @@ export default function ScanPage() {
                 <div className="ocr-result">
                   <div className="stat-card income" style={{ marginBottom: '16px' }}>
                     <div className="stat-card-label">Số tiền phát hiện</div>
-                    <div className="stat-card-value">
-                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.amount)}
+                    <div className="stat-card-header" style={{ marginBottom: '8px' }}>
+                       <div className="stat-card-value">
+                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.amount)}
+                      </div>
+                      <MdTrendingUp size={24} color="var(--income-color)" />
                     </div>
                   </div>
                   

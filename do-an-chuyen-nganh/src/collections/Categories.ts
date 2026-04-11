@@ -9,6 +9,7 @@ export const Categories: CollectionConfig = {
   access: {
     read: ({ req: { user } }) => {
       if (!user) return false
+      if (user.role === 'admin') return true
       return {
         or: [
           { isDefault: { equals: true } },
@@ -19,12 +20,44 @@ export const Categories: CollectionConfig = {
     create: ({ req: { user } }) => Boolean(user),
     update: ({ req: { user } }) => {
       if (!user) return false
+      if (user.role === 'admin') return true
       return { user: { equals: user.id } }
     },
     delete: ({ req: { user } }) => {
       if (!user) return false
+      if (user.role === 'admin') return true
       return { user: { equals: user.id } }
     },
+  },
+  hooks: {
+    beforeValidate: [
+      ({ req, operation, data }) => {
+        if (operation === 'create' && req.user && data) {
+          data.user = req.user.id
+        }
+        return data
+      },
+    ],
+    beforeDelete: [
+      async ({ req, id }) => {
+        try {
+          const transactions = await req.payload.find({
+            collection: 'transactions',
+            where: {
+              category: { equals: id }
+            },
+            limit: 1,
+          })
+          
+          if (transactions.totalDocs > 0) {
+            throw new Error('Cảnh báo: Không thể xóa danh mục này vì đang có các giao dịch liên quan.')
+          }
+        } catch (error: any) {
+          console.error('Lỗi khi xóa danh mục:', error.message)
+          throw error
+        }
+      }
+    ],
   },
   fields: [
     {

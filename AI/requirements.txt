@@ -10,3 +10,4 @@ Pillow
 python-multipart
 httpx
 python-dotenv
+huggingface-hub

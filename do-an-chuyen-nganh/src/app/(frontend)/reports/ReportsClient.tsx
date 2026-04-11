@@ -4,6 +4,17 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area,
 } from 'recharts'
+import { 
+  MdTrendingUp, 
+  MdTrendingDown, 
+  MdAccountBalanceWallet, 
+  MdInsertChart, 
+  MdPieChart, 
+  MdListAlt,
+  MdCelebration,
+  MdWarning
+} from 'react-icons/md'
+import CategoryIcon from '@/components/CategoryIcon'
 
 interface ChartDataPoint {
   month: string
@@ -59,21 +70,27 @@ export default function ReportsClient({ chartData, categoryData }: Props) {
         <div className="stat-card income">
           <div className="stat-card-header">
             <span className="stat-card-label">Tổng thu 12 tháng</span>
-            <div className="stat-card-icon income">📈</div>
+            <div className="stat-card-icon income">
+              <MdTrendingUp size={24} />
+            </div>
           </div>
           <div className="stat-card-value income">{formatCurrency(totalIncome)}</div>
         </div>
         <div className="stat-card expense">
           <div className="stat-card-header">
             <span className="stat-card-label">Tổng chi 12 tháng</span>
-            <div className="stat-card-icon expense">📉</div>
+            <div className="stat-card-icon expense">
+              <MdTrendingDown size={24} />
+            </div>
           </div>
           <div className="stat-card-value expense">{formatCurrency(totalExpense)}</div>
         </div>
         <div className="stat-card balance">
           <div className="stat-card-header">
             <span className="stat-card-label">Tiết kiệm ròng</span>
-            <div className="stat-card-icon balance">🏦</div>
+            <div className="stat-card-icon balance">
+              <MdAccountBalanceWallet size={24} />
+            </div>
           </div>
           <div className="stat-card-value balance">{formatCurrency(netSavings)}</div>
         </div>
@@ -85,8 +102,16 @@ export default function ReportsClient({ chartData, categoryData }: Props) {
         <div style={{ fontSize: '48px', fontWeight: 800, color: parseFloat(savingsRate) >= 20 ? 'var(--income-color)' : 'var(--expense-color)' }}>
           {savingsRate}%
         </div>
-        <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-          {parseFloat(savingsRate) >= 20 ? '🎉 Tuyệt vời! Bạn đang tiết kiệm tốt' : '⚠️ Hãy cố gắng tiết kiệm thêm nhé'}
+        <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+          {parseFloat(savingsRate) >= 20 ? (
+            <>
+              <MdCelebration color="#10b981" size={18} /> Tuyệt vời! Bạn đang tiết kiệm tốt
+            </>
+          ) : (
+            <>
+              <MdWarning color="#ef4444" size={18} /> Hãy cố gắng tiết kiệm thêm nhé
+            </>
+          )}
         </div>
       </div>
 
@@ -94,7 +119,9 @@ export default function ReportsClient({ chartData, categoryData }: Props) {
       <div className="charts-grid">
         {/* Area Chart - Trend */}
         <div className="chart-card">
-          <div className="chart-card-title">📊 Xu hướng thu chi theo thời gian</div>
+          <div className="chart-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MdInsertChart size={20} color="var(--primary)" /> Xu hướng thu chi theo thời gian
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={chartData}>
               <defs>
@@ -120,7 +147,9 @@ export default function ReportsClient({ chartData, categoryData }: Props) {
 
         {/* Bar Chart - Comparison */}
         <div className="chart-card">
-          <div className="chart-card-title">📊 So sánh thu chi hàng tháng</div>
+          <div className="chart-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MdInsertChart size={20} color="var(--primary)" /> So sánh thu chi hàng tháng
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -138,7 +167,9 @@ export default function ReportsClient({ chartData, categoryData }: Props) {
       {/* Category Breakdown */}
       <div className="charts-grid">
         <div className="chart-card">
-          <div className="chart-card-title">🍩 Phân bổ chi tiêu tháng này</div>
+          <div className="chart-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MdPieChart size={20} color="var(--primary)" /> Phân bổ chi tiêu tháng này
+          </div>
           {expenseByCategory.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -169,7 +200,9 @@ export default function ReportsClient({ chartData, categoryData }: Props) {
 
         {/* Category Table */}
         <div className="chart-card">
-          <div className="chart-card-title">📋 Chi tiết theo danh mục</div>
+          <div className="chart-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MdListAlt size={20} color="var(--primary)" /> Chi tiết theo danh mục
+          </div>
           {expenseByCategory.length > 0 ? (
             <div className="table-container">
               <table className="table">
@@ -188,7 +221,7 @@ export default function ReportsClient({ chartData, categoryData }: Props) {
                       <tr key={c.name}>
                         <td>
                           <span className="category-tag">
-                            {c.icon} {c.name}
+                            <CategoryIcon icon={c.icon} size={16} /> {c.name}
                           </span>
                         </td>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(c.expense)}</td>

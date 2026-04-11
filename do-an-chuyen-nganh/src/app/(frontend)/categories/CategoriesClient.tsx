@@ -1,6 +1,16 @@
 'use client'
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { 
+  MdAdd, 
+  MdEdit, 
+  MdDelete, 
+  MdClose, 
+  MdTrendingUp, 
+  MdTrendingDown,
+  MdFilterList
+} from 'react-icons/md'
+import CategoryIcon from '@/components/CategoryIcon'
 
 interface Category {
   id: string
@@ -16,13 +26,20 @@ interface Props {
   initialCategories: Category[]
 }
 
-const ICON_OPTIONS = ['🍔', '🚗', '🎮', '💰', '🏠', '📚', '💊', '🎁', '✈️', '👕', '💼', '📱', '🎬', '☕', '🛒', '💡', '🏋️', '🎵', '💳', '📦']
+const ICON_OPTIONS = [
+  'MdRestaurant', 'MdDirectionsCar', 'MdGames', 'MdAttachMoney', 'MdHome', 
+  'MdMenuBook', 'MdMedicalServices', 'MdCardGiftcard', 'MdFlight', 'MdCheckroom', 
+  'MdWork', 'MdPhoneAndroid', 'MdMovie', 'MdLocalCafe', 'MdShoppingCart', 
+  'MdLightbulb', 'MdFitnessCenter', 'MdMusicNote', 'MdCreditCard', 'MdInventory2',
+  'MdSchool', 'MdPets', 'MdPhonelink', 'MdSelfImprovement', 'MdVolunteerActivism', 'MdPaid'
+]
 
 const COLOR_OPTIONS = ['#6366f1', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16']
 
 export default function CategoriesClient({ initialCategories }: Props) {
   const router = useRouter()
   const [showModal, setShowModal] = useState(false)
+  const [deleteConfirmData, setDeleteConfirmData] = useState<Category | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [filterType, setFilterType] = useState<string>('all')
@@ -30,12 +47,12 @@ export default function CategoriesClient({ initialCategories }: Props) {
   const [formData, setFormData] = useState({
     name: '',
     type: 'expense' as 'income' | 'expense',
-    icon: '📦',
+    icon: 'MdInventory2',
     color: '#6366f1',
   })
 
   const resetForm = () => {
-    setFormData({ name: '', type: 'expense', icon: '📦', color: '#6366f1' })
+    setFormData({ name: '', type: 'expense', icon: 'MdInventory2', color: '#6366f1' })
     setEditingId(null)
   }
 
@@ -73,13 +90,22 @@ export default function CategoriesClient({ initialCategories }: Props) {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa danh mục này?')) return
+  const confirmDelete = async () => {
+    if (!deleteConfirmData) return
+    setLoading(true)
     try {
-      await fetch(`/api/categories/${id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/categories/${deleteConfirmData.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const errData = await res.json()
+        const message = errData.errors?.[0]?.message || errData.message || 'Không thể xóa danh mục'
+        alert(`Lỗi: ${message}`)
+      }
+      setDeleteConfirmData(null)
       router.refresh()
     } catch (err) {
       console.error(err)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -98,34 +124,37 @@ export default function CategoriesClient({ initialCategories }: Props) {
           <h1 className="page-title">Danh mục</h1>
           <p className="page-subtitle">Quản lý danh mục thu chi của bạn</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true) }}>
-          + Thêm danh mục
+        <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true) }} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <MdAdd size={20} /> Thêm danh mục
         </button>
       </div>
 
-      <div className="filter-bar">
-        <select
-          className="form-select"
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          style={{ width: 'auto', minWidth: '150px' }}
-        >
-          <option value="all">Tất cả</option>
-          <option value="income">Thu nhập</option>
-          <option value="expense">Chi tiêu</option>
-        </select>
+      <div className="filter-bar" style={{ display: 'flex', alignItems: 'center' }}>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <MdFilterList size={18} style={{ position: 'absolute', left: '12px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+          <select
+            className="form-select"
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            style={{ width: 'auto', minWidth: '150px', paddingLeft: '36px' }}
+          >
+            <option value="all">Tất cả</option>
+            <option value="income">Thu nhập</option>
+            <option value="expense">Chi tiêu</option>
+          </select>
+        </div>
       </div>
 
       {filterType === 'all' || filterType === 'expense' ? (
         <>
-          <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--expense-color)', marginBottom: '16px' }}>
-            📉 Chi tiêu ({expenseCategories.length})
+          <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--expense-color)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MdTrendingDown size={20} /> Chi tiêu ({expenseCategories.length})
           </h3>
           <div className="category-grid" style={{ marginBottom: '32px' }}>
             {expenseCategories.map((c) => (
               <div className="category-card" key={c.id}>
-                <div className="category-card-icon" style={{ background: `${c.color}20` }}>
-                  {c.icon}
+                <div className="category-card-icon" style={{ background: `${c.color}20`, color: c.color }}>
+                  <CategoryIcon icon={c.icon} size={24} />
                 </div>
                 <div>
                   <div className="category-card-name">{c.name}</div>
@@ -133,8 +162,12 @@ export default function CategoriesClient({ initialCategories }: Props) {
                 </div>
                 {!c.isDefault && (
                   <div className="category-card-actions">
-                    <button className="btn-icon" onClick={() => openEditModal(c)}>✏️</button>
-                    <button className="btn-icon" onClick={() => handleDelete(c.id)} style={{ color: 'var(--danger)' }}>🗑️</button>
+                    <button className="btn-icon" onClick={() => openEditModal(c)} style={{ color: '#f59e0b' }} title="Sửa">
+                      <MdEdit size={18} />
+                    </button>
+                    <button className="btn-icon" onClick={() => setDeleteConfirmData(c)} style={{ color: 'var(--danger)' }} title="Xóa">
+                      <MdClose size={18} />
+                    </button>
                   </div>
                 )}
               </div>
@@ -145,14 +178,14 @@ export default function CategoriesClient({ initialCategories }: Props) {
 
       {filterType === 'all' || filterType === 'income' ? (
         <>
-          <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--income-color)', marginBottom: '16px' }}>
-            📈 Thu nhập ({incomeCategories.length})
+          <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--income-color)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MdTrendingUp size={20} /> Thu nhập ({incomeCategories.length})
           </h3>
           <div className="category-grid">
             {incomeCategories.map((c) => (
               <div className="category-card" key={c.id}>
-                <div className="category-card-icon" style={{ background: `${c.color}20` }}>
-                  {c.icon}
+                <div className="category-card-icon" style={{ background: `${c.color}20`, color: c.color }}>
+                  <CategoryIcon icon={c.icon} size={24} />
                 </div>
                 <div>
                   <div className="category-card-name">{c.name}</div>
@@ -160,8 +193,12 @@ export default function CategoriesClient({ initialCategories }: Props) {
                 </div>
                 {!c.isDefault && (
                   <div className="category-card-actions">
-                    <button className="btn-icon" onClick={() => openEditModal(c)}>✏️</button>
-                    <button className="btn-icon" onClick={() => handleDelete(c.id)} style={{ color: 'var(--danger)' }}>🗑️</button>
+                    <button className="btn-icon" onClick={() => openEditModal(c)} style={{ color: '#f59e0b' }} title="Sửa">
+                      <MdEdit size={18} />
+                    </button>
+                    <button className="btn-icon" onClick={() => setDeleteConfirmData(c)} style={{ color: 'var(--danger)' }} title="Xóa">
+                      <MdClose size={18} />
+                    </button>
                   </div>
                 )}
               </div>
@@ -176,7 +213,9 @@ export default function CategoriesClient({ initialCategories }: Props) {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">{editingId ? 'Sửa danh mục' : 'Thêm danh mục mới'}</h2>
-              <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
+              <button className="modal-close" onClick={() => setShowModal(false)}>
+                <MdClose size={24} />
+              </button>
             </div>
             <form onSubmit={handleSubmit}>
               <div className="modal-body">
@@ -221,15 +260,17 @@ export default function CategoriesClient({ initialCategories }: Props) {
                         type="button"
                         onClick={() => setFormData({ ...formData, icon })}
                         style={{
-                          width: '40px', height: '40px',
+                          width: '44px', height: '44px',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '20px', borderRadius: '8px',
+                          borderRadius: '8px',
                           border: formData.icon === icon ? '2px solid var(--primary)' : '1px solid var(--border)',
-                          background: formData.icon === icon ? 'rgba(99,102,241,0.1)' : 'transparent',
+                          background: formData.icon === icon ? 'rgba(99,102,241,0.1)' : 'var(--bg-card)',
+                          color: formData.icon === icon ? 'var(--primary)' : 'var(--text-primary)',
                           cursor: 'pointer', transition: 'all 0.2s',
                         }}
+                        title={icon}
                       >
-                        {icon}
+                        <CategoryIcon icon={icon} size={24} />
                       </button>
                     ))}
                   </div>
@@ -263,6 +304,51 @@ export default function CategoriesClient({ initialCategories }: Props) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmData && (
+        <div className="modal-overlay" onClick={() => setDeleteConfirmData(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Xác nhận xóa</h2>
+              <button className="modal-close" onClick={() => setDeleteConfirmData(null)}>
+                <MdClose size={24} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ padding: '24px' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ 
+                  width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(239,68,68,0.1)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
+                  color: '#ef4444'
+                }}>
+                  <MdDelete size={32} />
+                </div>
+                <p style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '8px' }}>
+                  Xác nhận xóa?
+                </p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: '1.5' }}>
+                  Bạn có chắc chắn muốn xóa danh mục <strong>"{deleteConfirmData.name}"</strong>? Hành động này không thể hoàn tác.
+                </p>
+              </div>
+            </div>
+            <div className="modal-footer" style={{ borderTop: 'none', display: 'flex', gap: '12px' }}>
+              <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setDeleteConfirmData(null)}>
+                Hủy
+              </button>
+              <button 
+                type="button" 
+                className="btn btn-danger" 
+                style={{ flex: 1, background: '#ef4444', color: 'white', border: 'none' }} 
+                onClick={confirmDelete}
+                disabled={loading}
+              >
+                {loading ? 'Đang xóa...' : 'Xác nhận xóa'}
+              </button>
+            </div>
           </div>
         </div>
       )}
