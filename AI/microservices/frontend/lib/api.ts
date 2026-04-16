@@ -1,5 +1,5 @@
 import { requireAccessToken } from './auth-storage';
-import { AuthResponse, Category, DashboardSummary, Receipt, ReceiptStructuredExtraction, Transaction, Wallet } from './types';
+import { AuthResponse, Category, DashboardSummary, ReceiptStructuredExtraction, ReceiptWorkflow, Transaction, Wallet } from './types';
 
 function resolveApiUrl(publicUrl: string | undefined, internalUrl: string | undefined, fallback: string) {
   if (typeof window === 'undefined') {
@@ -101,7 +101,7 @@ export async function getCategories(): Promise<Category[]> {
   return parseJson<Category[]>(response);
 }
 
-export async function uploadReceipt(file: File): Promise<Receipt> {
+export async function uploadReceipt(file: File): Promise<ReceiptWorkflow> {
   const formData = new FormData();
   formData.append('file', file);
 
@@ -111,15 +111,23 @@ export async function uploadReceipt(file: File): Promise<Receipt> {
     headers: createHeaders(undefined, { auth: true }),
   });
 
-  return parseJson<Receipt>(response);
+  return parseJson<ReceiptWorkflow>(response);
 }
 
-export async function getReceipt(id: string): Promise<Receipt> {
+export async function getReceipt(id: string): Promise<ReceiptWorkflow> {
   const response = await fetch(`${receiptApiUrl}/receipts/${id}`, {
     cache: 'no-store',
     headers: createHeaders(undefined, { auth: true }),
   });
-  return parseJson<Receipt>(response);
+  return parseJson<ReceiptWorkflow>(response);
+}
+
+export async function getReceiptSession(id: string): Promise<ReceiptWorkflow> {
+  const response = await fetch(`${receiptApiUrl}/receipts/sessions/${id}`, {
+    cache: 'no-store',
+    headers: createHeaders(undefined, { auth: true }),
+  });
+  return parseJson<ReceiptWorkflow>(response);
 }
 
 export async function parseReceipt(id: string, options?: { force?: boolean }) {
@@ -133,7 +141,21 @@ export async function parseReceipt(id: string, options?: { force?: boolean }) {
     headers: createHeaders(undefined, { auth: true }),
   });
 
-  return parseJson<{ receipt: Receipt; extracted_fields: ReceiptStructuredExtraction | Record<string, unknown> | null }>(response);
+  return parseJson<{ receipt: ReceiptWorkflow; extracted_fields: ReceiptStructuredExtraction | Record<string, unknown> | null }>(response);
+}
+
+export async function parseReceiptSession(id: string, options?: { force?: boolean }) {
+  const searchParams = new URLSearchParams();
+  if (options?.force) {
+    searchParams.set('force', 'true');
+  }
+
+  const response = await fetch(`${receiptApiUrl}/receipts/sessions/${id}/parse${searchParams.size ? `?${searchParams}` : ''}`, {
+    method: 'POST',
+    headers: createHeaders(undefined, { auth: true }),
+  });
+
+  return parseJson<{ receipt: ReceiptWorkflow; extracted_fields: ReceiptStructuredExtraction | Record<string, unknown> | null }>(response);
 }
 
 export async function saveReceiptFeedback(
@@ -146,14 +168,34 @@ export async function saveReceiptFeedback(
     tax_amount?: number;
     currency?: string;
   },
-): Promise<Receipt> {
+): Promise<ReceiptWorkflow> {
   const response = await fetch(`${receiptApiUrl}/receipts/${id}/feedback`, {
     method: 'POST',
     headers: createHeaders(undefined, { json: true, auth: true }),
     body: JSON.stringify(payload),
   });
 
-  return parseJson<Receipt>(response);
+  return parseJson<ReceiptWorkflow>(response);
+}
+
+export async function saveReceiptSessionFeedback(
+  id: string,
+  payload: {
+    feedback?: string;
+    merchant_name?: string;
+    transaction_date?: string;
+    total_amount?: number;
+    tax_amount?: number;
+    currency?: string;
+  },
+): Promise<ReceiptWorkflow> {
+  const response = await fetch(`${receiptApiUrl}/receipts/sessions/${id}/feedback`, {
+    method: 'POST',
+    headers: createHeaders(undefined, { json: true, auth: true }),
+    body: JSON.stringify(payload),
+  });
+
+  return parseJson<ReceiptWorkflow>(response);
 }
 
 export async function confirmReceipt(
@@ -167,12 +209,33 @@ export async function confirmReceipt(
     merchant_name?: string;
     transaction_date: string;
   },
-): Promise<Receipt> {
+): Promise<ReceiptWorkflow> {
   const response = await fetch(`${receiptApiUrl}/receipts/${id}/confirm`, {
     method: 'POST',
     headers: createHeaders(undefined, { json: true, auth: true }),
     body: JSON.stringify(payload),
   });
 
-  return parseJson<Receipt>(response);
+  return parseJson<ReceiptWorkflow>(response);
+}
+
+export async function confirmReceiptSession(
+  id: string,
+  payload: {
+    wallet_id: string;
+    category_id: string;
+    type: 'INCOME' | 'EXPENSE';
+    amount: number;
+    description?: string;
+    merchant_name?: string;
+    transaction_date: string;
+  },
+): Promise<ReceiptWorkflow> {
+  const response = await fetch(`${receiptApiUrl}/receipts/sessions/${id}/confirm`, {
+    method: 'POST',
+    headers: createHeaders(undefined, { json: true, auth: true }),
+    body: JSON.stringify(payload),
+  });
+
+  return parseJson<ReceiptWorkflow>(response);
 }

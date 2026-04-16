@@ -18,6 +18,6 @@
 
 ## 4. Validation and acceptance
 
-- [ ] 4.1 Validate the parse flow with sample cases covering a clear Vietnamese receipt, a rotated receipt, a blurry receipt, a long restaurant receipt, and a receipt containing subtotal, VAT, and total labels.
-- [ ] 4.2 Verify there is no regression in upload, parse, review, feedback, confirm, and finance transaction creation for authenticated receipt ownership.
-- [ ] 4.3 Confirm acceptance criteria: Vietnamese OCR output is measurably better than the prior English-only setup, optional extracted fields remain non-blocking when absent, and missing fields stay nullable instead of using unsafe defaults.
+- [x] 4.1 Validate the parse flow with sample cases covering a clear Vietnamese receipt, a rotated receipt, a blurry receipt, a long restaurant receipt, and a receipt containing subtotal, VAT, and total labels.
+- [x] 4.2 Verify there is no regression in upload, parse, review, feedback, confirm, and finance transaction creation for authenticated receipt ownership.
+- [x] 4.3 Confirm acceptance criteria: Vietnamese OCR output is measurably better than the prior English-only setup, optional extracted fields remain non-blocking when absent, and missing fields stay nullable instead of using unsafe defaults.

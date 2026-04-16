@@ -72,6 +72,18 @@ export type ReceiptOcrDebug = {
   provider: string | null;
   confidence_score: number | null;
   device: string | null;
+  ocr_language?: string | null;
+  fallback_used?: boolean | null;
+  low_quality_ratio?: number | null;
+  profile?: string | null;
+  selected_path?: string | null;
+  timings?: Record<string, unknown> | null;
+  preprocess?: Record<string, unknown> | null;
+  line_count?: number | null;
+  detected_box_count?: number | null;
+  short_line_ratio?: number | null;
+  runtime?: Record<string, unknown> | null;
+  engine_config?: Record<string, unknown> | null;
 };
 
 export type ReceiptExtraction = {
@@ -165,15 +177,51 @@ export type ReceiptJob = {
   created_at: string;
 };
 
-export type Receipt = {
-  receipt: ReceiptMetadata;
+export type ReceiptParseSessionMetadata = {
+  id: string;
+  user_id: string;
+  file_name: string;
+  temp_url: string;
+  permanent_url: string | null;
+  mime_type: string | null;
+  file_size: number | null;
+  image_hash: string | null;
+  status: string;
+  processed_at: string | null;
+  expires_at: string;
+  finalized_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ReceiptParseJob = {
+  id: string;
+  session_id: string;
+  job_type: string;
+  status: string;
+  error_message: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+};
+
+export type SessionFeedback = {
+  corrected_data_json: Record<string, unknown>;
+  feedback_note: string | null;
+};
+
+export type ReceiptWorkflow = {
+  receipt: ReceiptMetadata | null;
+  session: ReceiptParseSessionMetadata | null;
+  confirmed_receipt: ReceiptMetadata | null;
   ocr_result: ReceiptOcrResult | null;
   ocr_debug: ReceiptOcrDebug | null;
   extraction_result: ReceiptExtraction | null;
   extraction_details?: ReceiptStructuredExtraction | null;
-  latest_feedback: ReceiptFeedback | null;
+  latest_feedback: ReceiptFeedback | SessionFeedback | null;
   jobs: ReceiptJob[];
-  active_job: ReceiptJob | null;
+  session_jobs: ReceiptParseJob[];
+  active_job: ReceiptJob | ReceiptParseJob | null;
   finance_transaction_id: string | null;
   finance_warning: string | null;
 };

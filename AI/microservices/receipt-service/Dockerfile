@@ -1,8 +1,9 @@
-FROM python:3.11-slim
+# syntax=docker/dockerfile:1.7
+FROM python:3.11-slim AS base
 
 WORKDIR /app
 
-ARG PADDLE_PACKAGE="paddlepaddle==3.3.1"
+ARG PADDLE_INSTALL_COMMAND="python -m pip install paddlepaddle==3.3.1"
 
 ENV PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True \
     PYTHONUNBUFFERED=1
@@ -17,10 +18,20 @@ RUN apt-get update \
         libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
+FROM base AS deps
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir "${PADDLE_PACKAGE}"
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt \
+    && sh -lc "${PADDLE_INSTALL_COMMAND}"
 
+FROM deps AS dev
+COPY . .
+
+EXPOSE 8003
+
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003"]
+
+FROM deps AS prod
 COPY . .
 
 EXPOSE 8003

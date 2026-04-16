@@ -1,7 +1,9 @@
 services:
   auth-service:
+    image: ai-auth-service:local
     build:
       context: ./microservices/auth-service
+      target: prod
     env_file:
       - ./microservices/auth-service/.env
     environment:
@@ -25,8 +27,10 @@ services:
       start_period: 20s
 
   finance-service:
+    image: ai-finance-service:local
     build:
       context: ./microservices/finance-service
+      target: prod
     env_file:
       - ./microservices/finance-service/.env
     environment:
@@ -53,10 +57,12 @@ services:
       start_period: 20s
 
   receipt-service:
+    image: ai-receipt-service:local
     build:
       context: ./microservices/receipt-service
+      target: prod
       args:
-        PADDLE_PACKAGE: ${RECEIPT_PADDLE_PACKAGE:-paddlepaddle==3.3.1}
+        PADDLE_INSTALL_COMMAND: ${RECEIPT_PADDLE_INSTALL_COMMAND:-python -m pip install paddlepaddle==3.3.1}
     env_file:
       - ./microservices/receipt-service/.env
     environment:
@@ -86,10 +92,7 @@ services:
       start_period: 20s
 
   receipt-worker:
-    build:
-      context: ./microservices/receipt-service
-      args:
-        PADDLE_PACKAGE: ${RECEIPT_PADDLE_PACKAGE:-paddlepaddle==3.3.1}
+    image: ai-receipt-service:local
     command: ["python", "-m", "app.worker"]
     env_file:
       - ./microservices/receipt-service/.env
@@ -107,8 +110,10 @@ services:
         condition: service_healthy
 
   frontend:
+    image: ai-frontend:local
     build:
       context: ./microservices/frontend
+      target: prod
       args:
         NEXT_PUBLIC_AUTH_API_URL: http://localhost:8001
         NEXT_PUBLIC_FINANCE_API_URL: http://localhost:8002

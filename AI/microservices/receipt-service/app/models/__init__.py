@@ -4,6 +4,8 @@ from app.models.receipt import (
     ReceiptFeedback,
     ReceiptJob,
     ReceiptOcrResult,
+    ReceiptParseJob,
+    ReceiptParseSession,
     compute_image_hash,
 )
 
@@ -13,5 +15,7 @@ __all__ = [
     "ReceiptExtraction",
     "ReceiptFeedback",
     "ReceiptJob",
+    "ReceiptParseSession",
+    "ReceiptParseJob",
     "compute_image_hash",
 ]

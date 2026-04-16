@@ -14,7 +14,7 @@ export function Shell({ children }: PropsWithChildren) {
             <Link href="/login">Login</Link>
             <Link href="/dashboard">Dashboard</Link>
             <Link href="/transactions">Transactions</Link>
-            <Link href="/receipts/upload">Upload Receipt</Link>
+            <Link href="/receipts/upload">Receipt Workspace</Link>
           </nav>
         </div>
       </header>

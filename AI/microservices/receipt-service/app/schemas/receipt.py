@@ -75,28 +75,80 @@ class ReceiptMetadataResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ReceiptParseSessionMetadataResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    file_name: str
+    temp_url: str
+    permanent_url: str | None
+    mime_type: str | None
+    file_size: int | None
+    image_hash: str | None
+    status: str
+    processed_at: datetime | None
+    expires_at: datetime
+    finalized_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReceiptParseJobResponse(BaseModel):
+    id: UUID
+    session_id: UUID
+    job_type: str
+    status: str
+    error_message: str | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ReceiptOcrDebugResponse(BaseModel):
     raw_text: str | None
     lines: list[str]
     provider: str | None
     confidence_score: float | None
     device: str | None = None
+    ocr_language: str | None = None
+    fallback_used: bool | None = None
+    low_quality_ratio: float | None = None
+    profile: str | None = None
+    selected_path: str | None = None
+    timings: dict | None = None
+    preprocess: dict | None = None
+    line_count: int | None = None
+    detected_box_count: int | None = None
+    short_line_ratio: float | None = None
+    runtime: dict | None = None
+    engine_config: dict | None = None
 
 
-class ReceiptDetailResponse(BaseModel):
-    receipt: ReceiptMetadataResponse
+class SessionFeedbackResponse(BaseModel):
+    corrected_data_json: dict
+    feedback_note: str | None = None
+
+
+class ReceiptWorkflowResponse(BaseModel):
+    receipt: ReceiptMetadataResponse | None = None
+    session: ReceiptParseSessionMetadataResponse | None = None
+    confirmed_receipt: ReceiptMetadataResponse | None = None
     ocr_result: ReceiptOcrResultResponse | None
     ocr_debug: ReceiptOcrDebugResponse | None = None
     extraction_result: ReceiptExtractionResponse | None
-    latest_feedback: ReceiptFeedbackResponse | None = None
+    latest_feedback: ReceiptFeedbackResponse | SessionFeedbackResponse | None = None
     jobs: list[ReceiptJobResponse] = Field(default_factory=list)
-    active_job: ReceiptJobResponse | None = None
+    session_jobs: list[ReceiptParseJobResponse] = Field(default_factory=list)
+    active_job: ReceiptJobResponse | ReceiptParseJobResponse | None = None
     finance_transaction_id: str | None = None
     finance_warning: str | None = None
 
 
 class ParseReceiptResponse(BaseModel):
-    receipt: ReceiptDetailResponse
+    receipt: ReceiptWorkflowResponse
     extracted_fields: dict | None
 
 

@@ -1,0 +1,17 @@
+services:
+  receipt-service:
+    build:
+      args:
+        PADDLE_INSTALL_COMMAND: ${RECEIPT_PADDLE_GPU_INSTALL_COMMAND:-python -m pip install paddlepaddle-gpu==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/}
+    environment:
+      OCR_DEVICE: gpu
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    gpus: all
+
+  receipt-worker:
+    environment:
+      OCR_DEVICE: gpu
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    gpus: all
