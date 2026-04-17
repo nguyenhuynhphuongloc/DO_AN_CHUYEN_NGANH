@@ -28,8 +28,8 @@ receipt-service
 
 ### Frontend
 
-- Technology: Next.js App Router + TypeScript + Tailwind CSS
-- Main responsibility: user-facing screens for login, dashboard, transactions, receipt upload, and receipt review
+- Technology: Next.js 15.0.3 App Router + TypeScript 5.7.x + Tailwind CSS 3.4.x
+- Main responsibility: user-facing screens for login, dashboard, transactions, and the unified receipt OCR workspace
 - Main integration file: `microservices/frontend/lib/api.ts`
 - Auth behavior: stores JWT after login and attaches `Authorization: Bearer <access_token>` to protected finance and receipt requests
 
@@ -39,11 +39,11 @@ Routes:
 - `/dashboard`
 - `/transactions`
 - `/receipts/upload`
-- `/receipts/[id]/review`
+- `/receipts/[id]/review` -> redirect into the unified workspace
 
 ### auth-service
 
-- Technology: NestJS + Prisma
+- Technology: NestJS 10.4.x + Prisma 5.21.x
 - Main responsibility: register, login, refresh token, profile
 - Main endpoints:
   - `POST /auth/register`
@@ -53,7 +53,7 @@ Routes:
 
 ### finance-service
 
-- Technology: NestJS + Prisma
+- Technology: NestJS 10.4.x + Prisma 5.21.x
 - Main responsibility: wallets, categories, transactions, dashboard summary
 - Auth behavior: validates JWT locally and scopes protected reads and writes by authenticated user
 - Main endpoints:
@@ -66,8 +66,8 @@ Routes:
 
 ### receipt-service
 
-- Technology: FastAPI + SQLAlchemy
-- Main responsibility: receipt upload API, receipt retrieval, feedback, confirm-to-finance flow, and parse job enqueueing
+- Technology: FastAPI 0.115.6 + SQLAlchemy 2.0.36 + PostgreSQL via psycopg 3.2.3
+- Main responsibility: session-first receipt upload/retrieval APIs, OCR/debug payload serving, feedback, confirm-to-finance flow, and parse job enqueueing
 - Auth behavior: validates JWT locally, enforces receipt ownership, and forwards the caller bearer token to `finance-service` during confirm
 - Main endpoints:
   - `POST /receipts/upload`
@@ -75,13 +75,17 @@ Routes:
   - `POST /receipts/{id}/parse`
   - `POST /receipts/{id}/feedback`
   - `POST /receipts/{id}/confirm`
+  - `GET /receipts/sessions/{id}`
+  - `POST /receipts/sessions/{id}/parse`
+  - `POST /receipts/sessions/{id}/feedback`
+  - `POST /receipts/sessions/{id}/confirm`
 
 ### receipt-worker
 
 - Technology: Python process in the same `receipt-service` codebase
-- Main responsibility: claim queued parse jobs, preprocess images, run PaddleOCR, persist OCR output, run extraction, and mark receipts ready for review or failed
+- Main responsibility: claim queued parse jobs, preprocess images, run Paddle detection plus configurable recognition, persist OCR output, run extraction, and mark sessions/receipts ready for review or failed
 - Main entrypoint: `microservices/receipt-service/app/worker.py`
-- Runtime behavior: keeps a warm OCR model in memory and uses CPU or GPU based on runtime configuration
+- Runtime behavior: keeps warm OCR adapters in memory and uses CPU or GPU based on runtime configuration
 
 ## Communication Model
 
@@ -115,14 +119,17 @@ Important note:
 ### Receipt-to-transaction flow
 
 1. Frontend uploads a receipt image to `receipt-service`
-2. `receipt-service` stores file metadata and local file path, creates a queued parse job, and returns immediately
-3. `receipt-worker` claims the queued job and moves it through `preprocessing`, `ocr_running`, and `extracting`
-4. `receipt-worker` stores OCR output in `receipt_ocr_results` and extracted fields in `receipt_extractions`
-5. `receipt-worker` marks the receipt `ready_for_review` or `failed`
-6. Frontend review page polls receipt status until extraction is ready
-7. Frontend review page allows user edits and feedback
-8. Frontend confirms receipt
-9. `receipt-service` verifies ownership and calls `finance-service` with the same bearer token to create a transaction
+2. When `RECEIPT_SESSION_FIRST_ENABLED=true`, `receipt-service` stores a temp file, creates a `receipt_parse_session`, queues a `receipt_parse_job`, and returns immediately
+3. `receipt-worker` claims the queued session job and moves it through `preprocessing`, `ocr_running`, and `extracting`
+4. OCR currently runs as:
+   - Paddle detection
+   - VietOCR recognition by default
+   - Paddle recognition fallback when configured or selected
+5. `receipt-worker` stores OCR/debug JSON and extracted fields on the parse session
+6. Frontend workspace polls session status until extraction is ready
+7. User edits extracted fields and optionally saves feedback
+8. Frontend confirms the parsed session
+9. `receipt-service` finalizes the session into an official `Receipt`, persists OCR/extraction snapshots, and calls `finance-service` with the same bearer token
 10. `finance-service` updates wallet balance and stores transaction
 
 ## Operational Shape
@@ -150,11 +157,12 @@ Health endpoints:
 - JWT-based user context is enforced across frontend, finance-service, and receipt-service.
 - Receipt confirmation preserves authenticated user context into finance-service.
 - Receipt parse requests now return immediately and heavy OCR work runs outside the HTTP request path.
-- Frontend review flow now reflects async parse state through polling.
+- Frontend review flow now uses a unified receipt workspace with async polling.
+- OCR is now split into detector and recognizer layers with a switchable recognizer backend.
 
 ### What is still fragile
 
-- Receipt storage depends on local filesystem paths.
+- Receipt storage still depends on local filesystem paths.
 - Frontend protected data loading depends on browser-side session storage rather than an SSR-friendly session mechanism.
-- receipt-service still uses startup `create_all()` instead of managed migrations.
-- GPU OCR depends on host/runtime support and environment configuration.
+- receipt-service still uses startup `create_all()` in the worker in addition to explicit DB migration files.
+- GPU OCR depends on host/runtime support and `docker-compose.gpu.yml`.

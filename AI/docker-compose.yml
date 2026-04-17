@@ -62,7 +62,8 @@ services:
       context: ./microservices/receipt-service
       target: prod
       args:
-        PADDLE_INSTALL_COMMAND: ${RECEIPT_PADDLE_INSTALL_COMMAND:-python -m pip install paddlepaddle==3.3.1}
+        PADDLE_INSTALL_COMMAND: ${RECEIPT_PADDLE_INSTALL_COMMAND:-python -m pip install paddlepaddle==3.2.0}
+        VIETOCR_INSTALL_COMMAND: ${RECEIPT_VIETOCR_INSTALL_COMMAND:-python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu}
     env_file:
       - ./microservices/receipt-service/.env
     environment:
@@ -71,6 +72,8 @@ services:
       FRONTEND_URL: http://localhost:3000
       RECEIPT_UPLOAD_DIR: uploads
       OCR_DEVICE: ${RECEIPT_OCR_DEVICE:-auto}
+      OCR_RECOGNIZER_BACKEND: ${RECEIPT_OCR_RECOGNIZER_BACKEND:-vietocr}
+      OCR_FALLBACK_RECOGNIZER_BACKEND: ${RECEIPT_OCR_FALLBACK_RECOGNIZER_BACKEND:-paddle}
     ports:
       - "8003:8003"
     volumes:
@@ -101,6 +104,8 @@ services:
       FRONTEND_URL: http://localhost:3000
       RECEIPT_UPLOAD_DIR: uploads
       OCR_DEVICE: ${RECEIPT_OCR_DEVICE:-auto}
+      OCR_RECOGNIZER_BACKEND: ${RECEIPT_OCR_RECOGNIZER_BACKEND:-vietocr}
+      OCR_FALLBACK_RECOGNIZER_BACKEND: ${RECEIPT_OCR_FALLBACK_RECOGNIZER_BACKEND:-paddle}
       WORKER_POLL_INTERVAL_SECONDS: ${RECEIPT_WORKER_POLL_INTERVAL_SECONDS:-2}
       WORKER_BATCH_SIZE: ${RECEIPT_WORKER_BATCH_SIZE:-1}
     volumes:

@@ -125,6 +125,7 @@ class ReceiptOcrDebugResponse(BaseModel):
     short_line_ratio: float | None = None
     runtime: dict | None = None
     engine_config: dict | None = None
+    ordering: dict | None = None
 
 
 class SessionFeedbackResponse(BaseModel):

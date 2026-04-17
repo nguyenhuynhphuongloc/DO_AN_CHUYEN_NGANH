@@ -126,6 +126,7 @@ def _build_ocr_debug_json(
         "postprocess": ocr_payload.get("postprocess"),
         "runtime": ocr_payload.get("runtime"),
         "engine_config": ocr_payload.get("engine_config"),
+        "ordering": ocr_payload.get("ordering"),
         "preprocess": preprocess_metadata,
         "profile": ocr_payload.get("profile"),
         "selected_path": selected_path,

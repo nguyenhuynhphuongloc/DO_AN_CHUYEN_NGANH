@@ -3,7 +3,8 @@ FROM python:3.11-slim AS base
 
 WORKDIR /app
 
-ARG PADDLE_INSTALL_COMMAND="python -m pip install paddlepaddle==3.3.1"
+ARG PADDLE_INSTALL_COMMAND="python -m pip install paddlepaddle==3.2.0"
+ARG VIETOCR_INSTALL_COMMAND="python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu"
 
 ENV PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True \
     PYTHONUNBUFFERED=1
@@ -22,7 +23,8 @@ FROM base AS deps
 COPY requirements.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt \
-    && sh -lc "${PADDLE_INSTALL_COMMAND}"
+    && sh -lc "${PADDLE_INSTALL_COMMAND}" \
+    && sh -lc "${VIETOCR_INSTALL_COMMAND}"
 
 FROM deps AS dev
 COPY . .

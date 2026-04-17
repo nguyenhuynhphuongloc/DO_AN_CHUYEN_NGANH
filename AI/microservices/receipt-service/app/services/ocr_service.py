@@ -1,324 +1,140 @@
 from __future__ import annotations
 
 import logging
-import os
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-import paddle
-from paddleocr import PaddleOCR
+import cv2
 
 from app.core.config import settings
+from app.services.ocr_pipeline import (
+    DetectionResult,
+    RecognitionBatchResult,
+    extract_crops,
+    get_paddle_detector,
+    get_paddle_recognizer,
+    get_vietocr_recognizer,
+    sort_boxes_into_rows,
+)
 from app.services.ocr_postprocess import estimate_low_quality, normalize_vietnamese_lines
 
 logger = logging.getLogger(__name__)
 
+SUPPORTED_RECOGNIZER_BACKENDS = {"vietocr", "paddle"}
+
 
 class OCRService:
     def __init__(self) -> None:
-        self._engines: dict[str, dict[str, PaddleOCR]] = {"fast": {}, "recovery": {}}
-        self._engine_configs: dict[str, dict[str, dict[str, Any]]] = {"fast": {}, "recovery": {}}
-        self._runtime_info = self._build_runtime_info()
-        self._primary_language = ""
-        self._fallback_language = ""
-        self._device = self._build_ocr_engines()
-
-    def _build_runtime_info(self) -> dict[str, Any]:
-        compiled_with_cuda = bool(paddle.is_compiled_with_cuda())
-        cuda_device_count = paddle.device.cuda.device_count() if compiled_with_cuda else 0
-        requested_device = settings.ocr_device.strip().lower()
-        return {
-            "requested_device": requested_device,
-            "compiled_with_cuda": compiled_with_cuda,
-            "cuda_device_count": int(cuda_device_count),
-            "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
-            "nvidia_visible_devices": os.environ.get("NVIDIA_VISIBLE_DEVICES"),
-            "nvidia_driver_capabilities": os.environ.get("NVIDIA_DRIVER_CAPABILITIES"),
+        self._detector = get_paddle_detector()
+        self._recognizers = {
+            "paddle": get_paddle_recognizer(),
+            "vietocr": get_vietocr_recognizer(),
         }
+        self._primary_backend = self._normalize_backend(settings.ocr_recognizer_backend, default="paddle")
+        self._fallback_backend = self._normalize_backend(settings.ocr_fallback_recognizer_backend, default="")
+        if self._fallback_backend == self._primary_backend:
+            self._fallback_backend = ""
 
-    def _build_profile_options(self, profile: str, language: str) -> dict[str, Any]:
-        if profile == "fast":
-            detector_model = settings.ocr_fast_detector_model
-            recognition_model = (
-                settings.ocr_fast_recognition_model_en
-                if language == self._fallback_language
-                else settings.ocr_fast_recognition_model_vi
-            )
-            flags = {
-                "use_doc_orientation_classify": False,
-                "use_doc_unwarping": False,
-                "use_textline_orientation": False,
-            }
-        else:
-            detector_model = settings.ocr_recovery_detector_model
-            recognition_model = (
-                settings.ocr_recovery_recognition_model_en
-                if language == self._fallback_language
-                else settings.ocr_recovery_recognition_model_vi
-            )
-            flags = {
-                "use_doc_orientation_classify": True,
-                "use_doc_unwarping": True,
-                "use_textline_orientation": True,
-            }
+    def _normalize_backend(self, backend: str | None, *, default: str) -> str:
+        candidate = (backend or default).strip().lower()
+        if candidate in SUPPORTED_RECOGNIZER_BACKENDS:
+            return candidate
+        if candidate:
+            logger.warning("Unsupported OCR recognizer backend '%s'; using '%s'", candidate, default or "none")
+        return default
 
-        return {
-            "profile": profile,
-            "language": language,
-            "text_detection_model_name": detector_model,
-            "text_recognition_model_name": recognition_model,
-            "doc_orientation_classify_model_name": "PP-LCNet_x1_0_doc_ori",
-            "doc_unwarping_model_name": "UVDoc",
-            "textline_orientation_model_name": "PP-LCNet_x1_0_textline_ori",
-            "limit_side_len": 1536 if profile == "fast" else 2048,
-            "enable_mkldnn": settings.ocr_enable_mkldnn,
-            "cpu_threads": settings.ocr_cpu_threads,
-            **flags,
-        }
-
-    def _create_ocr(self, *, use_gpu: bool, config: dict[str, Any]) -> PaddleOCR:
-        return PaddleOCR(
-            lang=config["language"],
-            device="gpu" if use_gpu else "cpu",
-            text_detection_model_name=config["text_detection_model_name"],
-            text_recognition_model_name=config["text_recognition_model_name"],
-            doc_orientation_classify_model_name=config["doc_orientation_classify_model_name"],
-            doc_unwarping_model_name=config["doc_unwarping_model_name"],
-            textline_orientation_model_name=config["textline_orientation_model_name"],
-            use_doc_orientation_classify=config["use_doc_orientation_classify"],
-            use_doc_unwarping=config["use_doc_unwarping"],
-            use_textline_orientation=config["use_textline_orientation"],
-            text_det_limit_side_len=config["limit_side_len"],
-            enable_mkldnn=config["enable_mkldnn"],
-            cpu_threads=config["cpu_threads"],
-        )
-
-    def _build_ocr_engines(self) -> str:
-        device = self._runtime_info["requested_device"]
-        if device not in {"auto", "gpu", "cpu"}:
-            raise ValueError(f"Unsupported OCR_DEVICE '{settings.ocr_device}'")
-
-        primary_language = (settings.ocr_primary_language or settings.ocr_language or "vi").strip().lower()
-        fallback_language = (settings.ocr_fallback_language or "en").strip().lower()
-        if primary_language == fallback_language:
-            fallback_language = "en" if primary_language != "en" else "vi"
-
-        self._primary_language = primary_language
-        self._fallback_language = fallback_language
-        for profile in ("fast", "recovery"):
-            self._engine_configs[profile]["primary"] = self._build_profile_options(profile, self._primary_language)
-            self._engine_configs[profile]["fallback"] = self._build_profile_options(profile, self._fallback_language)
-
-        if device == "cpu":
-            self._runtime_info["actual_device"] = "cpu"
-            logger.info(
-                "Prepared PaddleOCR runtime on CPU (primary=%s fallback=%s)",
-                primary_language,
-                fallback_language,
-            )
-            return "cpu"
-
-        gpu_available = bool(self._runtime_info["compiled_with_cuda"]) and int(self._runtime_info["cuda_device_count"]) > 0
-        if not gpu_available:
-            logger.info(
-                "GPU OCR requested but CUDA runtime is unavailable; using CPU "
-                "(compiled_with_cuda=%s device_count=%s cuda_visible_devices=%s nvidia_visible_devices=%s)",
-                self._runtime_info["compiled_with_cuda"],
-                self._runtime_info["cuda_device_count"],
-                self._runtime_info["cuda_visible_devices"],
-                self._runtime_info["nvidia_visible_devices"],
-            )
-            self._runtime_info["actual_device"] = "cpu"
-            logger.info(
-                "Prepared PaddleOCR runtime on CPU (primary=%s fallback=%s)",
-                primary_language,
-                fallback_language,
-            )
-            return "cpu"
-
-        try:
-            self._runtime_info["actual_device"] = "gpu"
-            logger.info(
-                "Prepared PaddleOCR runtime on GPU (primary=%s fallback=%s)",
-                primary_language,
-                fallback_language,
-            )
-            return "gpu"
-        except Exception as exc:
-            if device == "gpu":
-                logger.warning("PaddleOCR GPU initialization failed, falling back to CPU: %s", exc)
-            else:
-                logger.info("PaddleOCR GPU not available, using CPU fallback: %s", exc)
-            self._runtime_info["actual_device"] = "cpu"
-            logger.info(
-                "Prepared PaddleOCR runtime on CPU (primary=%s fallback=%s)",
-                primary_language,
-                fallback_language,
-            )
-            return "cpu"
-
-    def _get_engine(self, profile: str, role: str) -> tuple[PaddleOCR, dict[str, Any]]:
-        cached = self._engines[profile].get(role)
-        config = self._engine_configs[profile][role]
-        if cached is not None:
-            return cached, config
-
-        use_gpu = self._device == "gpu"
-        try:
-            engine = self._create_ocr(use_gpu=use_gpu, config=config)
-        except Exception as exc:
-            if use_gpu:
-                logger.warning(
-                    "OCR engine initialization failed on GPU for profile=%s role=%s; retrying on CPU: %s",
-                    profile,
-                    role,
-                    exc,
-                )
-                self._device = "cpu"
-                self._runtime_info["actual_device"] = "cpu"
-                engine = self._create_ocr(use_gpu=False, config=config)
-            else:
-                raise
-
-        self._engines[profile][role] = engine
-        logger.info(
-            "Configured OCR engine profile=%s role=%s device=%s det=%s rec=%s doc_orientation=%s unwarp=%s textline_orientation=%s limit_side_len=%s",
-            profile,
-            role,
-            self._device,
-            config["text_detection_model_name"],
-            config["text_recognition_model_name"],
-            config["use_doc_orientation_classify"],
-            config["use_doc_unwarping"],
-            config["use_textline_orientation"],
-            config["limit_side_len"],
-        )
-        return engine, config
-
-    @property
-    def device(self) -> str:
-        return self._device
+    def _get_recognizer(self, backend: str):
+        recognizer = self._recognizers.get(backend)
+        if recognizer is None:
+            raise ValueError(f"Unsupported recognizer backend '{backend}'")
+        return recognizer
 
     def runtime_info(self) -> dict[str, Any]:
-        return dict(self._runtime_info)
+        detector_runtime = dict(getattr(self._detector, "_runtime", {}))
+        detector_runtime["detector_backend"] = "paddle"
+        detector_runtime["recognizer_backend"] = self._primary_backend
+        return detector_runtime
 
-    def _extract_from_engine(self, engine: PaddleOCR, image_path: str, *, config: dict[str, Any]) -> dict[str, object]:
-        image = str(Path(image_path))
-        result = engine.predict(image)
+    def _recognition_runtime(
+        self,
+        *,
+        profile: str,
+        backend: str,
+        image: Any,
+        ordered_boxes: list,
+        order_metadata: dict[str, Any],
+    ) -> tuple[RecognitionBatchResult, dict[str, Any]]:
+        crop_start = time.perf_counter()
+        crops = extract_crops(image, ordered_boxes)
+        crop_seconds = time.perf_counter() - crop_start
 
-        lines: list[str] = []
-        confidences: list[float] = []
-        detected_box_count = 0
-
-        for item in result or []:
-            if isinstance(item, dict):
-                payload = item.get("res") if "res" in item else item
-            else:
-                payload = getattr(item, "res", None) or item
-            if not payload:
-                continue
-
-            texts = payload.get("rec_texts", []) if isinstance(payload, dict) else []
-            scores = payload.get("rec_scores", []) if isinstance(payload, dict) else []
-            boxes = payload.get("dt_polys", []) if isinstance(payload, dict) else []
-            if boxes:
-                detected_box_count += len(boxes)
-            elif texts:
-                detected_box_count += len(texts)
-
-            for index, text in enumerate(texts):
-                normalized = str(text).strip()
-                if not normalized:
-                    continue
-                lines.append(normalized)
-                confidences.append(float(scores[index]) if index < len(scores) else 0.0)
-
-        average_confidence = sum(confidences) / len(confidences) if confidences else 0.0
-        low_quality_lines = sum(1 for line in lines if estimate_low_quality(line))
-        low_quality_ratio = (low_quality_lines / len(lines)) if lines else 0.0
-        short_line_ratio = (
-            sum(1 for line in lines if len(line.strip()) <= 4) / len(lines)
-            if lines
-            else 1.0
-        )
-        return {
-            "lines": lines,
-            "confidences": confidences,
-            "confidence": average_confidence,
-            "low_quality_ratio": low_quality_ratio,
-            "line_count": len(lines),
-            "detected_box_count": detected_box_count,
-            "short_line_ratio": round(short_line_ratio, 4),
-            "engine_config": {
-                "profile": config["profile"],
-                "language": config["language"],
-                "device": self.device,
-                "text_detection_model_name": config["text_detection_model_name"],
-                "text_recognition_model_name": config["text_recognition_model_name"],
-                "limit_side_len": config["limit_side_len"],
-                "use_doc_orientation_classify": config["use_doc_orientation_classify"],
-                "use_doc_unwarping": config["use_doc_unwarping"],
-                "use_textline_orientation": config["use_textline_orientation"],
-            },
-        }
-
-    def _needs_fallback(self, primary_result: dict[str, object]) -> bool:
-        confidence = float(primary_result.get("confidence") or 0.0)
-        low_quality_ratio = float(primary_result.get("low_quality_ratio") or 0.0)
-        too_low_confidence = confidence < settings.ocr_fallback_confidence_threshold
-        low_quality = settings.ocr_force_fallback_on_low_quality and low_quality_ratio >= 0.35
-        return too_low_confidence or low_quality
-
-    def extract_text(self, image_path: str, *, profile: str = "recovery") -> dict[str, object]:
-        selected_profile = profile if profile in self._engines else "recovery"
-        primary_engine, primary_config = self._get_engine(selected_profile, "primary")
-        primary_result = self._extract_from_engine(
-            primary_engine,
-            image_path,
-            config=primary_config,
-        )
-        selected_result = primary_result
-        selected_language = self._primary_language
-        selected_config = primary_config
-        used_fallback = False
-
-        if self._needs_fallback(primary_result):
-            fallback_engine, fallback_config = self._get_engine(selected_profile, "fallback")
-            fallback_result = self._extract_from_engine(
-                fallback_engine,
-                image_path,
-                config=fallback_config,
-            )
-            primary_score = float(primary_result.get("confidence") or 0.0) - (
-                0.15 * float(primary_result.get("low_quality_ratio") or 0.0)
-            )
-            fallback_score = float(fallback_result.get("confidence") or 0.0) - (
-                0.15 * float(fallback_result.get("low_quality_ratio") or 0.0)
-            )
-            if fallback_score >= primary_score:
-                selected_result = fallback_result
-                selected_language = self._fallback_language
-                selected_config = fallback_config
-                used_fallback = True
-
-        original_lines = list(selected_result.get("lines", []))
-        original_confidences = [float(score) for score in list(selected_result.get("confidences", []))]
-        normalized_lines, postprocess_metadata = normalize_vietnamese_lines(original_lines, original_confidences)
-        raw_text = "\n".join(normalized_lines)
-        average_confidence = sum(original_confidences) / len(original_confidences) if original_confidences else 0.0
+        recognition_start = time.perf_counter()
+        recognition = self._get_recognizer(backend).recognize(crops, profile=profile)
+        recognition_seconds = time.perf_counter() - recognition_start
 
         runtime = {
-            **self.runtime_info(),
-            "engine_device": self.device,
-            "profile": selected_profile,
-            "language": selected_language,
-            "text_detection_model_name": selected_config["text_detection_model_name"],
-            "text_recognition_model_name": selected_config["text_recognition_model_name"],
-            "limit_side_len": selected_config["limit_side_len"],
-            "use_doc_orientation_classify": selected_config["use_doc_orientation_classify"],
-            "use_doc_unwarping": selected_config["use_doc_unwarping"],
-            "use_textline_orientation": selected_config["use_textline_orientation"],
+            "crop_seconds": round(crop_seconds, 4),
+            "recognition_seconds": round(recognition_seconds, 4),
+            "crop_count": len(crops),
+            "row_grouping": order_metadata,
+        }
+        return recognition, runtime
+
+    def _build_result_payload(
+        self,
+        *,
+        profile: str,
+        backend: str,
+        detection: DetectionResult,
+        recognition: RecognitionBatchResult,
+        ordering_metadata: dict[str, Any],
+        detection_seconds: float,
+        crop_seconds: float,
+        recognition_seconds: float,
+        total_ocr_seconds: float,
+        fallback_used: bool,
+    ) -> dict[str, Any]:
+        original_lines = [line.text for line in recognition.lines if line.text.strip()]
+        original_confidences = [line.confidence for line in recognition.lines if line.text.strip()]
+        normalized_lines, postprocess_metadata = normalize_vietnamese_lines(original_lines, original_confidences)
+        raw_text = "\n".join(normalized_lines)
+        average_confidence = (
+            sum(original_confidences) / len(original_confidences) if original_confidences else 0.0
+        )
+        low_quality_lines = sum(1 for line in original_lines if estimate_low_quality(line))
+        low_quality_ratio = (low_quality_lines / len(original_lines)) if original_lines else 1.0
+        short_line_ratio = (
+            sum(1 for line in original_lines if len(line.strip()) <= 4) / len(original_lines)
+            if original_lines
+            else 1.0
+        )
+
+        runtime = {
+            **detection.runtime,
+            **recognition.runtime,
+            "detector_backend": "paddle",
+            "recognizer_backend": backend,
+            "recognizer_backend_requested": self._primary_backend,
+            "recognizer_backend_fallback": self._fallback_backend or None,
+            "actual_device": recognition.runtime.get("actual_device") or detection.runtime.get("actual_device"),
+            "detector_device": detection.runtime.get("detector_device") or detection.runtime.get("actual_device"),
+            "recognizer_device": recognition.runtime.get("recognizer_device") or recognition.runtime.get("actual_device"),
+            "text_detection_model_name": detection.runtime.get("text_detection_model_name"),
+            "text_recognition_model_name": recognition.runtime.get("text_recognition_model_name"),
+            "recognizer_confidence_semantics": recognition.confidence_semantics,
+            "recognizer_backend_caveats": [
+                *recognition.backend_caveats,
+                "fallback_used_refers_to_recognizer_backend_selection",
+            ],
+            "row_grouping": ordering_metadata,
+            "detected_box_count": len(ordering_metadata.get("ordered_box_indices", [])),
+            "line_count": len(normalized_lines),
+            "detection_seconds": round(detection_seconds, 4),
+            "crop_seconds": round(crop_seconds, 4),
+            "recognition_seconds": round(recognition_seconds, 4),
+            "total_ocr_seconds": round(total_ocr_seconds, 4),
         }
 
         return {
@@ -326,20 +142,145 @@ class OCRService:
             "lines": normalized_lines,
             "confidence": average_confidence,
             "confidences": original_confidences,
-            "device": self.device,
-            "provider": "paddleocr",
-            "ocr_language": selected_language,
-            "fallback_used": used_fallback,
-            "low_quality_ratio": float(selected_result.get("low_quality_ratio") or 0.0),
+            "device": runtime.get("actual_device"),
+            "provider": "paddleocr" if backend == "paddle" else "paddleocr+vietocr",
+            "ocr_language": settings.ocr_primary_language,
+            "fallback_used": fallback_used,
+            "low_quality_ratio": low_quality_ratio,
             "postprocess": postprocess_metadata,
             "raw_lines_before_postprocess": original_lines,
-            "profile": selected_profile,
-            "line_count": int(selected_result.get("line_count") or len(normalized_lines)),
-            "detected_box_count": int(selected_result.get("detected_box_count") or len(normalized_lines)),
-            "short_line_ratio": float(selected_result.get("short_line_ratio") or 0.0),
-            "engine_config": selected_result.get("engine_config"),
+            "profile": profile,
+            "line_count": len(normalized_lines),
+            "detected_box_count": len(ordering_metadata.get("ordered_box_indices", [])),
+            "short_line_ratio": round(short_line_ratio, 4),
+            "engine_config": {
+                "profile": profile,
+                "language": settings.ocr_primary_language,
+                "device": runtime.get("actual_device"),
+                "detector_backend": "paddle",
+                "recognizer_backend": backend,
+                "text_detection_model_name": detection.runtime.get("text_detection_model_name"),
+                "text_recognition_model_name": recognition.runtime.get("text_recognition_model_name"),
+                "row_grouping_tolerance": settings.ocr_row_grouping_tolerance,
+                "recognizer_confidence_semantics": recognition.confidence_semantics,
+            },
             "runtime": runtime,
+            "ordering": ordering_metadata,
         }
+
+    def _should_use_fallback(self, result: dict[str, Any]) -> bool:
+        if not self._fallback_backend:
+            return False
+        confidence = float(result.get("confidence") or 0.0)
+        line_count = int(result.get("line_count") or 0)
+        low_quality_ratio = float(result.get("low_quality_ratio") or 0.0)
+        no_text = not str(result.get("raw_text") or "").strip()
+        return (
+            no_text
+            or line_count == 0
+            or confidence < settings.ocr_fallback_confidence_threshold
+            or (
+                settings.ocr_force_fallback_on_low_quality
+                and low_quality_ratio >= settings.ocr_fast_low_quality_threshold
+            )
+        )
+
+    def _compare_results(self, primary: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
+        primary_score = float(primary.get("confidence") or 0.0) - (0.15 * float(primary.get("low_quality_ratio") or 0.0))
+        fallback_score = float(fallback.get("confidence") or 0.0) - (0.15 * float(fallback.get("low_quality_ratio") or 0.0))
+        return fallback if fallback_score >= primary_score else primary
+
+    def extract_text(self, image_path: str, *, profile: str = "recovery") -> dict[str, Any]:
+        selected_profile = profile if profile in {"fast", "recovery"} else "recovery"
+        image = cv2.imread(str(Path(image_path)))
+        if image is None:
+            raise ValueError("Unable to read receipt image for OCR")
+
+        detection_start = time.perf_counter()
+        detection = self._detector.detect(image, profile=selected_profile)
+        detection_seconds = time.perf_counter() - detection_start
+
+        ordered_boxes, row_grouping = sort_boxes_into_rows(
+            detection.boxes,
+            tolerance_factor=settings.ocr_row_grouping_tolerance,
+        )
+        ordering_metadata = {
+            **row_grouping,
+            "ordered_box_indices": [box.index for box in ordered_boxes],
+        }
+
+        primary_recognition, primary_metrics = self._recognition_runtime(
+            profile=selected_profile,
+            backend=self._primary_backend,
+            image=image,
+            ordered_boxes=ordered_boxes,
+            order_metadata=ordering_metadata,
+        )
+        primary_total = detection_seconds + float(primary_metrics["crop_seconds"]) + float(primary_metrics["recognition_seconds"])
+        primary_result = self._build_result_payload(
+            profile=selected_profile,
+            backend=self._primary_backend,
+            detection=detection,
+            recognition=primary_recognition,
+            ordering_metadata=ordering_metadata,
+            detection_seconds=detection_seconds,
+            crop_seconds=float(primary_metrics["crop_seconds"]),
+            recognition_seconds=float(primary_metrics["recognition_seconds"]),
+            total_ocr_seconds=primary_total,
+            fallback_used=False,
+        )
+
+        if not self._should_use_fallback(primary_result):
+            logger.info(
+                "OCR profile=%s detector=paddle recognizer=%s device=%s boxes=%s lines=%s timings={det=%.4f crop=%.4f rec=%.4f total=%.4f}",
+                selected_profile,
+                self._primary_backend,
+                primary_result.get("device"),
+                primary_result.get("detected_box_count"),
+                primary_result.get("line_count"),
+                detection_seconds,
+                float(primary_metrics["crop_seconds"]),
+                float(primary_metrics["recognition_seconds"]),
+                primary_total,
+            )
+            return primary_result
+
+        fallback_backend = self._fallback_backend
+        fallback_recognition, fallback_metrics = self._recognition_runtime(
+            profile=selected_profile,
+            backend=fallback_backend,
+            image=image,
+            ordered_boxes=ordered_boxes,
+            order_metadata=ordering_metadata,
+        )
+        fallback_total = detection_seconds + float(fallback_metrics["crop_seconds"]) + float(fallback_metrics["recognition_seconds"])
+        fallback_result = self._build_result_payload(
+            profile=selected_profile,
+            backend=fallback_backend,
+            detection=detection,
+            recognition=fallback_recognition,
+            ordering_metadata=ordering_metadata,
+            detection_seconds=detection_seconds,
+            crop_seconds=float(fallback_metrics["crop_seconds"]),
+            recognition_seconds=float(fallback_metrics["recognition_seconds"]),
+            total_ocr_seconds=fallback_total,
+            fallback_used=True,
+        )
+        selected_result = self._compare_results(primary_result, fallback_result)
+        if selected_result is fallback_result:
+            selected_result["fallback_used"] = True
+        logger.info(
+            "OCR profile=%s detector=paddle primary=%s fallback=%s selected=%s device=%s boxes=%s lines=%s timings=%s",
+            selected_profile,
+            self._primary_backend,
+            fallback_backend,
+            selected_result["engine_config"]["recognizer_backend"],
+            selected_result.get("device"),
+            selected_result.get("detected_box_count"),
+            selected_result.get("line_count"),
+            selected_result.get("runtime"),
+        )
+        return selected_result
 
 
 @lru_cache(maxsize=1)

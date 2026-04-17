@@ -84,6 +84,7 @@ export type ReceiptOcrDebug = {
   short_line_ratio?: number | null;
   runtime?: Record<string, unknown> | null;
   engine_config?: Record<string, unknown> | null;
+  ordering?: Record<string, unknown> | null;
 };
 
 export type ReceiptExtraction = {

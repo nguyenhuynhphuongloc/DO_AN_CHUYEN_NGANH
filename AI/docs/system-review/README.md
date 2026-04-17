@@ -1,6 +1,6 @@
 # System Review
 
-This folder captures the current-state overview of the personal finance microservice system after the JWT auth-context enforcement update and the async receipt OCR worker redesign.
+This folder captures the current-state overview of the personal finance microservice system, including the current session-first receipt parsing flow, unified receipt workspace, and detector/recognizer-split OCR pipeline.
 
 Contents:
 
@@ -12,5 +12,5 @@ Scope:
 
 - service responsibilities and communication
 - authenticated user context and cross-service JWT behavior
-- async receipt OCR pipeline, worker runtime, and database mapping
+- async receipt OCR pipeline, worker runtime, OCR stack versions, and database mapping
 - current strengths, weaknesses, and roadmap priorities

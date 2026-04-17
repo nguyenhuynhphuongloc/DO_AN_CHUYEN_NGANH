@@ -15,6 +15,7 @@ export function ReceiptOcrTextPanel({ receipt, ocrDebug, isProcessing, onRetryPa
   const runtime = ocrDebug?.runtime ?? null;
   const detector = String(runtime?.text_detection_model_name ?? ocrDebug?.engine_config?.text_detection_model_name ?? 'Pending');
   const recognizer = String(runtime?.text_recognition_model_name ?? ocrDebug?.engine_config?.text_recognition_model_name ?? 'Pending');
+  const recognizerBackend = String(runtime?.recognizer_backend ?? ocrDebug?.engine_config?.recognizer_backend ?? 'Pending');
 
   return (
     <section className="rounded-[1.75rem] border border-black/10 bg-white/80 p-6 shadow-sm">
@@ -30,6 +31,7 @@ export function ReceiptOcrTextPanel({ receipt, ocrDebug, isProcessing, onRetryPa
           <p>Path: {ocrDebug?.selected_path ?? 'Pending'}</p>
           <p>Detector: {detector}</p>
           <p>Recognizer: {recognizer}</p>
+          <p>Backend: {recognizerBackend}</p>
         </div>
       </div>
 
@@ -104,6 +106,7 @@ export function ReceiptOcrTextPanel({ receipt, ocrDebug, isProcessing, onRetryPa
                 line_count: ocrDebug?.line_count,
                 short_line_ratio: ocrDebug?.short_line_ratio,
                 image_size: ocrDebug?.preprocess?.output_size,
+                row_grouping: ocrDebug?.ordering,
               },
               null,
               2,

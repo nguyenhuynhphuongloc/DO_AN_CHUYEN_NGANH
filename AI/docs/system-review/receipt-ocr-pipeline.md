@@ -1,343 +1,443 @@
-# Receipt OCR Pipeline
+# Receipt OCR System Review
 
-## End-to-End Flow
+## Executive Summary
 
-```text
-Upload
--> Save local file + receipt row
--> Create queued parse job
--> Return immediately
--> Worker claims job
--> Preprocess image
--> PaddleOCR
--> Save receipt_ocr_results
--> Rule-based extraction
--> Save receipt_extractions
--> Mark ready_for_review or failed
--> Review UI polls status
--> Feedback
--> Confirm
--> finance-service transaction creation
-```
+`receipt-service` no longer runs a single monolithic PaddleOCR pipeline. The current codebase uses:
 
-## Step-by-Step Breakdown
+- `PaddleOCR` text detection through `TextDetection`
+- configurable text recognition through:
+  - `VietOCR` as the default recognizer backend
+  - `PaddleOCR TextRecognition` as the fallback / rollback-safe backend
+- a two-profile OCR pipeline:
+  - `fast`
+  - `recovery`
+- a session-first async parsing flow behind `RECEIPT_SESSION_FIRST_ENABLED`
 
-### 1. Upload
+The effective source of truth for OCR orchestration is:
 
-Implementation:
+- API entry: `microservices/receipt-service/app/api/receipts.py`
+- queue + worker: `microservices/receipt-service/app/services/receipt_queue.py`, `microservices/receipt-service/app/worker.py`
+- parse orchestration: `microservices/receipt-service/app/services/parse_pipeline.py`
+- preprocessing: `microservices/receipt-service/app/services/image_preprocess.py`
+- OCR execution: `microservices/receipt-service/app/services/ocr_service.py`
+- detector / recognizer adapters: `microservices/receipt-service/app/services/ocr_pipeline.py`
+- post-processing: `microservices/receipt-service/app/services/ocr_postprocess.py`
+- extraction: `microservices/receipt-service/app/services/extraction_service.py`
 
-- `microservices/receipt-service/app/api/receipts.py`
-- function: `upload_receipt`
+## Current End-to-End OCR Workflow
 
-Reads:
+### 1. Upload and session creation
 
-- uploaded file bytes from multipart form data
+`POST /receipts/upload` in `app/api/receipts.py` has two behaviors:
 
-Writes:
+- legacy receipt-first flow when `receipt_session_first_enabled = false`
+- current preferred session-first flow when `receipt_session_first_enabled = true`
 
-- local file under `RECEIPT_UPLOAD_DIR`
-- `receipts` row with:
-  - `user_id` from authenticated JWT `sub`
-  - `file_name`
-  - `original_url`
-  - `mime_type`
-  - `file_size`
-  - `image_hash`
-  - `status=queued` after job enqueue
-- `receipt_jobs` row with:
-  - `job_type=parse`
-  - `status=queued`
+Session-first path:
 
-Failure points:
+1. file bytes are read from multipart form upload
+2. temp image is stored via `store_temp_upload()` in `app/services/receipt_storage.py`
+3. a `ReceiptParseSession` row is created
+4. a `ReceiptParseJob` row is queued
+5. API returns a `ReceiptWorkflowResponse` shaped for the unified frontend workspace
 
-- empty file
-- missing/invalid bearer token
-- disk write failure
+### 2. Worker claim loop
 
-### 2. Save file
+`app/worker.py` runs a background polling loop:
 
-Implementation detail:
+1. claim oldest queued `ReceiptParseJob`
+2. if none exists, claim legacy `ReceiptJob`
+3. if nothing is queued, run expired temp-session cleanup
+4. sleep for `WORKER_POLL_INTERVAL_SECONDS`
 
-- file is saved locally and the local path is persisted as `original_url`
+The worker still preserves the original async architecture:
 
-Risk:
+- upload request returns immediately
+- OCR and extraction run outside the HTTP request
+- review UI polls workflow state
 
-- storage path is tightly coupled to runtime filesystem layout
+### 3. Parse pipeline
 
-### 3. Queue and job claim
+`process_session_parse_job()` and `process_parse_job()` in `app/services/parse_pipeline.py` both route into `_run_profiled_parse()`.
 
-Implementation:
+Current behavior:
 
-- `microservices/receipt-service/app/services/receipt_queue.py`
-- functions: `enqueue_parse_job`, `claim_next_parse_job`
-- worker entrypoint: `microservices/receipt-service/app/worker.py`
+1. run `fast` preprocessing + OCR + extraction
+2. evaluate fast-path quality through `_needs_recovery(...)`
+3. if needed, run `recovery` preprocessing + OCR + extraction
+4. compare fast vs recovery result confidence
+5. persist OCR debug JSON, extraction payload, timings, and selected path
+6. mark job/session or job/receipt `ready_for_review` or `failed`
 
-Job states used by the parse pipeline:
+### 4. Review and confirm
 
-- `queued`
-- `preprocessing`
-- `ocr_running`
-- `extracting`
-- `ready_for_review`
-- `failed`
+Frontend now uses a single-page workspace:
 
-Behavior:
+- main route: `microservices/frontend/app/receipts/upload/page.tsx`
+- main component: `microservices/frontend/components/receipt-workspace.tsx`
+- old review route redirects into the workspace
 
-- upload auto-enqueues parsing
-- `POST /receipts/{id}/parse` reuses current results unless `force=true`
-- duplicate OCR runs are skipped when a completed parse already exists
-- worker polls and claims the oldest queued job transactionally
+Pre-confirm flow:
 
-### 4. Preprocess image
+- poll `GET /receipts/sessions/{session_id}` or legacy `GET /receipts/{id}`
+- display receipt image preview
+- display OCR text/debug panel
+- display editable extracted fields
+- save reviewer feedback
 
-Implementation:
+Confirm flow:
 
-- `microservices/receipt-service/app/services/image_preprocess.py`
-- function: `preprocess_image`
+- `POST /receipts/sessions/{session_id}/confirm`
+- handled by `finalize_parse_session()` in `app/services/session_finalize.py`
+- creates the official `Receipt`, `ReceiptOcrResult`, `ReceiptExtraction`, and optional `ReceiptFeedback`
+- calls `finance-service`
+- promotes temp image to permanent storage
 
-Operations:
+## OCR Stack and Runtime Versions
 
-- OpenCV image read
-- resize so the largest side is at most `1280`
-- grayscale conversion
-- contrast boost
-- light Gaussian blur
-- save processed image
+### Python / API stack
 
-Writes:
+From `microservices/receipt-service/requirements.txt`:
 
-- processed PNG file in `uploads/processed`
+- `fastapi==0.115.6`
+- `uvicorn==0.32.1`
+- `sqlalchemy==2.0.36`
+- `psycopg[binary]==3.2.3`
+- `pydantic==2.10.3`
+- `pydantic-settings==2.6.1`
+- `python-multipart==0.0.18`
 
-Failure points:
+### OCR / imaging stack
 
-- unreadable image
-- OpenCV decode issue
-- processed image save failure
+- `opencv-python==4.10.0.84`
+- `numpy==1.26.4`
+- `pillow==10.2.0`
+- `paddleocr==3.3.3`
+- `paddlepaddle==3.2.0` in base CPU build
+- `paddlepaddle-gpu==3.2.0` in GPU override build
+- `vietocr==0.3.13`
+- `torch` + `torchvision`
+  - CPU wheels by default
+  - CUDA wheels through `docker-compose.gpu.yml`
 
-### 5. OCR
+### Runtime container base
 
-Implementation:
+From `microservices/receipt-service/Dockerfile`:
 
-- `microservices/receipt-service/app/services/ocr_service.py`
-- `OCRService.extract_text`
+- base image: `python:3.11-slim`
+- system packages:
+  - `libgomp1`
+  - `libglib2.0-0`
+  - `libsm6`
+  - `libxrender1`
+  - `libxext6`
+  - `libgl1`
 
-Configuration:
+### Compose/runtime modes
 
-- PaddleOCR singleton through `lru_cache`
-- language: `en`
-- orientation helpers disabled
-- device controlled by `OCR_DEVICE`
-- CPU threads controlled by `OCR_CPU_THREADS`
+- `docker-compose.yml`
+  - CPU-safe base runtime
+  - `OCR_DEVICE=${RECEIPT_OCR_DEVICE:-auto}`
+- `docker-compose.gpu.yml`
+  - forces `OCR_DEVICE=gpu`
+  - sets NVIDIA env vars
+  - adds `gpus: all`
+  - switches Paddle and Torch installs to GPU wheels
 
-Behavior:
+## Current OCR Pipeline Design
 
-- worker keeps OCR model warm in memory
-- tries GPU when configured and CUDA is available
-- falls back to CPU automatically when GPU is unavailable or misconfigured
+## 1. Preprocessing profiles
 
-Produces:
+Implemented in `app/services/image_preprocess.py`.
+
+### Fast profile
+
+Pipeline:
+
+- safe resize
+- grayscale
+- `cv2.normalize`
+- light non-local means denoise
+- orientation check
+
+Purpose:
+
+- keep latency low
+- preserve small text without always paying heavy cleanup cost
+
+### Recovery profile
+
+Pipeline:
+
+- safe resize
+- grayscale
+- CLAHE
+- stronger denoise
+- sharpen filter
+- deskew
+- orientation check
+
+Purpose:
+
+- retry difficult receipts only when the fast path looks weak
+
+### Resize policy
+
+- `MAX_LONG_SIDE = 2200`
+- `MIN_SHORT_SIDE = 900`
+
+This is materially different from the old documentation that described a single fixed max-side resize to `1280`.
+
+## 2. Detection and recognition split
+
+Implemented in `app/services/ocr_pipeline.py`.
+
+### Detection
+
+Always handled by Paddle through `PaddleDetectorAdapter`.
+
+Current configured models:
+
+- fast detector: `PP-OCRv5_mobile_det`
+- recovery detector: `PP-OCRv5_server_det`
+
+### Recognition
+
+Selected through `OCR_RECOGNIZER_BACKEND`.
+
+Supported backends:
+
+- `vietocr`
+- `paddle`
+
+Adapters:
+
+- `VietOCRRecognizerAdapter`
+- `PaddleRecognizerAdapter`
+
+Defaults from `app/core/config.py`:
+
+- `ocr_recognizer_backend = "vietocr"`
+- `ocr_fallback_recognizer_backend = "paddle"`
+- `ocr_recognizer_batch_size = 8`
+- `ocr_row_grouping_tolerance = 0.65`
+- `ocr_vietocr_config_name = "vgg_seq2seq"`
+
+### Box ordering
+
+After detection:
+
+1. detected polygons are normalized to `OCRBox`
+2. boxes are grouped into visual rows with configurable tolerance
+3. boxes are sorted top-to-bottom, then left-to-right within each row
+4. crops are extracted through perspective warp
+5. recognizer runs on ordered crops in batch
+
+The row-ordering metadata is preserved in `ocr_debug.ordering`.
+
+## 3. OCR post-processing
+
+`app/services/ocr_postprocess.py` is responsible for conservative Vietnamese normalization and low-quality estimation.
+
+Current OCR result payload still keeps:
 
 - `raw_text`
 - `lines`
-- average confidence
-- line-level confidences
-- effective OCR device
+- `confidence`
+- `confidences`
+- `device`
+- `provider`
+- `ocr_language`
+- `fallback_used`
+- `line_count`
+- `detected_box_count`
+- `runtime`
+- `engine_config`
+- `ordering`
 
-### 6. Save OCR result
+This preserves downstream extraction and frontend compatibility while adding more runtime/debug metadata.
 
-Implementation:
+## 4. Fast-path recovery gate
 
-- `microservices/receipt-service/app/services/parse_pipeline.py`
+Implemented in `_needs_recovery(...)` inside `app/services/parse_pipeline.py`.
 
-Writes to `receipt_ocr_results`:
+Current recovery reasons include:
 
-- `ocr_provider`
-- `raw_text`
-- `raw_json`
-- `confidence_score`
+- low OCR confidence
+- corrupted text ratio
+- strong Vietnamese corruption signal
+- too-short OCR output
+- too few detected lines
+- fragmented line output
+- fragmented header lines
+- weak merchant candidate
+- missing total amount
+- missing critical context
+- orientation-corrected input
+- deskew-needed signal
 
-Also writes into `raw_json`:
+This is a material change from the older generic “run OCR once then extract” design.
 
-- OCR lines
-- line confidences
-- processed image path
-- effective OCR device
+## Persistence Model
 
-### 7. Extraction
+### Temporary parse layer
 
-Implementation:
+Tables in `app/models/receipt.py`:
 
-- `microservices/receipt-service/app/services/extraction_service.py`
-- function: `extract_all`
+- `receipt_parse_sessions`
+- `receipt_parse_jobs`
 
-Current rules:
+`ReceiptParseSession` stores:
 
-- extraction now uses a hybrid staged pipeline:
-  - normalize OCR text and separators
-  - build soft zones for header, metadata, item table, payment summary, and footer
-  - generate merchant/date/amount/currency/payment/labeled-field candidates
-  - score and rank candidates
-  - validate selected values against safe business rules
-  - persist rich extraction metadata into `extracted_json`
-- merchant name is chosen from scored header-oriented candidates instead of blindly using the first OCR line
-- transaction date accepts practical OCR-corrupted separators such as `/`, `-`, `.`, and `:`
-- numeric values are normalized by `_parse_decimal`:
-  - both `,` and `.` present -> treat `,` as thousand separators
-  - only `,` present -> treat as thousands if later groups have length `3`, otherwise treat as decimal separator
-  - only `.` present -> treat as thousands if later groups have length `3`
-- amount candidates are grouped into:
-  - `total_amount`
-  - `subtotal_amount`
-  - `tax_amount`
-  - `discount_amount`
-  - `service_charge`
-- total selection prefers total-labeled candidates and nearby supporting lines, while avoiding customer-cash and non-total signals
-- optional fields are extracted conservatively when supported by line labels or layout hints:
-  - `payment_method`
-  - `receipt_number`
-  - `merchant_address`
-  - `merchant_phone`
-  - `cashier_name`
-  - `table_number`
-  - `guest_count`
-  - `time_in`
-  - `time_out`
-- simple row-like receipts can also produce `items[]` with:
-  - `name`
-  - `quantity`
-  - `unit_price`
-  - `line_total`
-- extracted values remain `null` when confidence is weak or validation fails
-- `currency` still remains nullable and is not guessed
+- temp image URL
+- optional permanent URL
+- OCR raw text
+- OCR debug JSON
+- extraction JSON
+- reviewer feedback
+- finance transaction ID
+- confirmed receipt linkage
+- expiry/finalization timestamps
 
-Important behavior:
+### Confirmed receipt layer
 
-- missing or uncertain fields remain `null`
-- no fake defaults are injected during extraction
-- extraction is language-agnostic and does not contain Vietnamese-specific OCR behavior
-- `extracted_json` now preserves:
-  - normalized text payload
-  - zone breakdown
-  - selected fields
-  - `items`
-  - field-level confidence
-  - compact source-line trace metadata
-  - `needs_review_fields`
-  - `extraction_version`
-  - `extraction_notes`
-  - description-like text for later suggestion features
+Official persistence still uses:
 
-### 8. Save extraction
-
-Implementation:
-
-- `microservices/receipt-service/app/services/parse_pipeline.py`
-
-Writes to `receipt_extractions`:
-
-- `merchant_name`
-- `transaction_date`
-- `total_amount`
-- `tax_amount`
-- `currency`
-- `extracted_json`
-- `confidence_score`
-- `review_status=needs_review`
-
-Also updates:
-
-- `receipts.status=ready_for_review`
-- `receipts.processed_at`
-- `receipt_jobs.status=ready_for_review`
-
-### 9. Review UI
-
-Implementation:
-
-- `microservices/frontend/app/receipts/[id]/review/page.tsx`
-
-Visible parts:
-
-- receipt status card
-- parse/retry queue button
-- editable extraction form
-- feedback area
-- isolated OCR debug panel
-
-Behavior:
-
-- review page polls `GET /receipts/{id}` while the active parse job is:
-  - `queued`
-  - `preprocessing`
-  - `ocr_running`
-  - `extracting`
-- form stays disabled until extraction is available
-- existing edit-and-confirm flow remains the same once data is ready
-
-### 10. Feedback
-
-Implementation:
-
-- `POST /receipts/{id}/feedback`
-- function: `save_feedback`
-
-Writes:
-
+- `receipts`
+- `receipt_ocr_results`
+- `receipt_extractions`
 - `receipt_feedback`
-- `receipt_feedback.user_id` from authenticated JWT `sub`
-- updated values back into `receipt_extractions`
-- `receipts.status=reviewed`
+- `receipt_jobs` for legacy receipt-first mode
 
-### 11. Confirm
+This means the current codebase is in a compatibility phase:
 
-Implementation:
+- session-first for new flow when feature flag is on
+- legacy receipt-first path still present when feature flag is off
 
-- `POST /receipts/{id}/confirm`
-- function: `confirm_receipt`
-- finance integration: `microservices/receipt-service/app/services/finance_client.py`
+## Current Folder Map for OCR-Relevant Code
 
-Writes:
+```text
+microservices/receipt-service/
+  Dockerfile
+  requirements.txt
+  db/
+    migrations/
+      20260416_add_receipt_parse_sessions.sql
+  scripts/
+    benchmark_recognizers.py
+    validate_recognizer_contract.py
+  app/
+    api/
+      receipts.py
+    core/
+      auth.py
+      config.py
+    db/
+      base.py
+      session.py
+    models/
+      receipt.py
+    schemas/
+      receipt.py
+    services/
+      extraction_service.py
+      finance_client.py
+      image_preprocess.py
+      ocr_pipeline.py
+      ocr_postprocess.py
+      ocr_service.py
+      parse_pipeline.py
+      receipt_queue.py
+      receipt_storage.py
+      session_finalize.py
+    worker.py
+```
 
-- updates `receipt_extractions.review_status=confirmed`
-- updates `receipts.status=confirmed`
-- attaches `finance_transaction_id` into extraction JSON
+Frontend OCR-review surface:
 
-External call:
+```text
+microservices/frontend/
+  app/receipts/upload/page.tsx
+  app/receipts/[id]/review/page.tsx
+  components/receipt-workspace.tsx
+  components/receipt-ocr-text-panel.tsx
+  lib/api.ts
+  lib/types.ts
+```
 
-- `receipt-service` sends a transaction creation request to `finance-service`
-- the inbound bearer token is forwarded so `finance-service` can create the transaction under the same authenticated user context
+## OCR Debug / Observability Shape
 
-## Database Table Mapping
+The current persisted OCR debug payload includes:
 
-### receipts
+- `lines`
+- `confidences`
+- `processed_image_path`
+- `device`
+- `ocr_language`
+- `fallback_used`
+- `low_quality_ratio`
+- `line_count`
+- `detected_box_count`
+- `short_line_ratio`
+- `raw_lines_before_postprocess`
+- `postprocess`
+- `runtime`
+- `engine_config`
+- `ordering`
+- `preprocess`
+- `profile`
+- `selected_path`
+- `timings`
+- `recovery_reasons`
 
-- mapped by `Receipt`
-- used for upload metadata, receipt lifecycle state, and processed timestamp
+Timing fields currently persisted:
 
-### receipt_ocr_results
+- `queue_delay_seconds`
+- `fast_path.preprocess_seconds`
+- `fast_path.ocr_seconds`
+- `fast_path.extraction_seconds`
+- `recovery_path.*`
+- `total_parse_seconds`
 
-- mapped by `ReceiptOcrResult`
-- used to persist raw OCR output and OCR metadata
+This is the current source of truth for profiling OCR latency in the live system.
 
-### receipt_extractions
+## Current Frontend Review Shape
 
-- mapped by `ReceiptExtraction`
-- used to persist structured extracted fields and review state
+The OCR review UX is no longer split into a standalone upload page and a separate review page as the main flow.
 
-### receipt_feedback
+Current behavior:
 
-- mapped by `ReceiptFeedback`
-- used to store user corrections and feedback notes
+- `/receipts/upload` hosts the unified workspace
+- the workspace can load either:
+  - a temp parse session via `sessionId`
+  - a legacy/confirmed receipt via `receiptId`
+- OCR text is rendered in `ReceiptOcrTextPanel`
+- field editing and confirm happen in the same workspace
+- polling is still done every 3 seconds while the parse job is active
 
-### receipt_jobs
+## Current Risks and Observations
 
-- mapped by `ReceiptJob`
-- used to track async parse lifecycle for each queued parse run
+- The codebase is in a hybrid compatibility phase:
+  - legacy receipt-first flow still exists
+  - session-first flow is feature-flagged
+- Official DB migrations exist for parse sessions, but the worker still also calls `Base.metadata.create_all(...)`
+- OCR quality still depends heavily on receipt image quality, detector output, and recognizer backend choice
+- VietOCR is integrated and switchable, but benchmark results are not universally better on every sample
+- GPU OCR depends on running with `docker-compose.gpu.yml` and an actual NVIDIA-capable host
+- Temp storage and promoted permanent storage are still filesystem-based, not object storage based
 
-## Practical Risks in the Pipeline
+## Recommended Reading Order
 
-- local file storage is not durable across environments
-- extraction still depends heavily on OCR text quality
-- merchant/date/total heuristics are still simple and generic
-- GPU OCR availability depends on host/runtime support
-- `receipt-service` still relies on `create_all()` instead of managed DB migrations
+If someone needs to understand the current OCR system from code:
+
+1. `app/core/config.py`
+2. `app/api/receipts.py`
+3. `app/services/receipt_queue.py`
+4. `app/worker.py`
+5. `app/services/parse_pipeline.py`
+6. `app/services/image_preprocess.py`
+7. `app/services/ocr_service.py`
+8. `app/services/ocr_pipeline.py`
+9. `app/services/ocr_postprocess.py`
+10. `app/services/extraction_service.py`
+11. `app/services/session_finalize.py`
