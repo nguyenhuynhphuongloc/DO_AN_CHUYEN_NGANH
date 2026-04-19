@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
 from app.core.config import settings
 from app.services.extraction_service import extract_all
 from app.services.image_preprocess import preprocess_image_with_metadata
+from app.services.layout_service import get_layout_service
 from app.services.ocr_pipeline import (
     get_paddle_detector,
     get_paddle_recognizer,
@@ -44,7 +45,10 @@ REQUIRED_TOP_LEVEL_KEYS = {
 def _reset_runtime(backend: str) -> None:
     settings.ocr_recognizer_backend = backend
     settings.ocr_fallback_recognizer_backend = ""
+    settings.ocr_layout_enabled = False
+    settings.ocr_layout_model_path = ""
     get_ocr_service.cache_clear()
+    get_layout_service.cache_clear()
     get_paddle_detector.cache_clear()
     get_paddle_recognizer.cache_clear()
     get_vietocr_recognizer.cache_clear()
@@ -129,4 +133,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

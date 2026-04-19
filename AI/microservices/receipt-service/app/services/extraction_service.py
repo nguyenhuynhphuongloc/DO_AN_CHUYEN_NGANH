@@ -265,13 +265,33 @@ def _looks_like_item_line(record: dict[str, Any]) -> bool:
     return bool(re.search(r"[A-Za-z]", record["text"]))
 
 
-def _build_zones(records: list[dict[str, Any]]) -> dict[str, Any]:
+def _build_zones(records: list[dict[str, Any]], layout_blocks: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     zone_map: dict[int, str] = {}
     header_indices: list[int] = []
     metadata_indices: list[int] = []
     item_indices: list[int] = []
     summary_indices: list[int] = []
     footer_indices: list[int] = []
+    block_map: dict[int, dict[str, Any]] = {}
+
+    if layout_blocks:
+        label_to_zone = {
+            "header": "header",
+            "items": "item_table",
+            "totals": "payment_summary",
+            "payment_info": "payment_summary",
+            "footer": "footer",
+            "metadata": "metadata",
+        }
+        for block in layout_blocks:
+            zone = label_to_zone.get(str(block.get("label") or "metadata"), "metadata")
+            for line_index in block.get("line_indices") or []:
+                block_map[int(line_index)] = {
+                    "zone": zone,
+                    "label": block.get("label"),
+                    "index": block.get("index"),
+                    "raw_label": block.get("raw_label"),
+                }
 
     summary_start: int | None = None
     for record in records:
@@ -288,6 +308,23 @@ def _build_zones(records: list[dict[str, Any]]) -> dict[str, Any]:
 
     for position, record in enumerate(records):
         idx = record["index"]
+        layout_entry = block_map.get(idx)
+        if layout_entry is not None:
+            zone = layout_entry["zone"]
+            zone_map[idx] = zone
+            record["layout_block_index"] = layout_entry.get("index")
+            record["layout_block_label"] = layout_entry.get("label")
+            if zone == "header":
+                header_indices.append(idx)
+            elif zone == "metadata":
+                metadata_indices.append(idx)
+            elif zone == "item_table":
+                item_indices.append(idx)
+            elif zone == "payment_summary":
+                summary_indices.append(idx)
+            else:
+                footer_indices.append(idx)
+            continue
         folded = record["folded"]
         if position < 3 and idx < (item_start if item_start is not None else 9999):
             zone = "header"
@@ -328,12 +365,17 @@ def _build_zones(records: list[dict[str, Any]]) -> dict[str, Any]:
         "item_table": item_indices,
         "payment_summary": summary_indices,
         "footer": footer_indices,
+        "layout_line_map": block_map,
     }
 
 
-def _build_normalized_payload(lines: list[str], raw_text: str) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+def _build_normalized_payload(
+    lines: list[str],
+    raw_text: str,
+    layout_blocks: list[dict[str, Any]] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
     records = _build_line_records(lines)
-    zones = _build_zones(records)
+    zones = _build_zones(records, layout_blocks)
     normalized_lines = [record["text"] for record in records]
     payload = {
         "raw_text": raw_text,
@@ -347,8 +389,27 @@ def _build_normalized_payload(lines: list[str], raw_text: str) -> tuple[list[dic
         "item_table": [record["text"] for record in records if zones["line_zones"].get(record["index"]) == "item_table"],
         "payment_summary": [record["text"] for record in records if zones["line_zones"].get(record["index"]) == "payment_summary"],
         "footer": [record["text"] for record in records if zones["line_zones"].get(record["index"]) == "footer"],
+        "layout_line_map": zones["layout_line_map"],
     }
     return records, payload, zone_payload
+
+
+def _build_field_provenance(source_lines: dict[str, Any], layout_line_map: dict[int, dict[str, Any]]) -> dict[str, Any]:
+    provenance: dict[str, Any] = {}
+    for field_name, trace in source_lines.items():
+        if not isinstance(trace, dict):
+            continue
+        for line_index in trace.get("source_lines") or []:
+            layout_entry = layout_line_map.get(int(line_index))
+            if not layout_entry:
+                continue
+            provenance[field_name] = {
+                "layout_block_index": layout_entry.get("index"),
+                "layout_block_label": layout_entry.get("label"),
+                "zone": layout_entry.get("zone"),
+            }
+            break
+    return provenance
 
 
 def _merchant_candidates(records: list[dict[str, Any]], zones: dict[str, Any]) -> list[Candidate]:
@@ -679,8 +740,8 @@ def _build_trace(candidate: Candidate | None) -> dict[str, Any] | None:
     }
 
 
-def extract_all(lines: list[str], raw_text: str) -> dict[str, Any]:
-    records, normalized_payload, zone_payload = _build_normalized_payload(lines, raw_text)
+def extract_all(lines: list[str], raw_text: str, layout_blocks: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    records, normalized_payload, zone_payload = _build_normalized_payload(lines, raw_text, layout_blocks)
     notes: list[str] = []
 
     merchant = _validate_merchant(_select_best(_merchant_candidates(records, zone_payload)), notes)
@@ -763,6 +824,7 @@ def extract_all(lines: list[str], raw_text: str) -> dict[str, Any]:
         "time_in": _build_trace(_select_best(labeled_fields["time_in"])),
         "time_out": _build_trace(_select_best(labeled_fields["time_out"])),
     }
+    field_provenance = _build_field_provenance(source_lines, zone_payload.get("layout_line_map") or {})
 
     needs_review_fields = [
         field_name
@@ -785,6 +847,7 @@ def extract_all(lines: list[str], raw_text: str) -> dict[str, Any]:
         "items": items,
         "field_confidence": field_confidence,
         "source_lines": source_lines,
+        "field_provenance": field_provenance,
         "needs_review_fields": sorted(set(needs_review_fields)),
         "description_text": description_text or None,
         "extraction_version": EXTRACTION_VERSION,

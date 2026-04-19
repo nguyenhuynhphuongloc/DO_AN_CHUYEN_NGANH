@@ -73,10 +73,11 @@ services:
       RECEIPT_UPLOAD_DIR: uploads
       OCR_DEVICE: ${RECEIPT_OCR_DEVICE:-auto}
       OCR_RECOGNIZER_BACKEND: ${RECEIPT_OCR_RECOGNIZER_BACKEND:-vietocr}
-      OCR_FALLBACK_RECOGNIZER_BACKEND: ${RECEIPT_OCR_FALLBACK_RECOGNIZER_BACKEND:-paddle}
+      OCR_FALLBACK_RECOGNIZER_BACKEND: ${RECEIPT_OCR_FALLBACK_RECOGNIZER_BACKEND:-}
     ports:
       - "8003:8003"
     volumes:
+      - ./models:/models
       - receipt_uploads:/app/uploads
     depends_on:
       finance-service:
@@ -105,10 +106,11 @@ services:
       RECEIPT_UPLOAD_DIR: uploads
       OCR_DEVICE: ${RECEIPT_OCR_DEVICE:-auto}
       OCR_RECOGNIZER_BACKEND: ${RECEIPT_OCR_RECOGNIZER_BACKEND:-vietocr}
-      OCR_FALLBACK_RECOGNIZER_BACKEND: ${RECEIPT_OCR_FALLBACK_RECOGNIZER_BACKEND:-paddle}
+      OCR_FALLBACK_RECOGNIZER_BACKEND: ${RECEIPT_OCR_FALLBACK_RECOGNIZER_BACKEND:-}
       WORKER_POLL_INTERVAL_SECONDS: ${RECEIPT_WORKER_POLL_INTERVAL_SECONDS:-2}
       WORKER_BATCH_SIZE: ${RECEIPT_WORKER_BATCH_SIZE:-1}
     volumes:
+      - ./models:/models
       - receipt_uploads:/app/uploads
     depends_on:
       receipt-service:

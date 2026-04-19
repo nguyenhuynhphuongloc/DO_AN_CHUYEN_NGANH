@@ -13,6 +13,14 @@ export function ReceiptOcrTextPanel({ receipt, ocrDebug, isProcessing, onRetryPa
   const hasText = Boolean(ocrDebug?.raw_text && ocrDebug.raw_text.trim());
   const failed = receipt?.active_job?.status === 'failed';
   const runtime = ocrDebug?.runtime ?? null;
+  const layout = ocrDebug?.layout ?? null;
+  const layoutBlocks = Array.isArray(layout?.blocks) ? layout.blocks : [];
+  const fieldProvenance =
+    receipt?.extraction_result?.extracted_json &&
+    typeof receipt.extraction_result.extracted_json === 'object' &&
+    'field_provenance' in receipt.extraction_result.extracted_json
+      ? (receipt.extraction_result.extracted_json.field_provenance as Record<string, unknown>)
+      : null;
   const detector = String(runtime?.text_detection_model_name ?? ocrDebug?.engine_config?.text_detection_model_name ?? 'Pending');
   const recognizer = String(runtime?.text_recognition_model_name ?? ocrDebug?.engine_config?.text_recognition_model_name ?? 'Pending');
   const recognizerBackend = String(runtime?.recognizer_backend ?? ocrDebug?.engine_config?.recognizer_backend ?? 'Pending');
@@ -32,6 +40,7 @@ export function ReceiptOcrTextPanel({ receipt, ocrDebug, isProcessing, onRetryPa
           <p>Detector: {detector}</p>
           <p>Recognizer: {recognizer}</p>
           <p>Backend: {recognizerBackend}</p>
+          <p>Layout: {String(layout?.used ?? false)}</p>
         </div>
       </div>
 
@@ -112,6 +121,33 @@ export function ReceiptOcrTextPanel({ receipt, ocrDebug, isProcessing, onRetryPa
               2,
             )}
           </pre>
+        </div>
+      ) : null}
+
+      {layout ? (
+        <div className="mt-4 rounded-3xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-700">
+          <p className="font-medium text-neutral-900">Layout blocks</p>
+          <pre className="mt-2 overflow-auto whitespace-pre-wrap font-mono">
+            {JSON.stringify(
+              {
+                enabled: layout.enabled,
+                used: layout.used,
+                backend: layout.backend,
+                fallback_reason: layout.fallback_reason,
+                runtime: layout.runtime,
+                blocks: layoutBlocks,
+              },
+              null,
+              2,
+            )}
+          </pre>
+        </div>
+      ) : null}
+
+      {fieldProvenance ? (
+        <div className="mt-4 rounded-3xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-700">
+          <p className="font-medium text-neutral-900">Field provenance</p>
+          <pre className="mt-2 overflow-auto whitespace-pre-wrap font-mono">{JSON.stringify(fieldProvenance, null, 2)}</pre>
         </div>
       ) : null}
     </section>

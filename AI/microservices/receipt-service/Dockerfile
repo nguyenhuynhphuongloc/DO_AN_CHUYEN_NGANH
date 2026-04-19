@@ -21,6 +21,7 @@ RUN apt-get update \
 
 FROM base AS deps
 COPY requirements.txt ./
+# `python-docx` is installed via requirements.txt for repo-local document generation workflows.
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt \
     && sh -lc "${PADDLE_INSTALL_COMMAND}" \

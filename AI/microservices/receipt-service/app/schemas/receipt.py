@@ -126,6 +126,7 @@ class ReceiptOcrDebugResponse(BaseModel):
     runtime: dict | None = None
     engine_config: dict | None = None
     ordering: dict | None = None
+    layout: dict | None = None
 
 
 class SessionFeedbackResponse(BaseModel):

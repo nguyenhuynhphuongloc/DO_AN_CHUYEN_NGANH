@@ -85,6 +85,7 @@ export type ReceiptOcrDebug = {
   runtime?: Record<string, unknown> | null;
   engine_config?: Record<string, unknown> | null;
   ordering?: Record<string, unknown> | null;
+  layout?: Record<string, unknown> | null;
 };
 
 export type ReceiptExtraction = {
@@ -151,6 +152,7 @@ export type ReceiptStructuredExtraction = {
   items?: ReceiptStructuredItem[] | null;
   field_confidence?: Record<string, number | null> | null;
   source_lines?: Record<string, unknown> | null;
+  field_provenance?: Record<string, unknown> | null;
   needs_review_fields?: string[] | null;
   description_text?: string | null;
   extraction_version?: string | null;

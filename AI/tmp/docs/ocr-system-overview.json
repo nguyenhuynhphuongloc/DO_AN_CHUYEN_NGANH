@@ -1,0 +1,23 @@
+{
+  "title": "OCR System Overview",
+  "sections": [
+    {
+      "heading": "Introduction",
+      "paragraphs": [
+        "The OCR system in this repository extracts structured text from receipt imagery to support downstream processing and system evaluation."
+      ]
+    },
+    {
+      "heading": "OCR Workflow",
+      "paragraphs": [
+        "The workflow acquires receipt images, applies preprocessing and optional layout analysis, runs OCR, and normalizes the extracted text for application use."
+      ]
+    },
+    {
+      "heading": "Technologies Used",
+      "paragraphs": [
+        "The implementation combines FastAPI-based services with OCR and computer vision libraries, including PaddleOCR, VietOCR, Ultralytics models, and supporting Python infrastructure."
+      ]
+    }
+  ]
+}

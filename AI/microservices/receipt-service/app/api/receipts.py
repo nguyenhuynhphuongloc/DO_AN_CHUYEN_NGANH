@@ -125,6 +125,7 @@ def _serialize_receipt(receipt: Receipt, *, finance_transaction_id: str | None =
             runtime=raw_json.get("runtime") if isinstance(raw_json.get("runtime"), dict) else None,
             engine_config=raw_json.get("engine_config") if isinstance(raw_json.get("engine_config"), dict) else None,
             ordering=raw_json.get("ordering") if isinstance(raw_json.get("ordering"), dict) else None,
+            layout=raw_json.get("layout") if isinstance(raw_json.get("layout"), dict) else None,
         )
 
     return ReceiptWorkflowResponse(
@@ -206,6 +207,7 @@ def _serialize_session(session: ReceiptParseSession, *, finance_warning: str | N
             runtime=ocr_debug_json.get("runtime") if isinstance(ocr_debug_json.get("runtime"), dict) else None,
             engine_config=ocr_debug_json.get("engine_config") if isinstance(ocr_debug_json.get("engine_config"), dict) else None,
             ordering=ocr_debug_json.get("ordering") if isinstance(ocr_debug_json.get("ordering"), dict) else None,
+            layout=ocr_debug_json.get("layout") if isinstance(ocr_debug_json.get("layout"), dict) else None,
         ) if ocr_result is not None else None,
         extraction_result=extraction_result,
         latest_feedback=latest_feedback,

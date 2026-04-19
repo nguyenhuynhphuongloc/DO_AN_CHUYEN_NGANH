@@ -32,12 +32,14 @@ services:
       ]
     volumes:
       - ./microservices/receipt-service:/app
+      - ./models:/models
       - receipt_uploads:/app/uploads
 
   receipt-worker:
     command: ["python", "-m", "app.worker"]
     volumes:
       - ./microservices/receipt-service:/app
+      - ./models:/models
       - receipt_uploads:/app/uploads
 
   frontend:

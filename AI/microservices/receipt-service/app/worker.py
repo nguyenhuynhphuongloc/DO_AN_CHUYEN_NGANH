@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models import Receipt, ReceiptExtraction, ReceiptFeedback, ReceiptJob, ReceiptOcrResult, ReceiptParseJob, ReceiptParseSession  # noqa: F401
+from app.services.layout_service import get_layout_service
 from app.services.parse_pipeline import process_parse_job, process_session_parse_job
 from app.services.receipt_queue import claim_next_parse_job, claim_next_session_parse_job
 from app.services.session_finalize import cleanup_expired_parse_sessions
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 def run_worker() -> None:
     Base.metadata.create_all(bind=engine)
+    get_layout_service().validate_runtime(ensure_load=True)
     logger.info(
         "Starting receipt worker with poll interval %.2fs",
         settings.worker_poll_interval_seconds,

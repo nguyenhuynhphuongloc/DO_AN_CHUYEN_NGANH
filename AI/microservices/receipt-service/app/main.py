@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.db.base import Base
 from app.db.session import engine
 from app.models import Receipt, ReceiptExtraction, ReceiptFeedback, ReceiptJob, ReceiptOcrResult, ReceiptParseJob, ReceiptParseSession  # noqa: F401
+from app.services.layout_service import get_layout_service
 
 Base.metadata.create_all(bind=engine)
 
@@ -26,6 +27,11 @@ app.add_middleware(
 )
 
 app.include_router(receipts_router)
+
+
+@app.on_event("startup")
+def validate_layout_runtime() -> None:
+    get_layout_service().validate_runtime(ensure_load=True)
 
 
 @app.get("/health")

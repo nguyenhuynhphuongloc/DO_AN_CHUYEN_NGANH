@@ -30,6 +30,19 @@ class Settings(BaseSettings):
     ocr_row_grouping_tolerance: float = 0.65
     ocr_vietocr_config_name: str = "vgg_seq2seq"
     ocr_vietocr_weights: str = ""
+    ocr_layout_enabled: bool = False
+    ocr_layout_backend: str = "yolo"
+    ocr_layout_model_path: str = ""
+    ocr_layout_model_auto_download: bool = True
+    ocr_layout_model_download_url: str = (
+        "https://huggingface.co/Armaggheddon/yolo11-document-layout/resolve/main/yolo11n_doc_layout.pt"
+    )
+    ocr_layout_model_download_timeout_seconds: int = 120
+    ocr_layout_confidence_threshold: float = 0.25
+    ocr_layout_iou_threshold: float = 0.45
+    ocr_layout_max_blocks: int = 20
+    ocr_layout_min_block_area_ratio: float = 0.0025
+    ocr_layout_merge_same_label_gap_pixels: int = 24
     ocr_fast_confidence_threshold: float = 0.72
     ocr_fast_low_quality_threshold: float = 0.35
     ocr_fast_min_text_length: int = 24

@@ -11,3 +11,5 @@ opencv-python==4.10.0.84
 pillow==10.2.0
 paddleocr==3.3.3
 vietocr==0.3.13
+ultralytics==8.4.38
+python-docx==1.2.0

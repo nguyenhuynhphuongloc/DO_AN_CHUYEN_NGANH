@@ -127,6 +127,7 @@ def _build_ocr_debug_json(
         "runtime": ocr_payload.get("runtime"),
         "engine_config": ocr_payload.get("engine_config"),
         "ordering": ocr_payload.get("ordering"),
+        "layout": ocr_payload.get("layout"),
         "preprocess": preprocess_metadata,
         "profile": ocr_payload.get("profile"),
         "selected_path": selected_path,
@@ -149,13 +150,14 @@ def _run_attempt(
     preprocess_seconds = time.perf_counter() - preprocess_start
 
     ocr_start = time.perf_counter()
-    ocr_payload = get_ocr_service().extract_text(str(processed_path), profile=profile)
+    ocr_payload = get_ocr_service().extract_text(str(processed_path), profile=profile, debug_tag=f"{file_stem}-{profile}")
     ocr_seconds = time.perf_counter() - ocr_start
 
     extraction_start = time.perf_counter()
     extracted_fields = extract_all(
         lines=list(ocr_payload.get("lines", [])),
         raw_text=str(ocr_payload.get("raw_text", "")),
+        layout_blocks=((ocr_payload.get("layout") or {}).get("blocks") if isinstance(ocr_payload.get("layout"), dict) else None),
     )
     extraction_seconds = time.perf_counter() - extraction_start
 
