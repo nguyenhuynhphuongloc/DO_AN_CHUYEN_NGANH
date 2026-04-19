@@ -1,0 +1,367 @@
+{
+  "profile": "fast",
+  "results": [
+    {
+      "image": "/workspace/tmp_receipt_tests/receipt-clear.png",
+      "profile": "fast",
+      "results": {
+        "paddle": {
+          "provider": "paddleocr",
+          "device": "cpu",
+          "confidence": 0.49408679008483886,
+          "line_count": 5,
+          "detected_box_count": 5,
+          "low_quality_ratio": 0.0,
+          "runtime": {
+            "requested_device": "auto",
+            "compiled_with_cuda": false,
+            "cuda_device_count": 0,
+            "cuda_visible_devices": null,
+            "nvidia_visible_devices": null,
+            "nvidia_driver_capabilities": null,
+            "actual_device": "cpu",
+            "detector_backend": "paddle",
+            "detector_device": "cpu",
+            "text_detection_model_name": "PP-OCRv5_mobile_det",
+            "text_det_limit_side_len": 1536,
+            "recognizer_backend": "paddle",
+            "recognizer_device": "cpu",
+            "text_recognition_model_name": "latin_PP-OCRv5_mobile_rec",
+            "recognizer_backend_requested": "paddle",
+            "recognizer_backend_fallback": null,
+            "recognizer_confidence_semantics": "paddle_rec_score",
+            "recognizer_backend_caveats": [
+              "fallback_used_refers_to_recognizer_backend_selection"
+            ],
+            "row_grouping": {
+              "row_grouping_tolerance": 0.65,
+              "row_tolerance_pixels": 55.9,
+              "row_count": 1,
+              "row_lengths": [
+                5
+              ],
+              "ordered_box_indices": [
+                0,
+                4,
+                3,
+                1,
+                2
+              ]
+            },
+            "detected_box_count": 5,
+            "line_count": 5,
+            "detection_seconds": 3.5252,
+            "crop_seconds": 0.0006,
+            "recognition_seconds": 2.4673,
+            "total_ocr_seconds": 5.9931
+          },
+          "engine_config": {
+            "profile": "fast",
+            "language": "vi",
+            "device": "cpu",
+            "detector_backend": "paddle",
+            "recognizer_backend": "paddle",
+            "text_detection_model_name": "PP-OCRv5_mobile_det",
+            "text_recognition_model_name": "latin_PP-OCRv5_mobile_rec",
+            "row_grouping_tolerance": 0.65,
+            "recognizer_confidence_semantics": "paddle_rec_score"
+          },
+          "timings": {
+            "ocr_seconds": 5.9991,
+            "detection_seconds": 3.5252,
+            "crop_seconds": 0.0006,
+            "recognition_seconds": 2.4673,
+            "total_ocr_seconds": 5.9931
+          },
+          "sample_text": "20\n0\n20\n201\n0",
+          "merchant_name": null,
+          "total_amount": 201.0,
+          "transaction_date": null
+        },
+        "vietocr": {
+          "provider": "paddleocr+vietocr",
+          "device": "cpu",
+          "confidence": 0.2856383085250854,
+          "line_count": 5,
+          "detected_box_count": 5,
+          "low_quality_ratio": 0.0,
+          "runtime": {
+            "requested_device": "auto",
+            "compiled_with_cuda": false,
+            "cuda_device_count": 0,
+            "cuda_visible_devices": null,
+            "nvidia_visible_devices": null,
+            "nvidia_driver_capabilities": null,
+            "actual_device": "cpu",
+            "detector_backend": "paddle",
+            "detector_device": "cpu",
+            "text_detection_model_name": "PP-OCRv5_mobile_det",
+            "text_det_limit_side_len": 1536,
+            "torch_available": true,
+            "torch_cuda_available": false,
+            "torch_cuda_device_count": 0,
+            "recognizer_backend": "vietocr",
+            "recognizer_device": "cpu",
+            "text_recognition_model_name": "vgg_seq2seq",
+            "recognizer_backend_requested": "vietocr",
+            "recognizer_backend_fallback": null,
+            "recognizer_confidence_semantics": "vietocr_sequence_probability",
+            "recognizer_backend_caveats": [
+              "vietocr_probability_is_sequence_level",
+              "fallback_used_refers_to_recognizer_backend_selection"
+            ],
+            "row_grouping": {
+              "row_grouping_tolerance": 0.65,
+              "row_tolerance_pixels": 55.9,
+              "row_count": 1,
+              "row_lengths": [
+                5
+              ],
+              "ordered_box_indices": [
+                0,
+                4,
+                3,
+                1,
+                2
+              ]
+            },
+            "detected_box_count": 5,
+            "line_count": 5,
+            "detection_seconds": 0.1826,
+            "crop_seconds": 0.0004,
+            "recognition_seconds": 16.5253,
+            "total_ocr_seconds": 16.7083
+          },
+          "engine_config": {
+            "profile": "fast",
+            "language": "vi",
+            "device": "cpu",
+            "detector_backend": "paddle",
+            "recognizer_backend": "vietocr",
+            "text_detection_model_name": "PP-OCRv5_mobile_det",
+            "text_recognition_model_name": "vgg_seq2seq",
+            "row_grouping_tolerance": 0.65,
+            "recognizer_confidence_semantics": "vietocr_sequence_probability"
+          },
+          "timings": {
+            "ocr_seconds": 16.7124,
+            "detection_seconds": 0.1826,
+            "crop_seconds": 0.0004,
+            "recognition_seconds": 16.5253,
+            "total_ocr_seconds": 16.7083
+          },
+          "sample_text": "E\nE\nE\nT\nE",
+          "merchant_name": null,
+          "total_amount": null,
+          "transaction_date": null
+        }
+      },
+      "preprocess": {
+        "scale": 1.5,
+        "resized_from": [
+          900,
+          600
+        ],
+        "resized_to": [
+          1350,
+          900
+        ],
+        "input_size": [
+          900,
+          600
+        ],
+        "profile": "fast",
+        "deskew_angle": 0.0,
+        "rotated_90": true,
+        "pipeline": [
+          "resize",
+          "grayscale",
+          "normalize",
+          "denoise-light",
+          "orientation-check"
+        ],
+        "output_size": [
+          900,
+          1350
+        ]
+      }
+    },
+    {
+      "image": "/workspace/tmp_receipt_tests/receipt-blurry.png",
+      "profile": "fast",
+      "results": {
+        "paddle": {
+          "provider": "paddleocr",
+          "device": "cpu",
+          "confidence": 0.49273717403411865,
+          "line_count": 1,
+          "detected_box_count": 1,
+          "low_quality_ratio": 0.0,
+          "runtime": {
+            "requested_device": "auto",
+            "compiled_with_cuda": false,
+            "cuda_device_count": 0,
+            "cuda_visible_devices": null,
+            "nvidia_visible_devices": null,
+            "nvidia_driver_capabilities": null,
+            "actual_device": "cpu",
+            "detector_backend": "paddle",
+            "detector_device": "cpu",
+            "text_detection_model_name": "PP-OCRv5_mobile_det",
+            "text_det_limit_side_len": 1536,
+            "recognizer_backend": "paddle",
+            "recognizer_device": "cpu",
+            "text_recognition_model_name": "latin_PP-OCRv5_mobile_rec",
+            "recognizer_backend_requested": "paddle",
+            "recognizer_backend_fallback": null,
+            "recognizer_confidence_semantics": "paddle_rec_score",
+            "recognizer_backend_caveats": [
+              "fallback_used_refers_to_recognizer_backend_selection"
+            ],
+            "row_grouping": {
+              "row_grouping_tolerance": 0.65,
+              "row_tolerance_pixels": 124.15,
+              "row_count": 1,
+              "row_lengths": [
+                1
+              ],
+              "ordered_box_indices": [
+                0
+              ]
+            },
+            "detected_box_count": 1,
+            "line_count": 1,
+            "detection_seconds": 0.2083,
+            "crop_seconds": 0.0016,
+            "recognition_seconds": 0.187,
+            "total_ocr_seconds": 0.3969
+          },
+          "engine_config": {
+            "profile": "fast",
+            "language": "vi",
+            "device": "cpu",
+            "detector_backend": "paddle",
+            "recognizer_backend": "paddle",
+            "text_detection_model_name": "PP-OCRv5_mobile_det",
+            "text_recognition_model_name": "latin_PP-OCRv5_mobile_rec",
+            "row_grouping_tolerance": 0.65,
+            "recognizer_confidence_semantics": "paddle_rec_score"
+          },
+          "timings": {
+            "ocr_seconds": 0.401,
+            "detection_seconds": 0.2083,
+            "crop_seconds": 0.0016,
+            "recognition_seconds": 0.187,
+            "total_ocr_seconds": 0.3969
+          },
+          "sample_text": "1 1I|",
+          "merchant_name": null,
+          "total_amount": 1.0,
+          "transaction_date": null
+        },
+        "vietocr": {
+          "provider": "paddleocr+vietocr",
+          "device": "cpu",
+          "confidence": 0.19325844943523407,
+          "line_count": 1,
+          "detected_box_count": 1,
+          "low_quality_ratio": 0.0,
+          "runtime": {
+            "requested_device": "auto",
+            "compiled_with_cuda": false,
+            "cuda_device_count": 0,
+            "cuda_visible_devices": null,
+            "nvidia_visible_devices": null,
+            "nvidia_driver_capabilities": null,
+            "actual_device": "cpu",
+            "detector_backend": "paddle",
+            "detector_device": "cpu",
+            "text_detection_model_name": "PP-OCRv5_mobile_det",
+            "text_det_limit_side_len": 1536,
+            "torch_available": true,
+            "torch_cuda_available": false,
+            "torch_cuda_device_count": 0,
+            "recognizer_backend": "vietocr",
+            "recognizer_device": "cpu",
+            "text_recognition_model_name": "vgg_seq2seq",
+            "recognizer_backend_requested": "vietocr",
+            "recognizer_backend_fallback": null,
+            "recognizer_confidence_semantics": "vietocr_sequence_probability",
+            "recognizer_backend_caveats": [
+              "vietocr_probability_is_sequence_level",
+              "fallback_used_refers_to_recognizer_backend_selection"
+            ],
+            "row_grouping": {
+              "row_grouping_tolerance": 0.65,
+              "row_tolerance_pixels": 124.15,
+              "row_count": 1,
+              "row_lengths": [
+                1
+              ],
+              "ordered_box_indices": [
+                0
+              ]
+            },
+            "detected_box_count": 1,
+            "line_count": 1,
+            "detection_seconds": 0.2305,
+            "crop_seconds": 0.0014,
+            "recognition_seconds": 1.2296,
+            "total_ocr_seconds": 1.4615
+          },
+          "engine_config": {
+            "profile": "fast",
+            "language": "vi",
+            "device": "cpu",
+            "detector_backend": "paddle",
+            "recognizer_backend": "vietocr",
+            "text_detection_model_name": "PP-OCRv5_mobile_det",
+            "text_recognition_model_name": "vgg_seq2seq",
+            "row_grouping_tolerance": 0.65,
+            "recognizer_confidence_semantics": "vietocr_sequence_probability"
+          },
+          "timings": {
+            "ocr_seconds": 1.4658,
+            "detection_seconds": 0.2305,
+            "crop_seconds": 0.0014,
+            "recognition_seconds": 1.2296,
+            "total_ocr_seconds": 1.4615
+          },
+          "sample_text": "Partic",
+          "merchant_name": "Partic",
+          "total_amount": null,
+          "transaction_date": null
+        }
+      },
+      "preprocess": {
+        "scale": 1.5,
+        "resized_from": [
+          900,
+          600
+        ],
+        "resized_to": [
+          1350,
+          900
+        ],
+        "input_size": [
+          900,
+          600
+        ],
+        "profile": "fast",
+        "deskew_angle": 0.0,
+        "rotated_90": true,
+        "pipeline": [
+          "resize",
+          "grayscale",
+          "normalize",
+          "denoise-light",
+          "orientation-check"
+        ],
+        "output_size": [
+          900,
+          1350
+        ]
+      }
+    }
+  ]
+}

@@ -21,6 +21,11 @@ try:
 except ImportError:  # pragma: no cover
     YOLO = None  # type: ignore[assignment]
 
+try:
+    from doclayout_yolo import YOLOv10
+except ImportError:  # pragma: no cover
+    YOLOv10 = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,6 +36,15 @@ class LayoutService:
         self._model_source: str | None = None
         self._loaded_model_path: str | None = None
         self._model_device: str | None = None
+        self._loaded_backend: str | None = None
+
+    def _backend(self) -> str:
+        candidate = (settings.ocr_layout_backend or "").strip().lower()
+        if candidate in {"yolo", "ultralytics", "ultralytics_yolo"}:
+            return "yolo"
+        if candidate in {"doclayout", "doclayout_yolo", "doclayout-yolo", "yolov10"}:
+            return "doclayout_yolo"
+        return candidate or "disabled"
 
     def _model_path(self) -> Path | None:
         if not settings.ocr_layout_model_path.strip():
@@ -38,12 +52,12 @@ class LayoutService:
         return Path(settings.ocr_layout_model_path).expanduser()
 
     def _base_runtime(self, *, profile: str) -> dict[str, Any]:
-        backend = settings.ocr_layout_backend.strip().lower() or "disabled"
+        backend = self._backend()
         return {
             "backend": backend,
             "profile": profile,
             "model_path": settings.ocr_layout_model_path or None,
-            "model_loaded": bool(self._model is not None),
+            "model_loaded": bool(self._model is not None and self._loaded_backend == backend),
             "model_source": self._model_source,
             "device": self._model_device,
             "auto_download_enabled": bool(settings.ocr_layout_model_auto_download),
@@ -58,7 +72,7 @@ class LayoutService:
             raise FileNotFoundError(f"Layout model is missing and no download URL is configured for {target_path}")
         target_path.parent.mkdir(parents=True, exist_ok=True)
         temp_path = target_path.with_suffix(f"{target_path.suffix}.download")
-        logger.info("Downloading layout model backend=%s url=%s target=%s", settings.ocr_layout_backend, download_url, target_path)
+        logger.info("Downloading layout model backend=%s url=%s target=%s", self._backend(), download_url, target_path)
         try:
             with requests.get(
                 download_url,
@@ -177,22 +191,34 @@ class LayoutService:
                 "runtime": runtime,
             }
 
+    def _create_model(self, model_path: Path) -> Any:
+        backend = self._backend()
+        if backend == "yolo":
+            if YOLO is None:
+                raise RuntimeError("Ultralytics is not installed")
+            return YOLO(str(model_path))
+        if backend == "doclayout_yolo":
+            if YOLOv10 is None:
+                raise RuntimeError("doclayout-yolo is not installed")
+            return YOLOv10(str(model_path))
+        raise RuntimeError(f"Unsupported layout backend '{backend}'")
+
     def _get_model(self) -> Any:
-        if YOLO is None:
-            raise RuntimeError("Ultralytics is not installed")
-        if self._model is not None:
+        backend = self._backend()
+        if self._model is not None and self._loaded_backend == backend:
             return self._model
         model_path = self._resolve_model_path(allow_download=True)
         try:
-            self._model = YOLO(str(model_path))
+            self._model = self._create_model(model_path)
             self._loaded_model_path = str(model_path)
             self._model_device = self._resolve_model_device()
+            self._loaded_backend = backend
         except Exception as exc:  # pragma: no cover - runtime-dependent
             self._model_error = str(exc)
             raise RuntimeError(f"Failed to load layout model from {model_path}: {exc}") from exc
         logger.info(
             "Configured layout detector backend=%s model=%s source=%s device=%s",
-            settings.ocr_layout_backend,
+            backend,
             model_path,
             self._model_source,
             self._model_device,
@@ -221,7 +247,7 @@ class LayoutService:
 
     def detect(self, image: np.ndarray, *, profile: str, debug_tag: str | None = None) -> LayoutDetectionResult:
         enabled = bool(settings.ocr_layout_enabled)
-        backend = settings.ocr_layout_backend.strip().lower() or "disabled"
+        backend = self._backend()
         base_runtime = self._base_runtime(profile=profile)
         if not enabled:
             return LayoutDetectionResult(

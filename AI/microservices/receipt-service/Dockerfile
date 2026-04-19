@@ -5,6 +5,7 @@ WORKDIR /app
 
 ARG PADDLE_INSTALL_COMMAND="python -m pip install paddlepaddle==3.2.0"
 ARG VIETOCR_INSTALL_COMMAND="python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu"
+ARG DOCLAYOUT_YOLO_INSTALL_COMMAND="python -m pip install --no-deps doclayout-yolo==0.0.4"
 
 ENV PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True \
     PYTHONUNBUFFERED=1
@@ -24,6 +25,7 @@ COPY requirements.txt ./
 # `python-docx` is installed via requirements.txt for repo-local document generation workflows.
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt \
+    && sh -lc "${DOCLAYOUT_YOLO_INSTALL_COMMAND}" \
     && sh -lc "${PADDLE_INSTALL_COMMAND}" \
     && sh -lc "${VIETOCR_INSTALL_COMMAND}"
 

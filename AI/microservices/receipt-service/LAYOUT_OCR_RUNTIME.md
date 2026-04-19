@@ -2,13 +2,14 @@
 
 ## Purpose
 
-This service now supports an optional layout-recognition stage before OCR. Layout is disabled by default and should be enabled only when a compatible YOLO layout model is available.
+This service now supports an optional layout-recognition stage before OCR. Layout is disabled by default and should be enabled only when a compatible document-layout checkpoint is available.
 
 ## Dependencies
 
 The receipt-service runtime now includes:
 
 - `ultralytics==8.4.38`
+- `doclayout-yolo==0.0.4`
 - existing OCR stack:
   - `paddleocr==3.3.3`
   - `paddlepaddle==3.2.0` in the CPU base runtime
@@ -19,15 +20,17 @@ The service Docker image still uses:
 
 - base image: `python:3.11-slim`
 
+The Docker image installs `doclayout-yolo` separately from the base `requirements.txt` set so the runtime can keep the existing `vietocr` dependency pin on `albumentations==1.4.2`.
+
 ## Config
 
 Relevant layout config:
 
 - `OCR_LAYOUT_ENABLED=true`
-- `OCR_LAYOUT_BACKEND=yolo`
-- `OCR_LAYOUT_MODEL_PATH=/models/receipt_layout.pt`
+- `OCR_LAYOUT_BACKEND=doclayout_yolo`
+- `OCR_LAYOUT_MODEL_PATH=/models/doclayout_yolo_docstructbench_imgsz1024.pt`
 - `OCR_LAYOUT_MODEL_AUTO_DOWNLOAD=true`
-- `OCR_LAYOUT_MODEL_DOWNLOAD_URL=https://huggingface.co/Armaggheddon/yolo11-document-layout/resolve/main/yolo11n_doc_layout.pt`
+- `OCR_LAYOUT_MODEL_DOWNLOAD_URL=https://huggingface.co/juliozhao/DocLayout-YOLO-DocStructBench/resolve/main/doclayout_yolo_docstructbench_imgsz1024.pt`
 - `OCR_LAYOUT_MODEL_DOWNLOAD_TIMEOUT_SECONDS=120`
 - `OCR_LAYOUT_CONFIDENCE_THRESHOLD=0.25`
 - `OCR_LAYOUT_IOU_THRESHOLD=0.45`
@@ -36,6 +39,15 @@ Relevant layout config:
 - `OCR_LAYOUT_MERGE_SAME_LABEL_GAP_PIXELS=24`
 
 ## Runtime Behavior
+
+### Default model source
+
+The default layout model is:
+
+- Hugging Face model: `juliozhao/DocLayout-YOLO-DocStructBench`
+- paper: `DocLayout-YOLO: Enhancing Document Layout Analysis through Diverse Synthetic Data and Global-to-Local Adaptive Perception`
+- arXiv: `2410.12628`
+- runtime package: `doclayout_yolo.YOLOv10`
 
 ### When layout is disabled
 
@@ -75,9 +87,9 @@ The current Dockerfile does not hardcode a layout model file. The runtime suppor
 
 Default remote source:
 
-- repository: `Armaggheddon/yolo11-document-layout`
-- file: `yolo11n_doc_layout.pt`
-- cached path: `/models/receipt_layout.pt`
+- repository: `juliozhao/DocLayout-YOLO-DocStructBench`
+- file: `doclayout_yolo_docstructbench_imgsz1024.pt`
+- cached path: `/models/doclayout_yolo_docstructbench_imgsz1024.pt`
 
 For Docker Compose, mount the host `./models` directory into the container at `/models`. The default compose stack now mounts that directory for both `receipt-service` and `receipt-worker`, so the downloaded model stays cached across restarts.
 

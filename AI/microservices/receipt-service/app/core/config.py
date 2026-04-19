@@ -31,11 +31,11 @@ class Settings(BaseSettings):
     ocr_vietocr_config_name: str = "vgg_seq2seq"
     ocr_vietocr_weights: str = ""
     ocr_layout_enabled: bool = False
-    ocr_layout_backend: str = "yolo"
-    ocr_layout_model_path: str = ""
+    ocr_layout_backend: str = "doclayout_yolo"
+    ocr_layout_model_path: str = "/models/doclayout_yolo_docstructbench_imgsz1024.pt"
     ocr_layout_model_auto_download: bool = True
     ocr_layout_model_download_url: str = (
-        "https://huggingface.co/Armaggheddon/yolo11-document-layout/resolve/main/yolo11n_doc_layout.pt"
+        "https://huggingface.co/juliozhao/DocLayout-YOLO-DocStructBench/resolve/main/doclayout_yolo_docstructbench_imgsz1024.pt"
     )
     ocr_layout_model_download_timeout_seconds: int = 120
     ocr_layout_confidence_threshold: float = 0.25
