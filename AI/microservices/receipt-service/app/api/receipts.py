@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.auth import AuthenticatedUser, get_current_user
@@ -101,6 +102,14 @@ def _merge_corrected_extraction_payload(original_data: dict | None, corrected_fi
     return payload
 
 
+def _build_receipt_artifact_url(receipt_id: UUID | str, artifact: str) -> str:
+    return f"/receipts/{receipt_id}/ocr-artifacts/{artifact}"
+
+
+def _build_session_artifact_url(session_id: UUID | str, artifact: str) -> str:
+    return f"/receipts/sessions/{session_id}/ocr-artifacts/{artifact}"
+
+
 def _serialize_receipt(receipt: Receipt, *, finance_transaction_id: str | None = None, finance_warning: str | None = None) -> ReceiptWorkflowResponse:
     latest_feedback = ReceiptFeedbackResponse.model_validate(receipt.feedback_items[0]) if receipt.feedback_items else None
     raw_json = receipt.ocr_result.raw_json if receipt.ocr_result is not None and isinstance(receipt.ocr_result.raw_json, dict) else {}
@@ -111,6 +120,9 @@ def _serialize_receipt(receipt: Receipt, *, finance_transaction_id: str | None =
             lines=[str(line) for line in raw_json.get("lines", [])] if isinstance(raw_json.get("lines"), list) else [],
             provider=receipt.ocr_result.ocr_provider,
             confidence_score=float(receipt.ocr_result.confidence_score) if receipt.ocr_result.confidence_score is not None else None,
+            boxed_image_url=_build_receipt_artifact_url(receipt.id, "image") if raw_json.get("boxed_image_path") else None,
+            layout_image_url=_build_receipt_artifact_url(receipt.id, "layout") if raw_json.get("layout_image_path") else None,
+            text_file_url=_build_receipt_artifact_url(receipt.id, "text") if raw_json.get("ocr_text_file_path") else None,
             device=str(raw_json.get("device")) if raw_json.get("device") else None,
             ocr_language=str(raw_json.get("ocr_language")) if raw_json.get("ocr_language") else None,
             fallback_used=bool(raw_json.get("fallback_used")) if raw_json.get("fallback_used") is not None else None,
@@ -193,6 +205,9 @@ def _serialize_session(session: ReceiptParseSession, *, finance_warning: str | N
             lines=[str(line) for line in ocr_debug_json.get("lines", [])] if isinstance(ocr_debug_json.get("lines"), list) else [],
             provider=session.ocr_provider,
             confidence_score=float(session.ocr_confidence_score) if session.ocr_confidence_score is not None else None,
+            boxed_image_url=_build_session_artifact_url(session.id, "image") if ocr_debug_json.get("boxed_image_path") else None,
+            layout_image_url=_build_session_artifact_url(session.id, "layout") if ocr_debug_json.get("layout_image_path") else None,
+            text_file_url=_build_session_artifact_url(session.id, "text") if ocr_debug_json.get("ocr_text_file_path") else None,
             device=str(ocr_debug_json.get("device")) if ocr_debug_json.get("device") else None,
             ocr_language=str(ocr_debug_json.get("ocr_language")) if ocr_debug_json.get("ocr_language") else None,
             fallback_used=bool(ocr_debug_json.get("fallback_used")) if ocr_debug_json.get("fallback_used") is not None else None,
@@ -217,6 +232,20 @@ def _serialize_session(session: ReceiptParseSession, *, finance_warning: str | N
         finance_transaction_id=session.finance_transaction_id,
         finance_warning=finance_warning,
     )
+
+
+def _artifact_response(path_value: str | None, artifact: str, *, fallback_name: str) -> FileResponse:
+    path = Path(path_value or "")
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=404, detail=f"OCR {artifact} artifact not found")
+    media_type = "image/png" if artifact in {"image", "layout"} else "text/plain; charset=utf-8"
+    if artifact == "image":
+        filename = f"{fallback_name}-ocr-boxes.png"
+    elif artifact == "layout":
+        filename = f"{fallback_name}-layout-blocks.png"
+    else:
+        filename = f"{fallback_name}-ocr.txt"
+    return FileResponse(path, media_type=media_type, filename=filename)
 
 
 async def _upload_legacy_receipt(
@@ -295,6 +324,26 @@ def get_receipt(
     db: Session = Depends(get_db),
 ) -> ReceiptWorkflowResponse:
     return _serialize_receipt(_load_receipt(receipt_id, db, current_user.user_id))
+
+
+@router.get("/{receipt_id}/ocr-artifacts/{artifact}")
+def get_receipt_ocr_artifact(
+    receipt_id: str,
+    artifact: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    if artifact not in {"image", "layout", "text"}:
+        raise HTTPException(status_code=404, detail="OCR artifact not found")
+    receipt = _load_receipt(receipt_id, db, current_user.user_id)
+    raw_json = receipt.ocr_result.raw_json if receipt.ocr_result is not None and isinstance(receipt.ocr_result.raw_json, dict) else {}
+    if artifact == "image":
+        path_value = raw_json.get("boxed_image_path")
+    elif artifact == "layout":
+        path_value = raw_json.get("layout_image_path")
+    else:
+        path_value = raw_json.get("ocr_text_file_path")
+    return _artifact_response(str(path_value) if path_value else None, artifact, fallback_name=Path(receipt.file_name).stem or str(receipt.id))
 
 
 @router.post("/{receipt_id}/parse", response_model=ParseReceiptResponse)
@@ -432,6 +481,26 @@ def get_receipt_session(
     db: Session = Depends(get_db),
 ) -> ReceiptWorkflowResponse:
     return _serialize_session(_load_session(session_id, db, current_user.user_id))
+
+
+@router.get("/sessions/{session_id}/ocr-artifacts/{artifact}")
+def get_receipt_session_ocr_artifact(
+    session_id: str,
+    artifact: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    if artifact not in {"image", "layout", "text"}:
+        raise HTTPException(status_code=404, detail="OCR artifact not found")
+    session = _load_session(session_id, db, current_user.user_id)
+    raw_json = session.ocr_debug_json if isinstance(session.ocr_debug_json, dict) else {}
+    if artifact == "image":
+        path_value = raw_json.get("boxed_image_path")
+    elif artifact == "layout":
+        path_value = raw_json.get("layout_image_path")
+    else:
+        path_value = raw_json.get("ocr_text_file_path")
+    return _artifact_response(str(path_value) if path_value else None, artifact, fallback_name=Path(session.file_name).stem or str(session.id))
 
 
 @router.post("/sessions/{session_id}/parse", response_model=ParseReceiptResponse)

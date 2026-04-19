@@ -6,6 +6,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from uuid import UUID
+import cv2
+import numpy as np
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -23,6 +25,82 @@ from app.services.image_preprocess import preprocess_image_with_metadata
 from app.services.ocr_service import get_ocr_service
 
 logger = logging.getLogger(__name__)
+
+
+def _write_ocr_artifacts(
+    *,
+    processed_path: Path,
+    ocr_payload: dict,
+    profile: str,
+) -> tuple[Path | None, Path, Path | None]:
+    artifacts_dir = processed_path.parent / "ocr_artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+    image_output_path = artifacts_dir / f"{processed_path.stem}-boxes.png"
+    text_output_path = artifacts_dir / f"{processed_path.stem}.txt"
+    layout_output_path = artifacts_dir / f"{processed_path.stem}-layout.png"
+
+    raw_text = str(ocr_payload.get("raw_text") or "")
+    text_output_path.write_text(raw_text, encoding="utf-8")
+
+    detected_boxes = list(ocr_payload.get("detected_boxes") or [])
+    image = cv2.imread(str(processed_path))
+    if image is None:
+        return None, text_output_path, None
+
+    ocr_image_path: Path | None = None
+    if detected_boxes:
+        ocr_canvas = image.copy()
+        for raw_box in detected_boxes:
+            if not isinstance(raw_box, list) or len(raw_box) < 4:
+                continue
+            points = []
+            for point in raw_box[:4]:
+                if not isinstance(point, (list, tuple)) or len(point) != 2:
+                    continue
+                points.append([int(round(float(point[0]))), int(round(float(point[1])))])
+            if len(points) != 4:
+                continue
+            box = cv2.convexHull(np.array(points, dtype="int32")).reshape((-1, 1, 2))
+            cv2.polylines(ocr_canvas, [box], isClosed=True, color=(0, 200, 255), thickness=2)
+
+        label = f"OCR boxes ({profile})"
+        cv2.putText(ocr_canvas, label, (16, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 200, 255), 2, cv2.LINE_AA)
+        if cv2.imwrite(str(image_output_path), ocr_canvas):
+            ocr_image_path = image_output_path
+
+    layout_payload = ocr_payload.get("layout")
+    layout_image_path: Path | None = None
+    layout_blocks = layout_payload.get("blocks") if isinstance(layout_payload, dict) else None
+    if isinstance(layout_blocks, list) and layout_blocks:
+        layout_canvas = image.copy()
+        palette = {
+            "header": (59, 130, 246),
+            "items": (16, 185, 129),
+            "totals": (245, 158, 11),
+            "footer": (168, 85, 247),
+            "payment_info": (236, 72, 153),
+            "metadata": (107, 114, 128),
+        }
+        for block in layout_blocks:
+            if not isinstance(block, dict):
+                continue
+            bbox = block.get("bbox")
+            if not isinstance(bbox, list) or len(bbox) != 4:
+                continue
+            label = str(block.get("label") or "unknown")
+            index = block.get("index")
+            color = palette.get(label, (239, 68, 68))
+            x1, y1, x2, y2 = [int(round(float(value))) for value in bbox]
+            cv2.rectangle(layout_canvas, (x1, y1), (x2, y2), color, 3)
+            caption = f"{index}. {label}" if index is not None else label
+            cv2.putText(layout_canvas, caption, (x1, max(y1 - 8, 20)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2, cv2.LINE_AA)
+
+        cv2.putText(layout_canvas, "Layout blocks", (16, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (30, 41, 59), 2, cv2.LINE_AA)
+        if cv2.imwrite(str(layout_output_path), layout_canvas):
+            layout_image_path = layout_output_path
+
+    return ocr_image_path, text_output_path, layout_image_path
 
 
 def _load_parse_job(db: Session, job_id: UUID) -> ReceiptJob:
@@ -105,6 +183,9 @@ def _build_ocr_debug_json(
     ocr_payload: dict,
     preprocess_metadata: dict,
     *,
+    boxed_image_path: Path | None,
+    text_output_path: Path | None,
+    layout_image_path: Path | None,
     selected_path: str,
     timings: dict,
     recovery_reasons: list[str],
@@ -115,6 +196,9 @@ def _build_ocr_debug_json(
         "lines": lines,
         "confidences": confidences,
         "processed_image_path": str(processed_path),
+        "boxed_image_path": str(boxed_image_path) if boxed_image_path is not None else None,
+        "ocr_text_file_path": str(text_output_path) if text_output_path is not None else None,
+        "layout_image_path": str(layout_image_path) if layout_image_path is not None else None,
         "device": ocr_payload.get("device"),
         "ocr_language": ocr_payload.get("ocr_language"),
         "fallback_used": ocr_payload.get("fallback_used"),
@@ -263,6 +347,9 @@ def _needs_recovery(
 def _persist_receipt_results(
     job: ReceiptJob,
     processed_path: Path,
+    boxed_image_path: Path | None,
+    text_output_path: Path | None,
+    layout_image_path: Path | None,
     ocr_payload: dict,
     extracted_fields: dict,
     *,
@@ -280,6 +367,9 @@ def _persist_receipt_results(
         processed_path,
         ocr_payload,
         preprocess_metadata,
+        boxed_image_path=boxed_image_path,
+        text_output_path=text_output_path,
+        layout_image_path=layout_image_path,
         selected_path=selected_path,
         timings=timings,
         recovery_reasons=recovery_reasons,
@@ -341,6 +431,9 @@ def _persist_receipt_results(
 def _persist_session_results(
     job: ReceiptParseJob,
     processed_path: Path,
+    boxed_image_path: Path | None,
+    text_output_path: Path | None,
+    layout_image_path: Path | None,
     ocr_payload: dict,
     extracted_fields: dict,
     *,
@@ -360,6 +453,9 @@ def _persist_session_results(
         processed_path,
         ocr_payload,
         preprocess_metadata,
+        boxed_image_path=boxed_image_path,
+        text_output_path=text_output_path,
+        layout_image_path=layout_image_path,
         selected_path=selected_path,
         timings=timings,
         recovery_reasons=recovery_reasons,
@@ -465,6 +561,11 @@ def process_parse_job(db: Session, job_id: UUID) -> None:
             file_stem=source_path.stem,
             job=job,
         )
+        boxed_image_path, text_output_path, layout_image_path = _write_ocr_artifacts(
+            processed_path=processed_path,
+            ocr_payload=ocr_payload,
+            profile=selected_path,
+        )
 
         _set_receipt_phase(job, "extracting")
         db.commit()
@@ -473,6 +574,9 @@ def process_parse_job(db: Session, job_id: UUID) -> None:
         _persist_receipt_results(
             job,
             processed_path,
+            boxed_image_path,
+            text_output_path,
+            layout_image_path,
             ocr_payload,
             extracted_fields,
             preprocess_metadata=preprocess_metadata,
@@ -508,6 +612,11 @@ def process_session_parse_job(db: Session, job_id: UUID) -> None:
             file_stem=source_path.stem,
             job=job,
         )
+        boxed_image_path, text_output_path, layout_image_path = _write_ocr_artifacts(
+            processed_path=processed_path,
+            ocr_payload=ocr_payload,
+            profile=selected_path,
+        )
 
         _set_session_phase(job, "extracting")
         db.commit()
@@ -516,6 +625,9 @@ def process_session_parse_job(db: Session, job_id: UUID) -> None:
         _persist_session_results(
             job,
             processed_path,
+            boxed_image_path,
+            text_output_path,
+            layout_image_path,
             ocr_payload,
             extracted_fields,
             preprocess_metadata=preprocess_metadata,

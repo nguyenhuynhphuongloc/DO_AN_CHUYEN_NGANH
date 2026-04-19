@@ -7,9 +7,13 @@ ARG PADDLE_INSTALL_COMMAND="python -m pip install paddlepaddle==3.2.0"
 ARG VIETOCR_INSTALL_COMMAND="python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu"
 
 ENV PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True \
+    PIP_DEFAULT_TIMEOUT=300 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONUNBUFFERED=1
 
-RUN apt-get update \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update \
     && apt-get install -y --no-install-recommends \
         libgomp1 \
         libglib2.0-0 \
@@ -23,12 +27,15 @@ FROM base AS deps
 COPY requirements.txt ./
 # `python-docx` is installed via requirements.txt for repo-local document generation workflows.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r requirements.txt \
-    && sh -lc "${PADDLE_INSTALL_COMMAND}" \
-    && sh -lc "${VIETOCR_INSTALL_COMMAND}"
+    sh -lc "${VIETOCR_INSTALL_COMMAND}"
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    sh -lc "${PADDLE_INSTALL_COMMAND}"
 
 FROM deps AS dev
 COPY . .
+RUN PYTHONPATH=/app python -c "from app.services.ocr_pipeline import get_textline_orientation_classifier; get_textline_orientation_classifier()._get_model(); print('Preloaded text line orientation model')"
 
 EXPOSE 8003
 
@@ -36,6 +43,7 @@ CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "
 
 FROM deps AS prod
 COPY . .
+RUN PYTHONPATH=/app python -c "from app.services.ocr_pipeline import get_textline_orientation_classifier; get_textline_orientation_classifier()._get_model(); print('Preloaded text line orientation model')"
 
 EXPOSE 8003
 

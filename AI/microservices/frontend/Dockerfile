@@ -19,7 +19,7 @@ ENV INTERNAL_RECEIPT_API_URL=$INTERNAL_RECEIPT_API_URL
 
 FROM base AS deps
 COPY package*.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci
+RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci
 
 FROM deps AS dev
 COPY . .
@@ -27,7 +27,15 @@ EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "-H", "0.0.0.0", "-p", "3000"]
 
 FROM deps AS build
-COPY . .
+COPY next.config.* ./
+COPY next-env.d.ts ./
+COPY tsconfig.json ./
+COPY postcss.config.js ./
+COPY tailwind.config.ts ./
+COPY public ./public
+COPY app ./app
+COPY components ./components
+COPY lib ./lib
 RUN npm run build
 RUN npm prune --omit=dev
 

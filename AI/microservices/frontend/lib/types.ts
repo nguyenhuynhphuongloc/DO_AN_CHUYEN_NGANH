@@ -71,6 +71,9 @@ export type ReceiptOcrDebug = {
   lines: string[];
   provider: string | null;
   confidence_score: number | null;
+  boxed_image_url?: string | null;
+  layout_image_url?: string | null;
+  text_file_url?: string | null;
   device: string | null;
   ocr_language?: string | null;
   fallback_used?: boolean | null;

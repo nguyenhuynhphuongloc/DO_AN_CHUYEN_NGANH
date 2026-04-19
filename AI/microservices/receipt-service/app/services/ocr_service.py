@@ -17,6 +17,7 @@ from app.services.ocr_pipeline import (
     extract_crops,
     get_paddle_detector,
     get_paddle_recognizer,
+    get_textline_orientation_classifier,
     get_vietocr_recognizer,
     sort_boxes_into_rows,
 )
@@ -31,9 +32,14 @@ def _crop_layout_block(image: Any, block: LayoutBlock) -> Any:
     return image[block.top : block.bottom, block.left : block.right]
 
 
+def _serialize_box_points(points: list[tuple[float, float]]) -> list[list[float]]:
+    return [[round(float(x), 2), round(float(y), 2)] for x, y in points]
+
+
 class OCRService:
     def __init__(self) -> None:
         self._detector = get_paddle_detector()
+        self._textline_orientation = get_textline_orientation_classifier()
         self._layout_service = get_layout_service()
         self._recognizers = {
             "paddle": get_paddle_recognizer(),
@@ -64,6 +70,19 @@ class OCRService:
         detector_runtime["recognizer_backend"] = self._primary_backend
         return detector_runtime
 
+    def warmup_runtime(self) -> dict[str, Any]:
+        runtime = self.runtime_info()
+        runtime["textline_orientation_enabled"] = settings.ocr_textline_orientation_enabled
+        runtime["textline_orientation_model_name"] = settings.ocr_textline_orientation_model
+        runtime["textline_orientation_ready"] = False
+        if settings.ocr_textline_orientation_enabled:
+            try:
+                self._textline_orientation._get_model()
+                runtime["textline_orientation_ready"] = True
+            except Exception:
+                logger.exception("Failed to warm up Paddle text line orientation classifier")
+        return runtime
+
     def _recognition_runtime(
         self,
         *,
@@ -77,15 +96,21 @@ class OCRService:
         crops = extract_crops(image, ordered_boxes)
         crop_seconds = time.perf_counter() - crop_start
 
+        orientation_start = time.perf_counter()
+        orientation = self._textline_orientation.orient(crops)
+        orientation_seconds = time.perf_counter() - orientation_start
+
         recognition_start = time.perf_counter()
-        recognition = self._get_recognizer(backend).recognize(crops, profile=profile)
+        recognition = self._get_recognizer(backend).recognize(orientation.crops, profile=profile)
         recognition_seconds = time.perf_counter() - recognition_start
 
         runtime = {
             "crop_seconds": round(crop_seconds, 4),
+            "textline_orientation_seconds": round(orientation_seconds, 4),
             "recognition_seconds": round(recognition_seconds, 4),
             "crop_count": len(crops),
             "row_grouping": order_metadata,
+            **orientation.runtime,
         }
         return recognition, runtime
 
@@ -159,6 +184,7 @@ class OCRService:
             "lines": normalized_lines,
             "confidence": average_confidence,
             "confidences": original_confidences,
+            "detected_boxes": ordering_metadata.get("detected_boxes", []),
             "device": runtime.get("actual_device"),
             "provider": "paddleocr" if backend == "paddle" else "paddleocr+vietocr",
             "ocr_language": settings.ocr_primary_language,
@@ -229,6 +255,7 @@ class OCRService:
         ordering_metadata = {
             **row_grouping,
             "ordered_box_indices": [box.index for box in ordered_boxes],
+            "detected_boxes": [_serialize_box_points(box.points) for box in ordered_boxes],
         }
         recognition, recognition_metrics = self._recognition_runtime(
             profile=profile,
@@ -274,6 +301,7 @@ class OCRService:
         total_detected_boxes = 0
         ordering_entries: list[dict[str, Any]] = []
         layout_blocks_debug: list[dict[str, Any]] = []
+        detected_boxes: list[list[list[float]]] = []
         detection_runtime = dict(getattr(self._detector, "_runtime", {}))
         recognition_runtime: dict[str, Any] = {}
 
@@ -318,6 +346,12 @@ class OCRService:
                     "ordered_box_indices": [box.index for box in ordered_boxes],
                 }
             )
+            for box in ordered_boxes:
+                detected_boxes.append(
+                    _serialize_box_points(
+                        [(point[0] + float(block.left), point[1] + float(block.top)) for point in box.points]
+                    )
+                )
             layout_blocks_debug.append(
                 {
                     **block.to_debug_dict(),
@@ -358,6 +392,7 @@ class OCRService:
         ordering_metadata = {
             "layout_block_order": ordering_entries,
             "row_grouping_tolerance": settings.ocr_row_grouping_tolerance,
+            "detected_boxes": detected_boxes,
         }
         total_ocr_seconds = (
             float(layout_result.runtime.get("layout_seconds", 0.0))

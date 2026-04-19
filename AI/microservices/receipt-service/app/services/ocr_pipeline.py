@@ -10,14 +10,14 @@ from typing import Any, Protocol
 import cv2
 import numpy as np
 import paddle
-from paddleocr import TextDetection, TextRecognition
+from paddleocr import TextDetection, TextLineOrientationClassification, TextRecognition
 from PIL import Image
 
 from app.core.config import settings
 
 try:
     import torch
-except ImportError:  # pragma: no cover - optional dependency in some environments
+except (ImportError, OSError):  # pragma: no cover - optional dependency in some environments
     torch = None  # type: ignore[assignment]
 
 try:
@@ -96,6 +96,12 @@ class RecognitionBatchResult:
     backend_caveats: list[str]
 
 
+@dataclass(slots=True)
+class TextLineOrientationBatchResult:
+    crops: list[np.ndarray]
+    runtime: dict[str, Any]
+
+
 class OCRDetector(Protocol):
     def detect(self, image: np.ndarray, *, profile: str) -> DetectionResult: ...
 
@@ -110,6 +116,10 @@ class OCRRecognizer(Protocol):
         *,
         profile: str,
     ) -> RecognitionBatchResult: ...
+
+
+class OCRTextLineOrientation(Protocol):
+    def orient(self, crops: list[np.ndarray]) -> TextLineOrientationBatchResult: ...
 
 
 def _build_paddle_runtime_info() -> dict[str, Any]:
@@ -481,6 +491,77 @@ class VietOCRRecognizerAdapter:
         )
 
 
+class PaddleTextLineOrientationAdapter:
+    def __init__(self) -> None:
+        self._runtime = _build_paddle_runtime_info()
+        self._model: TextLineOrientationClassification | None = None
+
+    def _get_model(self) -> TextLineOrientationClassification:
+        if self._model is not None:
+            return self._model
+        self._model = TextLineOrientationClassification(
+            model_name=settings.ocr_textline_orientation_model,
+            device=self._runtime["actual_device"],
+        )
+        logger.info(
+            "Configured Paddle text line orientation classifier device=%s model=%s",
+            self._runtime["actual_device"],
+            settings.ocr_textline_orientation_model,
+        )
+        return self._model
+
+    @staticmethod
+    def _extract_prediction(result: Any) -> tuple[str, float]:
+        payload = result.get("res") if isinstance(result, dict) and "res" in result else result
+        if hasattr(payload, "json"):
+            payload = payload.json.get("res", payload.json)
+        if not isinstance(payload, dict):
+            return "", 0.0
+
+        labels = list(payload.get("label_names") or [])
+        raw_scores = payload.get("scores")
+        scores = list(raw_scores) if raw_scores is not None else []
+        label = str(labels[0]) if labels else ""
+        score = _clamp_confidence(scores[0] if scores else 0.0)
+        return label, score
+
+    def orient(self, crops: list[np.ndarray]) -> TextLineOrientationBatchResult:
+        runtime = {
+            **self._runtime,
+            "textline_orientation_enabled": settings.ocr_textline_orientation_enabled,
+            "textline_orientation_model_name": settings.ocr_textline_orientation_model,
+            "textline_orientation_threshold": settings.ocr_textline_orientation_score_threshold,
+            "textline_orientation_applied_count": 0,
+            "textline_orientation_predictions": [],
+        }
+        if not settings.ocr_textline_orientation_enabled or not crops:
+            return TextLineOrientationBatchResult(crops=crops, runtime=runtime)
+
+        model = self._get_model()
+        predictions = model.predict(input=crops, batch_size=max(settings.ocr_recognizer_batch_size, 1))
+        adjusted: list[np.ndarray] = []
+        applied = 0
+        prediction_debug: list[dict[str, Any]] = []
+        for crop, result in zip(crops, predictions, strict=False):
+            label, score = self._extract_prediction(result)
+            rotate_180 = label == "180_degree" and score >= settings.ocr_textline_orientation_score_threshold
+            if rotate_180:
+                crop = cv2.rotate(crop, cv2.ROTATE_180)
+                applied += 1
+            adjusted.append(crop)
+            prediction_debug.append(
+                {
+                    "label": label or None,
+                    "score": round(score, 4),
+                    "rotated": rotate_180,
+                }
+            )
+
+        runtime["textline_orientation_applied_count"] = applied
+        runtime["textline_orientation_predictions"] = prediction_debug
+        return TextLineOrientationBatchResult(crops=adjusted, runtime=runtime)
+
+
 @lru_cache(maxsize=1)
 def get_paddle_detector() -> PaddleDetectorAdapter:
     return PaddleDetectorAdapter()
@@ -494,3 +575,8 @@ def get_paddle_recognizer() -> PaddleRecognizerAdapter:
 @lru_cache(maxsize=1)
 def get_vietocr_recognizer() -> VietOCRRecognizerAdapter:
     return VietOCRRecognizerAdapter()
+
+
+@lru_cache(maxsize=1)
+def get_textline_orientation_classifier() -> PaddleTextLineOrientationAdapter:
+    return PaddleTextLineOrientationAdapter()

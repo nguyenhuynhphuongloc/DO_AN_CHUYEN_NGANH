@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     ocr_row_grouping_tolerance: float = 0.65
     ocr_vietocr_config_name: str = "vgg_seq2seq"
     ocr_vietocr_weights: str = ""
+    ocr_textline_orientation_enabled: bool = True
+    ocr_textline_orientation_model: str = "PP-LCNet_x0_25_textline_ori"
+    ocr_textline_orientation_score_threshold: float = 0.7
     ocr_layout_enabled: bool = False
     ocr_layout_backend: str = "yolo"
     ocr_layout_model_path: str = ""

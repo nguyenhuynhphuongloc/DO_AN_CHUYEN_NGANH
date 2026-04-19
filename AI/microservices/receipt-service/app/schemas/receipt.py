@@ -112,6 +112,9 @@ class ReceiptOcrDebugResponse(BaseModel):
     lines: list[str]
     provider: str | None
     confidence_score: float | None
+    boxed_image_url: str | None = None
+    layout_image_url: str | None = None
+    text_file_url: str | None = None
     device: str | None = None
     ocr_language: str | None = None
     fallback_used: bool | None = None

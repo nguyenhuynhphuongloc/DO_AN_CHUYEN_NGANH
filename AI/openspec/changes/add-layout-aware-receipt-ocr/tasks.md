@@ -12,6 +12,7 @@
 - [x] 2.3 Implement `layout_postprocess.py` to normalize labels, filter by confidence, sort blocks, and produce ordered semantic layout blocks.
 - [x] 2.4 Ensure layout failure, missing weights, or empty detections automatically fall back to the current whole-image OCR path without failing the parse job.
 - [x] 2.5 Cap OCR-eligible layout blocks and implement pruning/merge rules to control OCR overhead on long or noisy receipts.
+- [x] 2.6 Rewrite `layout_postprocess.py` to use receipt-oriented semantic assignment rules that separate top metadata, primary items body, totals bands, and footer/barcode regions more reliably than the original generic heuristics.
 
 ## 3. OCR pipeline integration
 

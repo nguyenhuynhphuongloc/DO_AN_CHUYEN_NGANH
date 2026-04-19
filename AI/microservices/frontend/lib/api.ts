@@ -239,3 +239,18 @@ export async function confirmReceiptSession(
 
   return parseJson<ReceiptWorkflow>(response);
 }
+
+export async function getReceiptArtifactBlob(url: string): Promise<Blob> {
+  const absoluteUrl = url.startsWith('http') ? url : `${receiptApiUrl}${url}`;
+  const response = await fetch(absoluteUrl, {
+    cache: 'no-store',
+    headers: createHeaders(undefined, { auth: true }),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || 'Request failed');
+  }
+
+  return response.blob();
+}
