@@ -119,8 +119,40 @@ for label in METADATA_ALIASES:
     _LABEL_TO_CANONICAL[label] = "metadata"
 
 
-def _canonical_label(raw_label: str) -> tuple[str | None, str]:
+def map_generic_yolo_to_canonical(
+    raw_label: str,
+    box: tuple[int, int, int, int],
+    image_height: int,
+) -> tuple[str | None, str | None]:
     cleaned = (raw_label or "").strip().lower()
+    safe_height = max(int(image_height), 1)
+    center_y = (float(box[1]) + float(box[3])) / 2.0
+    y_center_ratio = center_y / float(safe_height)
+
+    if cleaned in {"page-header", "page_header", "title"}:
+        return "header", "generic_yolo_header"
+    if cleaned in {"page-footer", "page_footer"}:
+        return "footer", "generic_yolo_footer"
+    if cleaned in {"table", "list-item", "list_item"}:
+        if y_center_ratio > 0.65:
+            return "totals", "generic_yolo_table_to_totals"
+        return "items", "generic_yolo_table_to_items"
+    if cleaned == "text":
+        if y_center_ratio < 0.25:
+            return "header", "generic_yolo_text_top_band"
+        if y_center_ratio > 0.85:
+            return "footer", "generic_yolo_text_bottom_band"
+        if 0.65 < y_center_ratio <= 0.85:
+            return "payment_info", "generic_yolo_text_payment_band"
+        return "metadata", "generic_yolo_text_default_metadata"
+    return None, None
+
+
+def _canonical_label(raw_label: str, *, bbox: tuple[int, int, int, int], image_shape: tuple[int, int]) -> tuple[str | None, str]:
+    cleaned = (raw_label or "").strip().lower()
+    normalized, source = map_generic_yolo_to_canonical(raw_label, bbox, image_shape[0])
+    if normalized in CANONICAL_LAYOUT_LABELS:
+        return normalized, source or "generic_yolo"
     normalized = _LABEL_TO_CANONICAL.get(cleaned)
     if normalized in CANONICAL_LAYOUT_LABELS:
         return normalized, "alias"
@@ -226,7 +258,11 @@ def _initial_block(
     raw_index: int,
     image_shape: tuple[int, int],
 ) -> LayoutBlock:
-    normalized, source = _canonical_label(detection.raw_label)
+    normalized, source = _canonical_label(
+        detection.raw_label,
+        bbox=detection.bbox,
+        image_shape=image_shape,
+    )
     unknown = normalized is None
     if normalized is None:
         normalized, unknown, source = _infer_geometry_label(

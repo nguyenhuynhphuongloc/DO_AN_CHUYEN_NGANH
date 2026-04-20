@@ -9,6 +9,7 @@ ARG VIETOCR_INSTALL_COMMAND="python -m pip install torch torchvision --index-url
 ENV PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True \
     PIP_DEFAULT_TIMEOUT=300 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -33,16 +34,16 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 RUN --mount=type=cache,target=/root/.cache/pip \
     sh -lc "${PADDLE_INSTALL_COMMAND}"
 
-FROM deps AS dev
+FROM deps AS runtime
 COPY . .
-RUN PYTHONPATH=/app python -c "from app.services.ocr_pipeline import get_textline_orientation_classifier; get_textline_orientation_classifier()._get_model(); print('Preloaded text line orientation model')"
+
+FROM runtime AS dev
 
 EXPOSE 8003
 
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003"]
 
-FROM deps AS prod
-COPY . .
+FROM runtime AS prod
 RUN PYTHONPATH=/app python -c "from app.services.ocr_pipeline import get_textline_orientation_classifier; get_textline_orientation_classifier()._get_model(); print('Preloaded text line orientation model')"
 
 EXPOSE 8003

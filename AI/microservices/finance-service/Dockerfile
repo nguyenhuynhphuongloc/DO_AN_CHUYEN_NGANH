@@ -3,6 +3,8 @@ FROM node:20-bookworm-slim AS base
 
 WORKDIR /app
 
+ENV npm_config_update_notifier=false
+
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked \
   apt-get update \
@@ -14,6 +16,8 @@ COPY package*.json ./
 RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci
 
 FROM deps AS dev
+ENV NODE_ENV=development
+
 COPY . .
 RUN npx prisma generate
 EXPOSE 8002
@@ -27,9 +31,13 @@ COPY src ./src
 RUN npm run build
 
 FROM base AS prod
+ENV NODE_ENV=production
+
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/dist ./dist
+
+EXPOSE 8002
 
 CMD ["sh", "-c", "if [ \"$RUN_DB_PUSH\" = \"true\" ]; then npx prisma db push; fi && if [ \"$RUN_SEED\" = \"true\" ]; then npm run seed; fi && node dist/src/main.js"]

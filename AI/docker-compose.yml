@@ -1,5 +1,28 @@
+name: ai-microservices
+
+x-service-defaults: &service-defaults
+  init: true
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-receipt-runtime-env: &receipt-runtime-env
+  FINANCE_SERVICE_URL: http://finance-service:8002
+  FRONTEND_URL: http://localhost:3000
+  RECEIPT_UPLOAD_DIR: uploads
+  OCR_DEVICE: ${RECEIPT_OCR_DEVICE:-auto}
+  OCR_RECOGNIZER_BACKEND: ${RECEIPT_OCR_RECOGNIZER_BACKEND:-vietocr}
+  OCR_FALLBACK_RECOGNIZER_BACKEND: ${RECEIPT_OCR_FALLBACK_RECOGNIZER_BACKEND:-}
+  OCR_TEXTLINE_ORIENTATION_ENABLED: ${RECEIPT_OCR_TEXTLINE_ORIENTATION_ENABLED:-true}
+  OCR_TEXTLINE_ORIENTATION_MODEL: ${RECEIPT_OCR_TEXTLINE_ORIENTATION_MODEL:-PP-LCNet_x0_25_textline_ori}
+  OCR_TEXTLINE_ORIENTATION_SCORE_THRESHOLD: ${RECEIPT_OCR_TEXTLINE_ORIENTATION_SCORE_THRESHOLD:-0.7}
+
 services:
   auth-service:
+    <<: *service-defaults
     image: ai-auth-service:local
     build:
       context: ./microservices/auth-service
@@ -27,6 +50,7 @@ services:
       start_period: 20s
 
   finance-service:
+    <<: *service-defaults
     image: ai-finance-service:local
     build:
       context: ./microservices/finance-service
@@ -57,6 +81,7 @@ services:
       start_period: 20s
 
   receipt-service:
+    <<: *service-defaults
     image: ai-receipt-service:local
     build:
       context: ./microservices/receipt-service
@@ -67,16 +92,8 @@ services:
     env_file:
       - ./microservices/receipt-service/.env
     environment:
+      <<: *receipt-runtime-env
       PORT: 8003
-      FINANCE_SERVICE_URL: http://finance-service:8002
-      FRONTEND_URL: http://localhost:3000
-      RECEIPT_UPLOAD_DIR: uploads
-      OCR_DEVICE: ${RECEIPT_OCR_DEVICE:-auto}
-      OCR_RECOGNIZER_BACKEND: ${RECEIPT_OCR_RECOGNIZER_BACKEND:-vietocr}
-      OCR_FALLBACK_RECOGNIZER_BACKEND: ${RECEIPT_OCR_FALLBACK_RECOGNIZER_BACKEND:-}
-      OCR_TEXTLINE_ORIENTATION_ENABLED: ${RECEIPT_OCR_TEXTLINE_ORIENTATION_ENABLED:-true}
-      OCR_TEXTLINE_ORIENTATION_MODEL: ${RECEIPT_OCR_TEXTLINE_ORIENTATION_MODEL:-PP-LCNet_x0_25_textline_ori}
-      OCR_TEXTLINE_ORIENTATION_SCORE_THRESHOLD: ${RECEIPT_OCR_TEXTLINE_ORIENTATION_SCORE_THRESHOLD:-0.7}
     ports:
       - "8003:8003"
     volumes:
@@ -99,26 +116,13 @@ services:
       start_period: 20s
 
   receipt-worker:
+    <<: *service-defaults
     image: ai-receipt-service:local
-    build:
-      context: ./microservices/receipt-service
-      target: prod
-      args:
-        PADDLE_INSTALL_COMMAND: ${RECEIPT_PADDLE_INSTALL_COMMAND:-python -m pip install paddlepaddle==3.2.0}
-        VIETOCR_INSTALL_COMMAND: ${RECEIPT_VIETOCR_INSTALL_COMMAND:-python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu}
     command: ["python", "-m", "app.worker"]
     env_file:
       - ./microservices/receipt-service/.env
     environment:
-      FINANCE_SERVICE_URL: http://finance-service:8002
-      FRONTEND_URL: http://localhost:3000
-      RECEIPT_UPLOAD_DIR: uploads
-      OCR_DEVICE: ${RECEIPT_OCR_DEVICE:-auto}
-      OCR_RECOGNIZER_BACKEND: ${RECEIPT_OCR_RECOGNIZER_BACKEND:-vietocr}
-      OCR_FALLBACK_RECOGNIZER_BACKEND: ${RECEIPT_OCR_FALLBACK_RECOGNIZER_BACKEND:-}
-      OCR_TEXTLINE_ORIENTATION_ENABLED: ${RECEIPT_OCR_TEXTLINE_ORIENTATION_ENABLED:-true}
-      OCR_TEXTLINE_ORIENTATION_MODEL: ${RECEIPT_OCR_TEXTLINE_ORIENTATION_MODEL:-PP-LCNet_x0_25_textline_ori}
-      OCR_TEXTLINE_ORIENTATION_SCORE_THRESHOLD: ${RECEIPT_OCR_TEXTLINE_ORIENTATION_SCORE_THRESHOLD:-0.7}
+      <<: *receipt-runtime-env
       WORKER_POLL_INTERVAL_SECONDS: ${RECEIPT_WORKER_POLL_INTERVAL_SECONDS:-2}
       WORKER_BATCH_SIZE: ${RECEIPT_WORKER_BATCH_SIZE:-1}
     volumes:
@@ -129,6 +133,7 @@ services:
         condition: service_healthy
 
   frontend:
+    <<: *service-defaults
     image: ai-frontend:local
     build:
       context: ./microservices/frontend

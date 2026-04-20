@@ -83,6 +83,67 @@ class OCRService:
                 logger.exception("Failed to warm up Paddle text line orientation classifier")
         return runtime
 
+    def _maybe_correct_document_orientation(
+        self,
+        image: Any,
+        *,
+        profile: str,
+    ) -> tuple[Any, DetectionResult | None, dict[str, Any]]:
+        metadata = {
+            "enabled": settings.ocr_document_orientation_enabled and settings.ocr_textline_orientation_enabled,
+            "checked": False,
+            "rotated_180": False,
+            "consensus_ratio": 0.0,
+            "applied_count": 0,
+            "eligible_crop_count": 0,
+            "box_count": 0,
+            "min_lines": settings.ocr_document_orientation_min_lines,
+            "consensus_threshold": settings.ocr_document_orientation_consensus_threshold,
+            "majority_threshold": 0.5,
+            "decision_reason": "orientation_check_disabled",
+        }
+        if not metadata["enabled"]:
+            return image, None, metadata
+
+        detection = self._detector.detect(image, profile=profile)
+        ordered_boxes, _ = sort_boxes_into_rows(
+            detection.boxes,
+            tolerance_factor=settings.ocr_row_grouping_tolerance,
+        )
+        metadata["checked"] = True
+        metadata["box_count"] = len(ordered_boxes)
+        if len(ordered_boxes) < settings.ocr_document_orientation_min_lines:
+            metadata["decision_reason"] = "insufficient_detected_lines"
+            return image, detection, metadata
+
+        crops = extract_crops(image, ordered_boxes)
+        orientation = self._textline_orientation.orient(crops)
+        metadata["eligible_crop_count"] = len(crops)
+        applied_count = int(orientation.runtime.get("textline_orientation_applied_count") or 0)
+        ratio = applied_count / len(crops) if crops else 0.0
+        majority_upside_down = bool(crops) and (applied_count * 2 > len(crops))
+        metadata["applied_count"] = applied_count
+        metadata["consensus_ratio"] = round(ratio, 4)
+        metadata["predictions"] = orientation.runtime.get("textline_orientation_predictions", [])
+        metadata["majority_upside_down"] = majority_upside_down
+        if not (majority_upside_down or ratio >= settings.ocr_document_orientation_consensus_threshold):
+            metadata["decision_reason"] = "insufficient_upside_down_consensus"
+            return image, detection, metadata
+
+        metadata["rotated_180"] = True
+        metadata["decision_reason"] = (
+            "majority_upside_down" if majority_upside_down else "consensus_threshold_reached"
+        )
+        rotated_image = cv2.rotate(image, cv2.ROTATE_180)
+        logger.info(
+            "Applied document-level 180-degree OCR orientation correction profile=%s reason=%s ratio=%.4f boxes=%s",
+            profile,
+            metadata["decision_reason"],
+            ratio,
+            len(ordered_boxes),
+        )
+        return rotated_image, None, metadata
+
     def _recognition_runtime(
         self,
         *,
@@ -131,6 +192,7 @@ class OCRService:
         fallback_used: bool,
         detected_box_count: int,
         layout_result: LayoutDetectionResult | None = None,
+        document_orientation: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         normalized_lines, postprocess_metadata = normalize_vietnamese_lines(original_lines, original_confidences)
         raw_text = "\n".join(normalized_lines)
@@ -177,6 +239,11 @@ class OCRService:
             "layout_enabled": layout_debug.get("enabled"),
             "layout_used": layout_debug.get("used"),
             "layout_backend": layout_debug.get("backend"),
+            "document_orientation_enabled": bool((document_orientation or {}).get("enabled")),
+            "document_orientation_checked": bool((document_orientation or {}).get("checked")),
+            "document_orientation_rotated_180": bool((document_orientation or {}).get("rotated_180")),
+            "document_orientation_consensus_ratio": float((document_orientation or {}).get("consensus_ratio") or 0.0),
+            "document_orientation_box_count": int((document_orientation or {}).get("box_count") or 0),
         }
 
         return {
@@ -212,6 +279,7 @@ class OCRService:
             "runtime": runtime,
             "ordering": ordering_metadata,
             "layout": layout_debug,
+            "document_orientation": document_orientation or {},
         }
 
     def _should_use_fallback(self, result: dict[str, Any]) -> bool:
@@ -243,10 +311,16 @@ class OCRService:
         profile: str,
         backend: str,
         layout_result: LayoutDetectionResult | None = None,
+        initial_detection: DetectionResult | None = None,
+        document_orientation: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        detection_start = time.perf_counter()
-        detection = self._detector.detect(image, profile=profile)
-        detection_seconds = time.perf_counter() - detection_start
+        if initial_detection is None:
+            detection_start = time.perf_counter()
+            detection = self._detector.detect(image, profile=profile)
+            detection_seconds = time.perf_counter() - detection_start
+        else:
+            detection = initial_detection
+            detection_seconds = 0.0
 
         ordered_boxes, row_grouping = sort_boxes_into_rows(
             detection.boxes,
@@ -290,9 +364,18 @@ class OCRService:
             fallback_used=False,
             detected_box_count=len(ordering_metadata.get("ordered_box_indices", [])),
             layout_result=layout_result,
+            document_orientation=document_orientation,
         )
 
-    def _layout_payload(self, image: Any, *, profile: str, backend: str, layout_result: LayoutDetectionResult) -> dict[str, Any]:
+    def _layout_payload(
+        self,
+        image: Any,
+        *,
+        profile: str,
+        backend: str,
+        layout_result: LayoutDetectionResult,
+        document_orientation: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         all_lines: list[str] = []
         all_confidences: list[float] = []
         total_detection_seconds = 0.0
@@ -425,6 +508,7 @@ class OCRService:
                 debug_image_path=layout_result.debug_image_path,
                 fallback_reason=layout_result.fallback_reason,
             ),
+            document_orientation=document_orientation,
         )
 
     def extract_text(self, image_path: str, *, profile: str = "recovery", debug_tag: str | None = None) -> dict[str, Any]:
@@ -433,6 +517,10 @@ class OCRService:
         if image is None:
             raise ValueError("Unable to read receipt image for OCR")
 
+        image, initial_detection, document_orientation = self._maybe_correct_document_orientation(
+            image,
+            profile=selected_profile,
+        )
         effective_debug_tag = debug_tag or Path(image_path).stem
         layout_result = self._layout_service.detect(image, profile=selected_profile, debug_tag=effective_debug_tag)
         logger.info(
@@ -458,11 +546,24 @@ class OCRService:
                     }
                     for block in layout_result.blocks
                 ],
-            )
+        )
         primary_result = (
-            self._layout_payload(image, profile=selected_profile, backend=self._primary_backend, layout_result=layout_result)
+            self._layout_payload(
+                image,
+                profile=selected_profile,
+                backend=self._primary_backend,
+                layout_result=layout_result,
+                document_orientation=document_orientation,
+            )
             if layout_result.used
-            else self._whole_image_payload(image, profile=selected_profile, backend=self._primary_backend, layout_result=layout_result)
+            else self._whole_image_payload(
+                image,
+                profile=selected_profile,
+                backend=self._primary_backend,
+                layout_result=layout_result,
+                initial_detection=initial_detection,
+                document_orientation=document_orientation,
+            )
         )
 
         if not self._should_use_fallback(primary_result):
@@ -480,9 +581,21 @@ class OCRService:
 
         fallback_backend = self._fallback_backend
         fallback_result = (
-            self._layout_payload(image, profile=selected_profile, backend=fallback_backend, layout_result=layout_result)
+            self._layout_payload(
+                image,
+                profile=selected_profile,
+                backend=fallback_backend,
+                layout_result=layout_result,
+                document_orientation=document_orientation,
+            )
             if layout_result.used
-            else self._whole_image_payload(image, profile=selected_profile, backend=fallback_backend, layout_result=layout_result)
+            else self._whole_image_payload(
+                image,
+                profile=selected_profile,
+                backend=fallback_backend,
+                layout_result=layout_result,
+                document_orientation=document_orientation,
+            )
         )
         fallback_result["fallback_used"] = True
         selected_result = self._compare_results(primary_result, fallback_result)

@@ -33,9 +33,12 @@ class Settings(BaseSettings):
     ocr_textline_orientation_enabled: bool = True
     ocr_textline_orientation_model: str = "PP-LCNet_x0_25_textline_ori"
     ocr_textline_orientation_score_threshold: float = 0.7
-    ocr_layout_enabled: bool = False
+    ocr_document_orientation_enabled: bool = True
+    ocr_document_orientation_min_lines: int = 3
+    ocr_document_orientation_consensus_threshold: float = 0.5
+    ocr_layout_enabled: bool = True
     ocr_layout_backend: str = "yolo"
-    ocr_layout_model_path: str = ""
+    ocr_layout_model_path: str = "models/doclayout-yolo-receipts.pt"
     ocr_layout_model_auto_download: bool = True
     ocr_layout_model_download_url: str = (
         "https://huggingface.co/Armaggheddon/yolo11-document-layout/resolve/main/yolo11n_doc_layout.pt"

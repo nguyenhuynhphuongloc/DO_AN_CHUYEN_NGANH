@@ -12,6 +12,8 @@ services:
 
   receipt-worker:
     build:
+      context: ./microservices/receipt-service
+      target: prod
       args:
         PADDLE_INSTALL_COMMAND: ${RECEIPT_PADDLE_GPU_INSTALL_COMMAND:-python -m pip install paddlepaddle-gpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/}
         VIETOCR_INSTALL_COMMAND: ${RECEIPT_VIETOCR_GPU_INSTALL_COMMAND:-python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126}

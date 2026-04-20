@@ -3,6 +3,9 @@ FROM node:20-bookworm-slim AS base
 
 WORKDIR /app
 
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    npm_config_update_notifier=false
+
 ARG NEXT_PUBLIC_AUTH_API_URL=http://auth-service:8001
 ARG NEXT_PUBLIC_FINANCE_API_URL=http://finance-service:8002
 ARG NEXT_PUBLIC_RECEIPT_API_URL=http://receipt-service:8003
@@ -22,6 +25,8 @@ COPY package*.json ./
 RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci
 
 FROM deps AS dev
+ENV NODE_ENV=development
+
 COPY . .
 EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "-H", "0.0.0.0", "-p", "3000"]
@@ -40,6 +45,8 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 FROM base AS prod
+ENV NODE_ENV=production
+
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/.next ./.next
