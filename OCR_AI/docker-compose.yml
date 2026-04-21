@@ -1,0 +1,153 @@
+name: ocr-ai-local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d postgres"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: docker/auth-service.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HOST: 0.0.0.0
+      PORT: ${AUTH_PORT:-5002}
+      AUTH_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/auth_db
+      AUTH_AUTO_MIGRATE: ${AUTH_AUTO_MIGRATE:-true}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-change-me-access-secret}
+      AUTH_REFRESH_TOKEN_SECRET: ${AUTH_REFRESH_TOKEN_SECRET:-change-me-refresh-secret}
+      AUTH_ACCESS_TOKEN_TTL: ${AUTH_ACCESS_TOKEN_TTL:-15m}
+      AUTH_REFRESH_TOKEN_TTL: ${AUTH_REFRESH_TOKEN_TTL:-30d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5000}
+    ports:
+      - "${AUTH_PORT:-5002}:${AUTH_PORT:-5002}"
+    volumes:
+      - .:/workspace
+      - auth_node_modules:/workspace/node_modules
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:' + (process.env.PORT || '5002') + '/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  finance-service:
+    build:
+      context: .
+      dockerfile: docker/finance-service.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    environment:
+      HOST: 0.0.0.0
+      PORT: ${FINANCE_PORT:-5003}
+      FINANCE_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/finance_db
+      FINANCE_AUTO_MIGRATE: ${FINANCE_AUTO_MIGRATE:-true}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5000}
+    ports:
+      - "${FINANCE_PORT:-5003}:${FINANCE_PORT:-5003}"
+    volumes:
+      - .:/workspace
+      - finance_node_modules:/workspace/node_modules
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:' + (process.env.PORT || '5003') + '/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  ocr-runtime:
+    image: docker.n8n.io/n8nio/n8n:1.88.0
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    environment:
+      N8N_PORT: ${N8N_PORT:-5001}
+      N8N_HOST: ${N8N_HOST:-0.0.0.0}
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5001/}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-replace-with-a-long-random-string}
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "false"
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE:-true}
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER:-admin}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:-admin123}
+      VERYFI_CLIENT_ID: ${VERYFI_CLIENT_ID:-replace-me}
+      VERYFI_USERNAME: ${VERYFI_USERNAME:-replace-me}
+      VERYFI_API_KEY: ${VERYFI_API_KEY:-replace-me}
+      OCR_REQUIRED_CONFIDENCE: ${OCR_REQUIRED_CONFIDENCE:-0.65}
+      OCR_DEFAULT_CURRENCY: ${OCR_DEFAULT_CURRENCY:-VND}
+      TZ: ${TZ:-Asia/Saigon}
+    ports:
+      - "${N8N_PORT:-5001}:${N8N_PORT:-5001}"
+    volumes:
+      - ./backend/receipt-ocr/storage/n8n:/home/node/.n8n
+      - ./backend/receipt-ocr/workflows:/workflows
+    command:
+      - "n8n import:workflow --input=/workflows/receipt-ocr-workflow.json && n8n start"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      finance-service:
+        condition: service_healthy
+      ocr-runtime:
+        condition: service_started
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      VITE_AUTH_SERVICE_URL: ${VITE_AUTH_SERVICE_URL:-http://localhost:5002}
+      VITE_FINANCE_SERVICE_URL: ${VITE_FINANCE_SERVICE_URL:-http://localhost:5003}
+      VITE_OCR_ENDPOINT: ${VITE_OCR_ENDPOINT:-http://localhost:5001/webhook/receipt-ocr}
+      FRONTEND_PORT: ${FRONTEND_PORT:-5000}
+    ports:
+      - "${FRONTEND_PORT:-5000}:${FRONTEND_PORT:-5000}"
+    volumes:
+      - .:/workspace
+      - frontend_node_modules:/workspace/node_modules
+
+volumes:
+  postgres_data:
+  auth_node_modules:
+  finance_node_modules:
+  frontend_node_modules:

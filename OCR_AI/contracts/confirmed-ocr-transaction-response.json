@@ -1,0 +1,32 @@
+{
+  "success": true,
+  "message": "Confirmed OCR transaction saved.",
+  "transaction_id": "0fd6c4f0-b96b-4dcb-b5aa-88a377a0fdfe",
+  "data": {
+    "transaction": {
+      "id": "0fd6c4f0-b96b-4dcb-b5aa-88a377a0fdfe",
+      "user_id": "3ce5f673-660d-4686-90d6-52af6046ef75",
+      "wallet_id": "9cb919e0-5951-490a-b9d2-02e35923c730",
+      "category_id": "1ea26fc9-668d-44be-9bb5-b1c9a07008ef",
+      "amount": 150000,
+      "currency": "VND",
+      "transaction_type": "expense",
+      "note": "Customer meeting",
+      "merchant_name": "Highlands Coffee",
+      "transaction_date": "2023-10-25T14:30:00.000Z",
+      "payment_method": "credit_card",
+      "source_type": "receipt",
+      "source_ref_id": null,
+      "receipt_reference": "Ăn uống",
+      "created_at": "2026-04-21T08:00:00.000Z",
+      "updated_at": "2026-04-21T08:00:00.000Z"
+    },
+    "wallet_balance": 850000,
+    "budget": {
+      "id": "d99488b1-3af0-4978-a1bb-d88d84b40c9a",
+      "amount_limit": 4000000,
+      "spent_amount": 550000,
+      "remaining_amount": 3450000
+    }
+  }
+}

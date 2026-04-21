@@ -1,0 +1,4 @@
+{
+  "error_code": "MISSING_WALLET_ID",
+  "message": "Provide wallet_id in the body or x-wallet-id in the request headers."
+}

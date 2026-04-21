@@ -1,0 +1,4 @@
+{
+  "error_code": "BLURRY_IMAGE",
+  "message": "The receipt image is too blurry for reliable OCR extraction."
+}

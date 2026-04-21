@@ -1,0 +1,33 @@
+name: receipt-ocr-local
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:1.88.0
+    container_name: receipt-ocr-n8n
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    env_file:
+      - .env
+    environment:
+      N8N_PORT: ${N8N_PORT:-5001}
+      N8N_HOST: ${N8N_HOST:-0.0.0.0}
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5001/}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "false"
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE:-true}
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER:-admin}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:-admin123}
+      VERYFI_CLIENT_ID: ${VERYFI_CLIENT_ID}
+      VERYFI_USERNAME: ${VERYFI_USERNAME}
+      VERYFI_API_KEY: ${VERYFI_API_KEY}
+      OCR_REQUIRED_CONFIDENCE: ${OCR_REQUIRED_CONFIDENCE:-0.65}
+      OCR_DEFAULT_CURRENCY: ${OCR_DEFAULT_CURRENCY:-VND}
+      TZ: Asia/Saigon
+    ports:
+      - "${N8N_PORT:-5001}:${N8N_PORT:-5001}"
+    volumes:
+      - ./storage/n8n:/home/node/.n8n
+      - ./workflows:/workflows
+    command:
+      - "n8n import:workflow --input=/workflows/receipt-ocr-workflow.json && n8n start"

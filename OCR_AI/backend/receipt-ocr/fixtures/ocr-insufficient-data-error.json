@@ -1,0 +1,10 @@
+{
+  "error_code": "INSUFFICIENT_DATA",
+  "message": "OCR completed but required receipt fields could not be derived reliably.",
+  "details": {
+    "missing_fields": [
+      "merchant_name",
+      "transaction_datetime"
+    ]
+  }
+}
