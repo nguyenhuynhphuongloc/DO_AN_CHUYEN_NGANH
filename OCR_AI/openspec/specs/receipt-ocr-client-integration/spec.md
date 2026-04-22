@@ -15,15 +15,16 @@ The system SHALL submit the selected receipt to the OCR endpoint as `multipart/f
 
 #### Scenario: Selected image is sent for OCR
 - **WHEN** a user starts OCR for a selected receipt image
-- **THEN** the module sends a multipart request containing the image file under the `receipt` field name
+- **THEN** the frontend sends a multipart request containing the image file under the `receipt` field name
 
 ### Requirement: OCR and save request states are visible to the user
 The system SHALL show distinct loading and error states for OCR, finance-data loading, and transaction save operations, SHALL surface backend error messages to the user, and SHALL show a success message after a confirmed OCR transaction is created.
 
 #### Scenario: OCR request fails
 - **WHEN** the OCR endpoint returns an error response
-- **THEN** the module displays a visible OCR error message to the user and does not treat the response as a successful extraction
+- **THEN** the frontend displays a visible OCR error message to the user and does not treat the response as a successful extraction
 
 #### Scenario: Transaction save succeeds
 - **WHEN** the confirmed OCR data is accepted by `finance-service`
 - **THEN** the frontend displays a visible transaction save success message while preserving the final confirmed values
+

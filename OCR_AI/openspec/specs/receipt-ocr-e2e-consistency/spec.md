@@ -23,3 +23,4 @@ The system SHALL expose user-correctable OCR, finance-data loading, and save fai
 #### Scenario: Structured backend error is shown in the UI
 - **WHEN** the OCR or save endpoint returns a structured error response
 - **THEN** the frontend displays the provided `message` and keeps the failure associated with the correct request stage
+
