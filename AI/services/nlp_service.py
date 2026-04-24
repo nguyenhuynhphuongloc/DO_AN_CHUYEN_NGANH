@@ -22,6 +22,7 @@ def normalize_text(text: str) -> str:
   text = re.sub(r'[^\w\s\dđ.,k]', ' ', text, flags=re.UNICODE)
   text = re.sub(r'\s+', ' ', text).strip()
   
+  # Replace currency abbreviations
   text = re.sub(r'(\d+)\s*xị', lambda m: str(int(m.group(1)) * 10000) + " đ", text)
   text = re.sub(r'(\d+)\s*(lít|lốp)', lambda m: str(int(m.group(1)) * 100000) + " đ", text)
   text = re.sub(r'(\d+)\s*(củ|mâm|quả)', lambda m: str(int(m.group(1)) * 1000000) + " đ", text)
@@ -78,7 +79,7 @@ def extract_transaction_info(text: str) -> Dict[str, Any]:
   
   transaction_type = "expense"
   
-  income_keywords = ["thu", "lương", "nhận", "thưởng", "cộng", "lãi", "lì xì", "được cho", "biếu", "tặng"]
+  income_keywords = {"thu", "lương", "nhận", "thưởng", "cộng", "lãi", "lì xì", "được cho", "biếu", "tặng"}
   if any(k in normalized_text for k in income_keywords):
     transaction_type = "income"
   elif re.search(r'(được|nhận)\s+.*cho', normalized_text) or re.search(r'(ba|mẹ|anh|chị|em)\s+cho', normalized_text):
@@ -95,20 +96,15 @@ def extract_transaction_info(text: str) -> Dict[str, Any]:
   if not category:
     try:
       tokens = pos_tag(text) 
-      stop_words = [
+      stop_words = {
         "chi", "thu", "hết", "khoản", "giá", "mất", "đã", "nhận", "cho", "vào", "mục", "tiền", "số", 
         "hôm", "qua", "nay", "với", "từ", "cho", "khoảng", "tầm", "cỡ",
         "tháng", "ngày", "năm", "tuần", "lần", "đợt", "triệu", "ngàn", "tỷ", "tr", "k",
         "được", "bị", "là", "vừa", "mới", "phải", "của", "tới", "đến", "tui", "mình", "em", "anh",
         "ba", "mẹ", "ông", "bà", "chú", "bác", "cô", "dì", "con", "cháu"
-      ]
+      }
       
-      candidates = []
-      for word, tag in tokens:
-        w = word.lower()
-        if tag in ['N', 'V', 'Np'] and w not in stop_words and len(w) > 1:
-          if not re.match(r'^[\d.,]+$', w):
-            candidates.append(word)
+      candidates = [word for word, tag in tokens if tag in ['N', 'V', 'Np'] and word.lower() not in stop_words and len(word) > 1 and not re.match(r'^[\d.,]+$', word.lower())]
       
       if candidates:
         guessed_cat = candidates[0].capitalize()

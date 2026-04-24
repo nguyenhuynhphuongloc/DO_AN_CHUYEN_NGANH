@@ -10,23 +10,27 @@ def process_receipt_image(image_bytes: bytes) -> dict:
   # OCR
   text = pytesseract.image_to_string(image, lang='vie')
   
-  # Simple regex for amount extraction (Total)
+  # Preprocess text for better matching
+  text = text.replace('\n', ' ').replace('\r', ' ')
+  text = re.sub(r'\s+', ' ', text).strip()
+  
+  # Compile patterns for efficiency
   total_patterns = [
-    r'Tổng cộng:?\s*([\d,.]+)',
-    r'Thành tiền:?\s*([\d,.]+)',
-    r'Total:?\s*([\d,.]+)',
-    r'TOTAL:?\s*([\d,.]+)',
+    re.compile(r'Tổng cộng:?\s*([\d,.]+)', re.IGNORECASE),
+    re.compile(r'Thành tiền:?\s*([\d,.]+)', re.IGNORECASE),
+    re.compile(r'Total:?\s*([\d,.]+)', re.IGNORECASE),
+    re.compile(r'TOTAL:?\s*([\d,.]+)', re.IGNORECASE),
   ]
   
   amount = 0.0
   for pattern in total_patterns:
-    match = re.search(pattern, text)
+    match = pattern.search(text)
     if match:
       amount_str = match.group(1).replace(",", "").replace(".", "")
       try:
         amount = float(amount_str)
         break
-      except:
+      except ValueError:
         continue
         
   return {
