@@ -49,17 +49,17 @@ def get_financial_advice(query: str, context: dict):
 
         trend_txt = ""
         if monthly_stats:
-            trend_txt = "\nXu hướng chi tiêu các tháng gần đây:\n"
-            for month, stats in sorted(monthly_stats.items()):
-                trend_txt += f"- Tháng {month}: Thu {stats['income']:,.0f} | Chi {stats['expense']:,.0f}\n"
+            trend_lines = [f"- Tháng {month}: Thu {stats['income']:,.0f} | Chi {stats['expense']:,.0f}" for month, stats in sorted(monthly_stats.items())]
+            trend_txt = "\nXu hướng chi tiêu các tháng gần đây:\n" + "\n".join(trend_lines) + "\n"
 
+        breakdown_str = ", ".join([f"{c['name']} ({c['total']:,.0f})" for c in breakdown[:5]])
         stats_txt = (
             f"Dữ liệu tài chính ({period}):\n"
             f"- Tổng Thu nhập: {total_income:,.0f} VND\n"
             f"- Tổng Chi tiêu: {total_expense:,.0f} VND\n"
             f"- Số dư hiện tại: {balance:,.0f} VND\n"
-            f"- Các khoản chi chính: " + ", ".join([f"{c['name']} ({c['total']:,.0f})" for c in breakdown[:5]])
-            + trend_txt
+            f"- Các khoản chi chính: {breakdown_str}"
+            f"{trend_txt}"
         )
 
         messages = [
@@ -91,7 +91,7 @@ def get_financial_advice(query: str, context: dict):
         cleaned_advice = advice.strip()
         
         if "Câu hỏi:" in cleaned_advice:
-            cleaned_advice = cleaned_advice.split("Câu hỏi:")[0].strip()
+            cleaned_advice = cleaned_advice.split("Câu hỏi:", 1)[0].strip()
         
         if len(cleaned_advice) < 10:
             cleaned_advice = "Tôi đã phân tích dữ liệu nhưng chưa thể đưa ra lời khuyên cụ thể ngay lúc này. Vui lòng thử hỏi khác đi một chút."
