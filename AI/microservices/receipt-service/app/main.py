@@ -5,7 +5,7 @@ from app.api.receipts import router as receipts_router
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import engine
-from app.models import Receipt, ReceiptExtraction, ReceiptFeedback, ReceiptJob, ReceiptOcrResult, ReceiptParseJob, ReceiptParseSession  # noqa: F401
+from app.models import Receipt, ReceiptFeedback, ReceiptJob, ReceiptParserResult, ReceiptParseJob, ReceiptParseSession  # noqa: F401
 from app.services.receipt_parser_service import get_receipt_parser_service
 
 Base.metadata.create_all(bind=engine)

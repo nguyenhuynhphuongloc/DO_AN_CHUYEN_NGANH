@@ -117,7 +117,6 @@ export function ReceiptWorkspace() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [walletId, setWalletId] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [type, setType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE');
   const [merchantName, setMerchantName] = useState('');
   const [amount, setAmount] = useState('');
   const [transactionDate, setTransactionDate] = useState('');
@@ -134,6 +133,7 @@ export function ReceiptWorkspace() {
   const [dragActive, setDragActive] = useState(false);
   const [receiptId, setReceiptId] = useState<string | null>(initialReceiptId);
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId);
+  const extractionDetails = getExtractionDetails(receipt);
 
   function syncFromReceipt(receiptData: ReceiptWorkflow) {
     const extraction = receiptData.extraction_result;
@@ -145,10 +145,18 @@ export function ReceiptWorkspace() {
     setMerchantName(extraction?.merchant_name ?? '');
     setAmount(extraction?.total_amount !== null && extraction?.total_amount !== undefined ? String(extraction.total_amount) : '');
     setTransactionDate(buildDateTimeInput(extraction?.transaction_date));
-    setDescription((prev) => prev || extractionDetails?.description_text || '');
+    setDescription((prev) => prev || extractionDetails?.review_defaults?.description || extractionDetails?.description_text || '');
+    setWalletId((prev) => prev || String(extractionDetails?.review_defaults?.wallet_id ?? ''));
+    setCategoryId((prev) => prev || String(extractionDetails?.review_defaults?.category_id ?? ''));
     setFeedback(receiptData.latest_feedback?.feedback_note ?? '');
     setStatus(describeStatus(receiptData));
-    setReceiptId(receiptData.receipt?.id ?? receiptData.confirmed_receipt?.id ?? null);
+    setReceiptId(
+      receiptData.receipt?.id !== undefined && receiptData.receipt?.id !== null
+        ? String(receiptData.receipt.id)
+        : receiptData.confirmed_receipt?.id !== undefined && receiptData.confirmed_receipt?.id !== null
+          ? String(receiptData.confirmed_receipt.id)
+          : null,
+    );
     setSessionId(receiptData.session?.id ?? null);
   }
 
@@ -163,8 +171,8 @@ export function ReceiptWorkspace() {
         const [walletData, categoryData] = await Promise.all([getWallets(), getCategories()]);
         setWallets(walletData);
         setCategories(categoryData);
-        setWalletId((prev) => prev || walletData[0]?.id || '');
-        setCategoryId((prev) => prev || categoryData[0]?.id || '');
+        setWalletId((prev) => prev || String(walletData.find((wallet) => wallet.isDefault)?.id ?? walletData[0]?.id ?? ''));
+        setCategoryId((prev) => prev || String(categoryData[0]?.id ?? ''));
       } catch (err) {
         if (err instanceof MissingAuthSessionError) {
           router.replace('/login');
@@ -220,6 +228,33 @@ export function ReceiptWorkspace() {
 
     return () => window.clearInterval(intervalId);
   }, [receipt, router]);
+
+  useEffect(() => {
+    const suggestedWalletId = extractionDetails?.review_defaults?.wallet_id;
+    if (suggestedWalletId !== undefined && suggestedWalletId !== null && String(suggestedWalletId) !== '' && wallets.some((wallet) => String(wallet.id) === String(suggestedWalletId))) {
+      setWalletId(String(suggestedWalletId));
+      return;
+    }
+    if (!walletId && wallets.length > 0) {
+      setWalletId(String(wallets.find((wallet) => wallet.isDefault)?.id ?? wallets[0]?.id ?? ''));
+    }
+  }, [extractionDetails?.review_defaults?.wallet_id, walletId, wallets]);
+
+  useEffect(() => {
+    const suggestedCategoryId = extractionDetails?.review_defaults?.category_id;
+    if (
+      suggestedCategoryId !== undefined &&
+      suggestedCategoryId !== null &&
+      String(suggestedCategoryId) !== '' &&
+      categories.some((category) => String(category.id) === String(suggestedCategoryId))
+    ) {
+      setCategoryId(String(suggestedCategoryId));
+      return;
+    }
+    if (!categoryId && categories.length > 0) {
+      setCategoryId(String(categories[0]?.id ?? ''));
+    }
+  }, [categoryId, categories, extractionDetails?.review_defaults?.category_id]);
 
   useEffect(() => {
     return () => {
@@ -285,12 +320,16 @@ export function ReceiptWorkspace() {
       syncFromReceipt(uploaded);
       if (uploaded.session?.id) {
         setSessionId(uploaded.session.id);
-        setReceiptId(uploaded.confirmed_receipt?.id ?? null);
+        setReceiptId(
+          uploaded.confirmed_receipt?.id !== undefined && uploaded.confirmed_receipt?.id !== null
+            ? String(uploaded.confirmed_receipt.id)
+            : null,
+        );
         router.replace(`/receipts/upload?sessionId=${uploaded.session.id}`);
       } else if (uploaded.receipt?.id) {
-        setReceiptId(uploaded.receipt.id);
+        setReceiptId(String(uploaded.receipt.id));
         setSessionId(null);
-        router.replace(`/receipts/upload?receiptId=${uploaded.receipt.id}`);
+        router.replace(`/receipts/upload?receiptId=${String(uploaded.receipt.id)}`);
       }
     } catch (err) {
       if (err instanceof MissingAuthSessionError) {
@@ -375,7 +414,7 @@ export function ReceiptWorkspace() {
       const updated = await confirm((sessionId ?? receiptId) as string, {
         wallet_id: walletId,
         category_id: categoryId,
-        type,
+        type: 'EXPENSE',
         amount: Number(amount),
         description,
         merchant_name: merchantName || undefined,
@@ -383,7 +422,7 @@ export function ReceiptWorkspace() {
       });
       syncFromReceipt(updated);
       if (updated.confirmed_receipt?.id) {
-        setReceiptId(updated.confirmed_receipt.id);
+        setReceiptId(String(updated.confirmed_receipt.id));
       }
       setStatus(updated.finance_warning ?? 'Receipt confirmed and transaction created');
     } catch (err) {
@@ -395,10 +434,7 @@ export function ReceiptWorkspace() {
     }
   }
 
-  const extractionDetails = getExtractionDetails(receipt);
-  const extractedFields = extractionDetails?.fields;
   const needsReview = extractionDetails?.needs_review_fields ?? [];
-  const fieldConfidence = extractionDetails?.field_confidence ?? {};
   const reviewReady = Boolean(receipt?.extraction_result);
   const processing = isProcessing(receipt);
   const qualityHints = useMemo(() => getImageHints(selectedFile, imageSize), [selectedFile, imageSize]);
@@ -487,7 +523,7 @@ export function ReceiptWorkspace() {
         <form onSubmit={handleConfirm} className="rounded-[1.75rem] border border-black/10 bg-white/90 p-6 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-neutral-500">Step 3</p>
           <h3 className="mt-1 text-xl font-semibold text-ink">Structured Fields</h3>
-          <p className="mt-1 text-sm text-neutral-600">Main business panel. Review extracted fields, fix uncertain values, then confirm.</p>
+          <p className="mt-1 text-sm text-neutral-600">Review the six business fields, adjust anything needed, then confirm the transaction.</p>
 
           {!reviewReady ? (
             <p className="mt-4 rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 px-4 py-3 text-sm text-neutral-600">
@@ -534,18 +570,6 @@ export function ReceiptWorkspace() {
               />
             </label>
             <label className="block">
-              <span className="mb-2 block text-sm font-medium">Type</span>
-              <select
-                className="w-full rounded-2xl border border-neutral-200 px-4 py-3 outline-none focus:border-accent disabled:bg-neutral-100"
-                value={type}
-                onChange={(event) => setType(event.target.value as 'INCOME' | 'EXPENSE')}
-                disabled={!reviewReady}
-              >
-                <option value="EXPENSE">Expense</option>
-                <option value="INCOME">Income</option>
-              </select>
-            </label>
-            <label className="block">
               <span className="mb-2 block text-sm font-medium">Wallet</span>
               <select
                 className="w-full rounded-2xl border border-neutral-200 px-4 py-3 outline-none focus:border-accent disabled:bg-neutral-100"
@@ -576,27 +600,6 @@ export function ReceiptWorkspace() {
               </select>
             </label>
           </div>
-
-          {reviewReady && (fieldConfidence.merchant_name !== undefined || fieldConfidence.total_amount !== undefined || fieldConfidence.transaction_date !== undefined) ? (
-            <div className="mt-4 rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
-              <p className="font-medium text-neutral-900">Confidence</p>
-              <div className="mt-2 grid gap-1 sm:grid-cols-2">
-                <p>Merchant: {fieldConfidence.merchant_name ?? 'n/a'}</p>
-                <p>Date: {fieldConfidence.transaction_date ?? 'n/a'}</p>
-                <p>Total: {fieldConfidence.total_amount ?? 'n/a'}</p>
-                <p>Payment: {fieldConfidence.payment_method ?? 'n/a'}</p>
-              </div>
-            </div>
-          ) : null}
-
-          {reviewReady && (extractedFields?.merchant_phone || extractedFields?.merchant_address || extractedFields?.receipt_number) ? (
-            <div className="mt-4 rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
-              <p className="font-medium text-neutral-900">Detected metadata</p>
-              {extractedFields?.receipt_number ? <p className="mt-1">Receipt #: {extractedFields.receipt_number}</p> : null}
-              {extractedFields?.merchant_phone ? <p className="mt-1">Phone: {extractedFields.merchant_phone}</p> : null}
-              {extractedFields?.merchant_address ? <p className="mt-1">Address: {extractedFields.merchant_address}</p> : null}
-            </div>
-          ) : null}
 
           <label className="mt-4 block">
             <span className="mb-2 block text-sm font-medium">Description</span>

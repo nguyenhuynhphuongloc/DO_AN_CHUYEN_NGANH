@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from app.services.receipt_description_service import build_receipt_description
+
 
 def _as_dict(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
@@ -87,7 +89,23 @@ def _normalize_line_item(raw_item: Any) -> dict[str, Any] | None:
     }
 
 
-def _description_text(items: list[dict[str, Any]], vendor_name: str | None, category: str | None) -> str | None:
+def _description_text(
+    items: list[dict[str, Any]],
+    vendor_name: str | None,
+    category: str | None,
+    transaction_date: str | None,
+    total_amount: float | None,
+    currency: str | None,
+) -> str | None:
+    generated = build_receipt_description(
+        merchant_name=vendor_name,
+        category_name=category,
+        transaction_date=transaction_date,
+        total_amount=total_amount,
+        currency=currency,
+    )
+    if generated:
+        return generated
     labels = [str(item["name"]) for item in items if item.get("name")]
     if labels:
         return " | ".join(labels[:5])
@@ -163,6 +181,14 @@ def normalize_veryfi_document(document: dict[str, Any], *, raw_text: str, runtim
         "time_in": None,
         "time_out": None,
     }
+    description_text = _description_text(
+        line_items,
+        merchant_name,
+        category,
+        transaction_date,
+        total_amount,
+        currency,
+    )
 
     extracted_json = {
         "normalized_text": {
@@ -174,7 +200,7 @@ def normalize_veryfi_document(document: dict[str, Any], *, raw_text: str, runtim
         "items": line_items,
         "field_confidence": field_confidence,
         "needs_review_fields": sorted(set(review_fields)),
-        "description_text": _description_text(line_items, merchant_name, category),
+        "description_text": description_text,
         "parser_metadata": {
             "provider": "veryfi",
             "document_id": document.get("id"),
@@ -187,6 +213,12 @@ def normalize_veryfi_document(document: dict[str, Any], *, raw_text: str, runtim
             "document_type": document.get("document_type"),
             "created_date": document.get("created_date"),
             "category": category,
+        },
+        "review_defaults": {
+            "merchant_name": merchant_name,
+            "amount": total_amount,
+            "transaction_time": transaction_date,
+            "description": description_text,
         },
     }
 

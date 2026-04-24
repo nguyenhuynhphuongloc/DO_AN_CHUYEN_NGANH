@@ -5,8 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ReceiptOcrResultResponse(BaseModel):
-    id: UUID
-    receipt_id: UUID
+    id: int
+    receipt_id: int
     ocr_provider: str
     raw_text: str | None
     raw_json: dict | None
@@ -17,8 +17,8 @@ class ReceiptOcrResultResponse(BaseModel):
 
 
 class ReceiptExtractionResponse(BaseModel):
-    id: UUID
-    receipt_id: UUID
+    id: int
+    receipt_id: int
     merchant_name: str | None
     transaction_date: date | None
     total_amount: float | None
@@ -35,8 +35,8 @@ class ReceiptExtractionResponse(BaseModel):
 
 class ReceiptFeedbackResponse(BaseModel):
     id: UUID
-    receipt_id: UUID
-    user_id: UUID
+    receipt_id: int
+    user_id: int
     original_data_json: dict | None
     corrected_data_json: dict
     feedback_note: str | None
@@ -47,7 +47,7 @@ class ReceiptFeedbackResponse(BaseModel):
 
 class ReceiptJobResponse(BaseModel):
     id: UUID
-    receipt_id: UUID
+    receipt_id: int
     job_type: str
     status: str
     error_message: str | None
@@ -59,8 +59,8 @@ class ReceiptJobResponse(BaseModel):
 
 
 class ReceiptMetadataResponse(BaseModel):
-    id: UUID
-    user_id: UUID
+    id: int
+    user_id: int
     file_name: str
     original_url: str
     mime_type: str | None
@@ -77,7 +77,7 @@ class ReceiptMetadataResponse(BaseModel):
 
 class ReceiptParseSessionMetadataResponse(BaseModel):
     id: UUID
-    user_id: UUID
+    user_id: int
     file_name: str
     temp_url: str
     permanent_url: str | None

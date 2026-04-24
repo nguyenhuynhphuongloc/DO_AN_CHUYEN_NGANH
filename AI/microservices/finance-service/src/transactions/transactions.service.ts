@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/library';
 import { AuthenticatedUser } from 'src/common/auth/authenticated-user.interface';
+import { resolveSharedDbUser } from 'src/common/auth/resolve-shared-db-user';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 
@@ -17,26 +18,39 @@ export class TransactionsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(user: AuthenticatedUser) {
+    const dbUser = await resolveSharedDbUser(this.prisma, user);
     const transactions = await this.prisma.transaction.findMany({
-      where: { userId: user.userId },
+      where: { userId: dbUser.id },
       include: {
         wallet: true,
         category: true,
       },
-      orderBy: { transactionDate: 'desc' },
+      orderBy: { date: 'desc' },
     });
 
     return transactions.map((transaction) => ({
       ...transaction,
+      id: String(transaction.id),
+      userId: String(transaction.userId),
+      walletId: transaction.walletId !== null ? String(transaction.walletId) : null,
+      categoryId: String(transaction.categoryId),
+      receiptId: transaction.receiptId !== null ? String(transaction.receiptId) : null,
       type: transaction.type.toUpperCase(),
       amount: Number(transaction.amount),
-      wallet: {
-        ...transaction.wallet,
-        balance: Number(transaction.wallet.balance),
-      },
+      transactionDate: transaction.date,
+      wallet: transaction.wallet
+        ? {
+            ...transaction.wallet,
+            id: String(transaction.wallet.id),
+            userId: String(transaction.wallet.userId),
+            balance: Number(transaction.wallet.balance),
+          }
+        : null,
       category: transaction.category
         ? {
             ...transaction.category,
+            id: String(transaction.category.id),
+            userId: transaction.category.userId !== null ? String(transaction.category.userId) : null,
             type: transaction.category.type.toUpperCase(),
           }
         : transaction.category,
@@ -44,27 +58,31 @@ export class TransactionsService {
   }
 
   async create(user: AuthenticatedUser, body: CreateTransactionDto) {
+    const dbUser = await resolveSharedDbUser(this.prisma, user);
+    const walletId = Number(body.walletId);
+    const categoryId = Number(body.categoryId);
+
     const wallet = await this.prisma.wallet.findUnique({
-      where: { id: body.walletId },
+      where: { id: walletId },
     });
 
     if (!wallet) {
       throw new NotFoundException('Wallet not found');
     }
 
-    if (wallet.userId !== user.userId) {
+    if (wallet.userId !== dbUser.id) {
       throw new ForbiddenException('Wallet does not belong to the authenticated user');
     }
 
     const category = await this.prisma.category.findUnique({
-      where: { id: body.categoryId },
+      where: { id: categoryId },
     });
 
     if (!category) {
       throw new NotFoundException('Category not found');
     }
 
-    if (category.userId && category.userId !== user.userId && !category.isSystem) {
+    if (category.userId && category.userId !== dbUser.id) {
       throw new ForbiddenException('Category does not belong to the authenticated user');
     }
 
@@ -74,7 +92,7 @@ export class TransactionsService {
 
     const [, transaction] = await this.prisma.$transaction([
       this.prisma.wallet.update({
-        where: { id: body.walletId },
+        where: { id: walletId },
         data: {
           balance: {
             increment: new Decimal(balanceDelta),
@@ -83,15 +101,17 @@ export class TransactionsService {
       }),
       this.prisma.transaction.create({
         data: {
-          userId: user.userId,
-          walletId: body.walletId,
-          categoryId: body.categoryId,
+          userId: dbUser.id,
+          walletId,
+          categoryId,
+          receiptId: body.receiptId,
           type: toDatabaseTransactionType(body.type),
           amount: new Decimal(body.amount),
           description: body.description,
-          source: body.source,
+          sourceType: body.source,
+          sourceRefId: body.sourceRefId,
           merchantName: body.merchantName,
-          transactionDate: new Date(body.transactionDate),
+          date: new Date(body.transactionDate),
         },
         include: {
           wallet: true,
@@ -102,19 +122,31 @@ export class TransactionsService {
 
     return {
       ...transaction,
+      id: String(transaction.id),
+      userId: String(transaction.userId),
+      walletId: transaction.walletId !== null ? String(transaction.walletId) : null,
+      categoryId: String(transaction.categoryId),
+      receiptId: transaction.receiptId !== null ? String(transaction.receiptId) : null,
       type: transaction.type.toUpperCase(),
       amount: Number(transaction.amount),
+      transactionDate: transaction.date,
       warning:
         overspendAmount > 0
-          ? `Bạn đã chi tiêu vượt mức ${formatOverspendAmount(overspendAmount)} VND. Vui lòng kiểm tra lại thu chi sau khi hoàn tất hoá đơn.`
+          ? `Ban da chi tieu vuot muc ${formatOverspendAmount(overspendAmount)} VND. Vui long kiem tra lai thu chi sau khi hoan tat hoa don.`
           : null,
-      wallet: {
-        ...transaction.wallet,
-        balance: Number(transaction.wallet.balance),
-      },
+      wallet: transaction.wallet
+        ? {
+            ...transaction.wallet,
+            id: String(transaction.wallet.id),
+            userId: String(transaction.wallet.userId),
+            balance: Number(transaction.wallet.balance),
+          }
+        : null,
       category: transaction.category
         ? {
             ...transaction.category,
+            id: String(transaction.category.id),
+            userId: transaction.category.userId !== null ? String(transaction.category.userId) : null,
             type: transaction.category.type.toUpperCase(),
           }
         : transaction.category,

@@ -10,17 +10,17 @@ from uuid import UUID
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
-from app.models.receipt import (
-    Receipt,
-    ReceiptExtraction,
-    ReceiptJob,
-    ReceiptOcrResult,
-    ReceiptParseJob,
-    ReceiptParseSession,
-)
+from app.models.receipt import Receipt, ReceiptJob, ReceiptParseJob, ReceiptParseSession, ReceiptParserResult
 from app.services.image_preprocess import preprocess_image_with_metadata
+from app.services.receipt_category_resolution_service import (
+    ReceiptCategoryResolutionError,
+    ReceiptCategoryResolutionService,
+)
+from app.services.receipt_description_service import build_receipt_description
 from app.services.receipt_parser_normalizer import normalize_veryfi_document
-from app.services.receipt_parser_service import ReceiptParserResult, get_receipt_parser_service
+from app.services.receipt_parser_service import ReceiptParserResult as ProviderParserResult
+from app.services.receipt_parser_service import get_receipt_parser_service
+from app.services.shared_finance_lookup_service import get_allowed_categories, get_default_wallet_id
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +37,8 @@ def _load_parse_job(db: Session, job_id: UUID) -> ReceiptJob:
     job = (
         db.query(ReceiptJob)
         .options(
-            joinedload(ReceiptJob.receipt).joinedload(Receipt.ocr_result),
-            joinedload(ReceiptJob.receipt).joinedload(Receipt.extraction),
+            joinedload(ReceiptJob.receipt).joinedload(Receipt.parser_result),
+            joinedload(ReceiptJob.receipt).joinedload(Receipt.feedback_items),
         )
         .filter(ReceiptJob.id == job_id)
         .first()
@@ -110,7 +110,7 @@ def _to_date(value: object) -> date | None:
 
 def _build_parser_debug_json(
     processed_path: Path,
-    parser_result: ReceiptParserResult,
+    parser_result: ProviderParserResult,
     extracted_fields: dict,
     preprocess_metadata: dict,
     *,
@@ -182,7 +182,7 @@ def _run_primary_parse(
     processed_path: Path,
     *,
     debug_tag: str,
-) -> tuple[ReceiptParserResult, dict, float, float]:
+) -> tuple[ProviderParserResult, dict, float, float]:
     parse_start = time.perf_counter()
     parser_result = get_receipt_parser_service().parse_document(str(processed_path), external_id=debug_tag)
     parse_seconds = time.perf_counter() - parse_start
@@ -206,11 +206,73 @@ def _run_primary_parse(
     return parser_result, extracted_fields, parse_seconds, normalize_seconds
 
 
+def _apply_shared_review_suggestions(
+    db: Session,
+    *,
+    owner_user_id: int,
+    extracted_fields: dict,
+) -> tuple[dict | None, str | None, str | None]:
+    extracted_json = dict(extracted_fields.get("extracted_json") or {})
+    review_defaults = dict(extracted_json.get("review_defaults") or {})
+    parser_metadata = dict(extracted_json.get("parser_metadata") or {})
+    normalized_text = dict(extracted_json.get("normalized_text") or {})
+
+    category_suggestion = None
+    categories = get_allowed_categories(db, user_id=owner_user_id, transaction_type="EXPENSE")
+    if categories:
+        try:
+            category_suggestion = ReceiptCategoryResolutionService().resolve_category(
+                normalized_receipt={
+                    "fields": extracted_json.get("fields") or {},
+                    "description_text": extracted_json.get("description_text"),
+                    "parser_metadata": parser_metadata,
+                    "normalized_text": {
+                        "raw_text": normalized_text.get("raw_text"),
+                        "normalized_lines": normalized_text.get("normalized_lines"),
+                    },
+                },
+                categories=categories,
+            )
+        except ReceiptCategoryResolutionError as exc:
+            logger.warning("Groq category resolution failed for user %s: %s", owner_user_id, exc)
+
+    default_wallet_id = get_default_wallet_id(db, user_id=owner_user_id)
+    if default_wallet_id:
+        review_defaults["wallet_id"] = default_wallet_id
+
+    suggested_category_name = None
+    suggested_category_id = None
+    if category_suggestion:
+        suggested_category_id = category_suggestion.get("category_id")
+        suggested_category_name = category_suggestion.get("category_name")
+        review_defaults["category_id"] = suggested_category_id
+        review_defaults["category_name"] = suggested_category_name
+        review_defaults["category_reason"] = category_suggestion.get("reason")
+        parser_metadata["category_suggestion"] = category_suggestion
+
+    suggested_description = build_receipt_description(
+        merchant_name=review_defaults.get("merchant_name") or extracted_fields.get("merchant_name"),
+        category_name=suggested_category_name or parser_metadata.get("category"),
+        transaction_date=review_defaults.get("transaction_time") or extracted_fields.get("transaction_date"),
+        total_amount=review_defaults.get("amount") or extracted_fields.get("total_amount"),
+        currency=extracted_fields.get("currency"),
+    )
+    if suggested_description:
+        extracted_json["description_text"] = suggested_description
+        review_defaults["description"] = suggested_description
+
+    extracted_json["review_defaults"] = review_defaults
+    extracted_json["parser_metadata"] = parser_metadata
+    extracted_fields["extracted_json"] = extracted_json
+    return category_suggestion, default_wallet_id, suggested_description
+
+
 def _persist_receipt_results(
+    db: Session,
     job: ReceiptJob,
     processed_path: Path,
     text_output_path: Path | None,
-    parser_result: ReceiptParserResult,
+    parser_result: ProviderParserResult,
     extracted_fields: dict,
     *,
     preprocess_metadata: dict,
@@ -218,9 +280,6 @@ def _persist_receipt_results(
 ) -> None:
     now = _job_now(job)
     receipt = job.receipt
-    raw_text = parser_result.raw_text
-    confidence = min(max(float(extracted_fields.get("confidence_score") or 0.0), 0.0), 1.0)
-    confidence_decimal = Decimal(f"{confidence:.4f}")
     raw_json = _build_parser_debug_json(
         processed_path,
         parser_result,
@@ -229,65 +288,49 @@ def _persist_receipt_results(
         text_output_path=text_output_path,
         timings=timings,
     )
-
-    if receipt.ocr_result is None:
-        receipt.ocr_result = ReceiptOcrResult(
-            receipt_id=receipt.id,
-            ocr_provider=parser_result.provider,
-            raw_text=raw_text,
-            raw_json=raw_json,
-            confidence_score=confidence_decimal,
-            created_at=now,
-        )
-    else:
-        receipt.ocr_result.ocr_provider = parser_result.provider
-        receipt.ocr_result.raw_text = raw_text
-        receipt.ocr_result.raw_json = raw_json
-        receipt.ocr_result.confidence_score = confidence_decimal
-
-    merchant_name = extracted_fields.get("merchant_name")
-    transaction_date = _to_date(extracted_fields.get("transaction_date"))
-    total_amount = Decimal(str(extracted_fields["total_amount"])) if extracted_fields.get("total_amount") is not None else None
-    tax_amount = Decimal(str(extracted_fields["tax_amount"])) if extracted_fields.get("tax_amount") is not None else None
-    extraction_payload = extracted_fields.get("extracted_json") or {}
-    extraction_payload["parse_debug"] = {
+    category_suggestion, _, suggested_description = _apply_shared_review_suggestions(
+        db,
+        owner_user_id=receipt.user_id,
+        extracted_fields=extracted_fields,
+    )
+    normalized_json = dict(extracted_fields.get("extracted_json") or {})
+    normalized_json["confidence_score"] = float(extracted_fields.get("confidence_score") or 0.0)
+    normalized_json["parse_debug"] = {
         "selected_path": "veryfi",
         "timings": timings,
         "provider": parser_result.provider,
     }
-    extraction_confidence = Decimal(f"{float(extracted_fields.get('confidence_score') or confidence):.4f}")
 
-    if receipt.extraction is None:
-        receipt.extraction = ReceiptExtraction(
+    if receipt.parser_result is None:
+        receipt.parser_result = ReceiptParserResult(
             receipt_id=receipt.id,
-            merchant_name=merchant_name,
-            transaction_date=transaction_date,
-            total_amount=total_amount,
-            tax_amount=tax_amount,
-            currency=str(extracted_fields.get("currency")) if extracted_fields.get("currency") else None,
-            extracted_json=extraction_payload,
-            confidence_score=extraction_confidence,
-            review_status="needs_review",
+            provider=parser_result.provider,
+            raw_text=parser_result.raw_text,
+            provider_json=raw_json,
+            normalized_json=normalized_json,
+            suggested_category_id=int(category_suggestion["category_id"]) if category_suggestion and category_suggestion.get("category_id") else None,
+            suggested_description=suggested_description,
             created_at=now,
             updated_at=now,
         )
     else:
-        receipt.extraction.merchant_name = merchant_name
-        receipt.extraction.transaction_date = transaction_date
-        receipt.extraction.total_amount = total_amount
-        receipt.extraction.tax_amount = tax_amount
-        receipt.extraction.currency = str(extracted_fields.get("currency")) if extracted_fields.get("currency") else None
-        receipt.extraction.extracted_json = extraction_payload
-        receipt.extraction.confidence_score = extraction_confidence
-        receipt.extraction.review_status = "needs_review"
-        receipt.extraction.updated_at = now
+        receipt.parser_result.provider = parser_result.provider
+        receipt.parser_result.raw_text = parser_result.raw_text
+        receipt.parser_result.provider_json = raw_json
+        receipt.parser_result.normalized_json = normalized_json
+        receipt.parser_result.suggested_category_id = (
+            int(category_suggestion["category_id"]) if category_suggestion and category_suggestion.get("category_id") else None
+        )
+        receipt.parser_result.suggested_description = suggested_description
+        receipt.parser_result.updated_at = now
 
 
 def _persist_session_results(
+    db: Session,
     job: ReceiptParseJob,
     processed_path: Path,
     text_output_path: Path | None,
-    parser_result: ReceiptParserResult,
+    parser_result: ProviderParserResult,
     extracted_fields: dict,
     *,
     preprocess_metadata: dict,
@@ -297,6 +340,12 @@ def _persist_session_results(
     session = job.session
     confidence = min(max(float(extracted_fields.get("confidence_score") or 0.0), 0.0), 1.0)
     extraction_confidence = float(extracted_fields.get("confidence_score") or confidence)
+    category_suggestion, default_wallet_id, suggested_description = _apply_shared_review_suggestions(
+        db,
+        owner_user_id=session.user_id,
+        extracted_fields=extracted_fields,
+    )
+
     session.ocr_provider = parser_result.provider
     session.ocr_raw_text = parser_result.raw_text
     session.ocr_confidence_score = Decimal(f"{confidence:.4f}")
@@ -309,16 +358,24 @@ def _persist_session_results(
         timings=timings,
     )
     session.merchant_name = extracted_fields.get("merchant_name")
-    session.transaction_date = _to_date(extracted_fields.get("transaction_date"))
+    transaction_date = extracted_fields.get("transaction_date")
+    session.transaction_date = datetime.fromisoformat(str(transaction_date)) if transaction_date else None
     session.total_amount = Decimal(str(extracted_fields["total_amount"])) if extracted_fields.get("total_amount") is not None else None
     session.tax_amount = Decimal(str(extracted_fields["tax_amount"])) if extracted_fields.get("tax_amount") is not None else None
     session.currency = str(extracted_fields.get("currency")) if extracted_fields.get("currency") else None
     extracted_json = dict(extracted_fields.get("extracted_json") or {})
+    extracted_json["confidence_score"] = extraction_confidence
     extracted_json["parse_debug"] = {
         "selected_path": "veryfi",
         "timings": timings,
         "provider": parser_result.provider,
     }
+    if category_suggestion:
+        extracted_json["suggested_category"] = category_suggestion
+    if default_wallet_id:
+        extracted_json["suggested_wallet_id"] = default_wallet_id
+    if suggested_description:
+        extracted_json["suggested_description"] = suggested_description
     session.extracted_json = extracted_json
     session.extraction_confidence_score = Decimal(f"{extraction_confidence:.4f}")
     session.review_status = "needs_review"
@@ -345,7 +402,7 @@ def _build_total_timings(
 
 def process_parse_job(db: Session, job_id: UUID) -> None:
     job = _load_parse_job(db, job_id)
-    source_path = Path(job.receipt.original_url)
+    source_path = Path(job.receipt.image_url)
     processed_dir = source_path.parent / "processed"
 
     try:
@@ -386,6 +443,7 @@ def process_parse_job(db: Session, job_id: UUID) -> None:
             },
         )
         _persist_receipt_results(
+            db,
             job,
             processed_path,
             text_output_path,
@@ -447,6 +505,7 @@ def process_session_parse_job(db: Session, job_id: UUID) -> None:
             },
         )
         _persist_session_results(
+            db,
             job,
             processed_path,
             text_output_path,

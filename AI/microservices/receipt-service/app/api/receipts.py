@@ -10,12 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.auth import AuthenticatedUser, get_current_user
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.receipt import (
-    Receipt,
-    ReceiptFeedback,
-    ReceiptParseSession,
-    compute_image_hash,
-)
+from app.models.receipt import Receipt, ReceiptFeedback, ReceiptParseSession, ReceiptParserResult, compute_image_hash
 from app.schemas.receipt import (
     ParseReceiptResponse,
     ReceiptConfirmRequest,
@@ -39,6 +34,7 @@ from app.services.receipt_queue import (
 )
 from app.services.receipt_storage import store_temp_upload
 from app.services.session_finalize import finalize_parse_session, utc_now
+from app.services.shared_finance_lookup_service import get_transaction_by_receipt_id, resolve_shared_user_id
 
 router = APIRouter(prefix="/receipts", tags=["receipts"])
 
@@ -47,16 +43,24 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-def _load_receipt(receipt_id: str, db: Session, user_id: UUID | None = None) -> Receipt:
+def _resolve_current_shared_user_id(db: Session, current_user: AuthenticatedUser) -> int:
+    return resolve_shared_user_id(db, email=current_user.email)
+
+
+def _load_receipt(receipt_id: str, db: Session, user_id: int | None = None) -> Receipt:
+    try:
+        receipt_key = int(receipt_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Receipt not found") from exc
+
     receipt = (
         db.query(Receipt)
         .options(
-            joinedload(Receipt.ocr_result),
-            joinedload(Receipt.extraction),
+            joinedload(Receipt.parser_result),
             joinedload(Receipt.feedback_items),
             joinedload(Receipt.jobs),
         )
-        .filter(Receipt.id == UUID(receipt_id))
+        .filter(Receipt.id == receipt_key)
         .first()
     )
     if receipt is None:
@@ -66,11 +70,15 @@ def _load_receipt(receipt_id: str, db: Session, user_id: UUID | None = None) -> 
     return receipt
 
 
-def _load_session(session_id: str, db: Session, user_id: UUID | None = None) -> ReceiptParseSession:
+def _load_session(session_id: str, db: Session, user_id: int | None = None) -> ReceiptParseSession:
+    try:
+        session_key = UUID(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Receipt parse session not found") from exc
     session = (
         db.query(ReceiptParseSession)
         .options(joinedload(ReceiptParseSession.jobs), joinedload(ReceiptParseSession.confirmed_receipt))
-        .filter(ReceiptParseSession.id == UUID(session_id))
+        .filter(ReceiptParseSession.id == session_key)
         .first()
     )
     if session is None:
@@ -80,11 +88,29 @@ def _load_session(session_id: str, db: Session, user_id: UUID | None = None) -> 
     return session
 
 
+def _coerce_transaction_date(value: object) -> datetime | None:
+    if value in (None, ""):
+        return None
+    text_value = str(value)
+    if len(text_value) == 10:
+        return datetime.fromisoformat(f"{text_value}T12:00:00")
+    return datetime.fromisoformat(text_value)
+
+
 def _merge_corrected_extraction_payload(original_data: dict | None, corrected_fields: dict, *, status: str) -> dict:
     payload = dict(original_data or {})
     fields = dict(payload.get("fields") or {})
     fields.update(corrected_fields)
     payload["fields"] = fields
+
+    review_defaults = dict(payload.get("review_defaults") or {})
+    if "merchant_name" in corrected_fields:
+        review_defaults["merchant_name"] = corrected_fields.get("merchant_name")
+    if "total_amount" in corrected_fields:
+        review_defaults["amount"] = corrected_fields.get("total_amount")
+    if "transaction_date" in corrected_fields:
+        review_defaults["transaction_time"] = corrected_fields.get("transaction_date")
+    payload["review_defaults"] = review_defaults
 
     needs_review_fields = set(payload.get("needs_review_fields") or [])
     for field_name, field_value in corrected_fields.items():
@@ -102,61 +128,118 @@ def _merge_corrected_extraction_payload(original_data: dict | None, corrected_fi
     return payload
 
 
-def _build_receipt_artifact_url(receipt_id: UUID | str, artifact: str) -> str:
+def _build_receipt_artifact_url(receipt_id: int | str, artifact: str) -> str:
     return f"/receipts/{receipt_id}/ocr-artifacts/{artifact}"
 
 
-def _build_session_artifact_url(session_id: UUID | str, artifact: str) -> str:
+def _build_session_artifact_url(session_id, artifact: str) -> str:
     return f"/receipts/sessions/{session_id}/ocr-artifacts/{artifact}"
+
+
+def _build_ocr_debug(raw_json: dict, *, raw_text: str | None, provider: str | None, confidence_score: float | None, receipt_id, session: bool = False):
+    artifact_builder = _build_session_artifact_url if session else _build_receipt_artifact_url
+    return ReceiptOcrDebugResponse(
+        raw_text=raw_text,
+        lines=[str(line) for line in raw_json.get("lines", [])] if isinstance(raw_json.get("lines"), list) else [],
+        provider=provider,
+        confidence_score=confidence_score,
+        display_mode=str(raw_json.get("display_mode")) if raw_json.get("display_mode") else None,
+        boxed_image_url=artifact_builder(receipt_id, "image") if raw_json.get("boxed_image_path") else None,
+        layout_image_url=artifact_builder(receipt_id, "layout") if raw_json.get("layout_image_path") else None,
+        text_file_url=artifact_builder(receipt_id, "text") if raw_json.get("ocr_text_file_path") else None,
+        device=str(raw_json.get("device")) if raw_json.get("device") else None,
+        ocr_language=str(raw_json.get("ocr_language")) if raw_json.get("ocr_language") else None,
+        fallback_used=bool(raw_json.get("fallback_used")) if raw_json.get("fallback_used") is not None else None,
+        low_quality_ratio=float(raw_json.get("low_quality_ratio")) if isinstance(raw_json.get("low_quality_ratio"), (float, int)) else None,
+        profile=str(raw_json.get("profile")) if raw_json.get("profile") else None,
+        selected_path=str(raw_json.get("selected_path")) if raw_json.get("selected_path") else None,
+        timings=raw_json.get("timings") if isinstance(raw_json.get("timings"), dict) else None,
+        preprocess=raw_json.get("preprocess") if isinstance(raw_json.get("preprocess"), dict) else None,
+        line_count=int(raw_json.get("line_count")) if isinstance(raw_json.get("line_count"), int) else None,
+        detected_box_count=int(raw_json.get("detected_box_count")) if isinstance(raw_json.get("detected_box_count"), int) else None,
+        short_line_ratio=float(raw_json.get("short_line_ratio")) if isinstance(raw_json.get("short_line_ratio"), (float, int)) else None,
+        runtime=raw_json.get("runtime") if isinstance(raw_json.get("runtime"), dict) else None,
+        engine_config=raw_json.get("engine_config") if isinstance(raw_json.get("engine_config"), dict) else None,
+        ordering=raw_json.get("ordering") if isinstance(raw_json.get("ordering"), dict) else None,
+        layout=raw_json.get("layout") if isinstance(raw_json.get("layout"), dict) else None,
+        structured_json=raw_json.get("structured_json") if isinstance(raw_json.get("structured_json"), dict) else None,
+        provider_document_id=raw_json.get("provider_document_id"),
+        provider_payload_summary=raw_json.get("provider_payload_summary") if isinstance(raw_json.get("provider_payload_summary"), dict) else None,
+        provider_payload=raw_json.get("provider_payload") if isinstance(raw_json.get("provider_payload"), dict) else None,
+    )
+
+
+def _build_receipt_extraction(parser_result: ReceiptParserResult | None) -> ReceiptExtractionResponse | None:
+    if parser_result is None:
+        return None
+    normalized = parser_result.normalized_json if isinstance(parser_result.normalized_json, dict) else {}
+    fields = normalized.get("fields") if isinstance(normalized.get("fields"), dict) else {}
+    return ReceiptExtractionResponse(
+        id=parser_result.id,
+        receipt_id=parser_result.receipt_id,
+        merchant_name=fields.get("merchant_name"),
+        transaction_date=_coerce_transaction_date(fields.get("transaction_date")).date() if fields.get("transaction_date") else None,
+        total_amount=float(fields["total_amount"]) if fields.get("total_amount") is not None else None,
+        tax_amount=float(fields["tax_amount"]) if fields.get("tax_amount") is not None else None,
+        currency=fields.get("currency"),
+        extracted_json=normalized,
+        confidence_score=float(normalized.get("confidence_score")) if normalized.get("confidence_score") is not None else None,
+        review_status=str(normalized.get("review_status") or "needs_review"),
+        created_at=parser_result.created_at,
+        updated_at=parser_result.updated_at,
+    )
 
 
 def _serialize_receipt(receipt: Receipt, *, finance_transaction_id: str | None = None, finance_warning: str | None = None) -> ReceiptWorkflowResponse:
     latest_feedback = ReceiptFeedbackResponse.model_validate(receipt.feedback_items[0]) if receipt.feedback_items else None
-    raw_json = receipt.ocr_result.raw_json if receipt.ocr_result is not None and isinstance(receipt.ocr_result.raw_json, dict) else {}
+    parser_result = receipt.parser_result
+    provider_json = parser_result.provider_json if parser_result is not None and isinstance(parser_result.provider_json, dict) else {}
+    ocr_result = None
     ocr_debug = None
-    if receipt.ocr_result is not None:
-        ocr_debug = ReceiptOcrDebugResponse(
-            raw_text=receipt.ocr_result.raw_text,
-            lines=[str(line) for line in raw_json.get("lines", [])] if isinstance(raw_json.get("lines"), list) else [],
-            provider=receipt.ocr_result.ocr_provider,
-            confidence_score=float(receipt.ocr_result.confidence_score) if receipt.ocr_result.confidence_score is not None else None,
-            display_mode=str(raw_json.get("display_mode")) if raw_json.get("display_mode") else None,
-            boxed_image_url=_build_receipt_artifact_url(receipt.id, "image") if raw_json.get("boxed_image_path") else None,
-            layout_image_url=_build_receipt_artifact_url(receipt.id, "layout") if raw_json.get("layout_image_path") else None,
-            text_file_url=_build_receipt_artifact_url(receipt.id, "text") if raw_json.get("ocr_text_file_path") else None,
-            device=str(raw_json.get("device")) if raw_json.get("device") else None,
-            ocr_language=str(raw_json.get("ocr_language")) if raw_json.get("ocr_language") else None,
-            fallback_used=bool(raw_json.get("fallback_used")) if raw_json.get("fallback_used") is not None else None,
-            low_quality_ratio=float(raw_json.get("low_quality_ratio")) if isinstance(raw_json.get("low_quality_ratio"), (float, int)) else None,
-            profile=str(raw_json.get("profile")) if raw_json.get("profile") else None,
-            selected_path=str(raw_json.get("selected_path")) if raw_json.get("selected_path") else None,
-            timings=raw_json.get("timings") if isinstance(raw_json.get("timings"), dict) else None,
-            preprocess=raw_json.get("preprocess") if isinstance(raw_json.get("preprocess"), dict) else None,
-            line_count=int(raw_json.get("line_count")) if isinstance(raw_json.get("line_count"), int) else None,
-            detected_box_count=int(raw_json.get("detected_box_count")) if isinstance(raw_json.get("detected_box_count"), int) else None,
-            short_line_ratio=float(raw_json.get("short_line_ratio")) if isinstance(raw_json.get("short_line_ratio"), (float, int)) else None,
-            runtime=raw_json.get("runtime") if isinstance(raw_json.get("runtime"), dict) else None,
-            engine_config=raw_json.get("engine_config") if isinstance(raw_json.get("engine_config"), dict) else None,
-            ordering=raw_json.get("ordering") if isinstance(raw_json.get("ordering"), dict) else None,
-            layout=raw_json.get("layout") if isinstance(raw_json.get("layout"), dict) else None,
-            structured_json=raw_json.get("structured_json") if isinstance(raw_json.get("structured_json"), dict) else None,
-            provider_document_id=raw_json.get("provider_document_id"),
-            provider_payload_summary=raw_json.get("provider_payload_summary") if isinstance(raw_json.get("provider_payload_summary"), dict) else None,
-            provider_payload=raw_json.get("provider_payload") if isinstance(raw_json.get("provider_payload"), dict) else None,
+    if parser_result is not None:
+        ocr_result = ReceiptOcrResultResponse(
+            id=parser_result.id,
+            receipt_id=receipt.id,
+            ocr_provider=parser_result.provider,
+            raw_text=parser_result.raw_text,
+            raw_json=parser_result.provider_json,
+            confidence_score=float(provider_json.get("structured_json", {}).get("confidence_score")) if isinstance(provider_json.get("structured_json"), dict) and provider_json.get("structured_json", {}).get("confidence_score") is not None else None,
+            created_at=parser_result.created_at,
+        )
+        ocr_debug = _build_ocr_debug(
+            provider_json,
+            raw_text=parser_result.raw_text,
+            provider=parser_result.provider,
+            confidence_score=ocr_result.confidence_score,
+            receipt_id=receipt.id,
         )
 
+    linked_transaction = get_transaction_by_receipt_id(receipt._sa_instance_state.session, receipt_id=receipt.id) if receipt._sa_instance_state.session else None
     return ReceiptWorkflowResponse(
-        receipt=ReceiptMetadataResponse.model_validate(receipt),
+        receipt=ReceiptMetadataResponse(
+            id=receipt.id,
+            user_id=receipt.user_id,
+            file_name=receipt.file_name,
+            original_url=receipt.image_url,
+            mime_type=receipt.mime_type,
+            file_size=int(receipt.file_size) if receipt.file_size is not None else None,
+            image_hash=receipt.image_hash,
+            status=receipt.status,
+            uploaded_at=receipt.uploaded_at,
+            processed_at=receipt.processed_at,
+            created_at=receipt.created_at,
+            updated_at=receipt.updated_at,
+        ),
         session=None,
         confirmed_receipt=None,
-        ocr_result=ReceiptOcrResultResponse.model_validate(receipt.ocr_result) if receipt.ocr_result is not None else None,
+        ocr_result=ocr_result,
         ocr_debug=ocr_debug,
-        extraction_result=ReceiptExtractionResponse.model_validate(receipt.extraction) if receipt.extraction is not None else None,
+        extraction_result=_build_receipt_extraction(parser_result),
         latest_feedback=latest_feedback,
         jobs=[ReceiptJobResponse.model_validate(job) for job in receipt.jobs],
         session_jobs=[],
         active_job=ReceiptJobResponse.model_validate(get_active_parse_job(receipt)) if get_active_parse_job(receipt) is not None else None,
-        finance_transaction_id=finance_transaction_id,
+        finance_transaction_id=finance_transaction_id or (linked_transaction["id"] if linked_transaction else None),
         finance_warning=finance_warning,
     )
 
@@ -165,23 +248,24 @@ def _serialize_session(session: ReceiptParseSession, *, finance_warning: str | N
     ocr_debug_json = session.ocr_debug_json if isinstance(session.ocr_debug_json, dict) else {}
     ocr_result = None
     if session.ocr_raw_text is not None or session.ocr_debug_json is not None:
-            ocr_result = ReceiptOcrResultResponse(
-                id=session.id,
-                receipt_id=session.id,
-                ocr_provider=session.ocr_provider or "veryfi",
-                raw_text=session.ocr_raw_text,
-                raw_json=session.ocr_debug_json,
-                confidence_score=float(session.ocr_confidence_score) if session.ocr_confidence_score is not None else None,
+        ocr_result = ReceiptOcrResultResponse(
+            id=0,
+            receipt_id=session.confirmed_receipt_id or 0,
+            ocr_provider=session.ocr_provider or "veryfi",
+            raw_text=session.ocr_raw_text,
+            raw_json=session.ocr_debug_json,
+            confidence_score=float(session.ocr_confidence_score) if session.ocr_confidence_score is not None else None,
             created_at=session.created_at,
         )
 
     extraction_result = None
     if session.extracted_json is not None or session.merchant_name is not None:
+        fields = dict((session.extracted_json or {}).get("fields") or {})
         extraction_result = ReceiptExtractionResponse(
-            id=session.id,
-            receipt_id=session.id,
+            id=0,
+            receipt_id=session.confirmed_receipt_id or 0,
             merchant_name=session.merchant_name,
-            transaction_date=session.transaction_date,
+            transaction_date=_coerce_transaction_date(fields.get("transaction_date")).date() if fields.get("transaction_date") else None,
             total_amount=float(session.total_amount) if session.total_amount is not None else None,
             tax_amount=float(session.tax_amount) if session.tax_amount is not None else None,
             currency=session.currency,
@@ -199,40 +283,36 @@ def _serialize_session(session: ReceiptParseSession, *, finance_warning: str | N
             feedback_note=session.reviewer_note,
         )
 
-    confirmed_receipt = ReceiptMetadataResponse.model_validate(session.confirmed_receipt) if session.confirmed_receipt is not None else None
+    confirmed_receipt = (
+        ReceiptMetadataResponse(
+            id=session.confirmed_receipt.id,
+            user_id=session.confirmed_receipt.user_id,
+            file_name=session.confirmed_receipt.file_name,
+            original_url=session.confirmed_receipt.image_url,
+            mime_type=session.confirmed_receipt.mime_type,
+            file_size=int(session.confirmed_receipt.file_size) if session.confirmed_receipt.file_size is not None else None,
+            image_hash=session.confirmed_receipt.image_hash,
+            status=session.confirmed_receipt.status,
+            uploaded_at=session.confirmed_receipt.uploaded_at,
+            processed_at=session.confirmed_receipt.processed_at,
+            created_at=session.confirmed_receipt.created_at,
+            updated_at=session.confirmed_receipt.updated_at,
+        )
+        if session.confirmed_receipt is not None
+        else None
+    )
     return ReceiptWorkflowResponse(
         receipt=None,
         session=ReceiptParseSessionMetadataResponse.model_validate(session),
         confirmed_receipt=confirmed_receipt,
         ocr_result=ocr_result,
-        ocr_debug=ReceiptOcrDebugResponse(
+        ocr_debug=_build_ocr_debug(
+            ocr_debug_json,
             raw_text=session.ocr_raw_text,
-            lines=[str(line) for line in ocr_debug_json.get("lines", [])] if isinstance(ocr_debug_json.get("lines"), list) else [],
             provider=session.ocr_provider,
             confidence_score=float(session.ocr_confidence_score) if session.ocr_confidence_score is not None else None,
-            display_mode=str(ocr_debug_json.get("display_mode")) if ocr_debug_json.get("display_mode") else None,
-            boxed_image_url=_build_session_artifact_url(session.id, "image") if ocr_debug_json.get("boxed_image_path") else None,
-            layout_image_url=_build_session_artifact_url(session.id, "layout") if ocr_debug_json.get("layout_image_path") else None,
-            text_file_url=_build_session_artifact_url(session.id, "text") if ocr_debug_json.get("ocr_text_file_path") else None,
-            device=str(ocr_debug_json.get("device")) if ocr_debug_json.get("device") else None,
-            ocr_language=str(ocr_debug_json.get("ocr_language")) if ocr_debug_json.get("ocr_language") else None,
-            fallback_used=bool(ocr_debug_json.get("fallback_used")) if ocr_debug_json.get("fallback_used") is not None else None,
-            low_quality_ratio=float(ocr_debug_json.get("low_quality_ratio")) if isinstance(ocr_debug_json.get("low_quality_ratio"), (float, int)) else None,
-            profile=str(ocr_debug_json.get("profile")) if ocr_debug_json.get("profile") else None,
-            selected_path=str(ocr_debug_json.get("selected_path")) if ocr_debug_json.get("selected_path") else None,
-            timings=ocr_debug_json.get("timings") if isinstance(ocr_debug_json.get("timings"), dict) else None,
-            preprocess=ocr_debug_json.get("preprocess") if isinstance(ocr_debug_json.get("preprocess"), dict) else None,
-            line_count=int(ocr_debug_json.get("line_count")) if isinstance(ocr_debug_json.get("line_count"), int) else None,
-            detected_box_count=int(ocr_debug_json.get("detected_box_count")) if isinstance(ocr_debug_json.get("detected_box_count"), int) else None,
-            short_line_ratio=float(ocr_debug_json.get("short_line_ratio")) if isinstance(ocr_debug_json.get("short_line_ratio"), (float, int)) else None,
-            runtime=ocr_debug_json.get("runtime") if isinstance(ocr_debug_json.get("runtime"), dict) else None,
-            engine_config=ocr_debug_json.get("engine_config") if isinstance(ocr_debug_json.get("engine_config"), dict) else None,
-            ordering=ocr_debug_json.get("ordering") if isinstance(ocr_debug_json.get("ordering"), dict) else None,
-            layout=ocr_debug_json.get("layout") if isinstance(ocr_debug_json.get("layout"), dict) else None,
-            structured_json=ocr_debug_json.get("structured_json") if isinstance(ocr_debug_json.get("structured_json"), dict) else None,
-            provider_document_id=ocr_debug_json.get("provider_document_id"),
-            provider_payload_summary=ocr_debug_json.get("provider_payload_summary") if isinstance(ocr_debug_json.get("provider_payload_summary"), dict) else None,
-            provider_payload=ocr_debug_json.get("provider_payload") if isinstance(ocr_debug_json.get("provider_payload"), dict) else None,
+            receipt_id=session.id,
+            session=True,
         ) if ocr_result is not None else None,
         extraction_result=extraction_result,
         latest_feedback=latest_feedback,
@@ -272,12 +352,13 @@ async def _upload_legacy_receipt(
     stored_file_name = f"{uuid4()}{extension}"
     destination = upload_dir / stored_file_name
     destination.write_bytes(file_bytes)
+    shared_user_id = _resolve_current_shared_user_id(db, current_user)
 
     timestamp = _now()
     receipt = Receipt(
-        user_id=current_user.user_id,
+        user_id=shared_user_id,
         file_name=file.filename or stored_file_name,
-        original_url=str(destination),
+        image_url=str(destination),
         mime_type=file.content_type,
         file_size=len(file_bytes),
         image_hash=compute_image_hash(file_bytes),
@@ -307,9 +388,10 @@ async def upload_receipt(
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
     stored_file_name, temp_url = store_temp_upload(file.filename, file_bytes)
     timestamp = utc_now()
+    shared_user_id = _resolve_current_shared_user_id(db, current_user)
 
     session = ReceiptParseSession(
-        user_id=current_user.user_id,
+        user_id=shared_user_id,
         file_name=file.filename or stored_file_name,
         temp_url=temp_url,
         mime_type=file.content_type,
@@ -333,7 +415,7 @@ def get_receipt(
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ReceiptWorkflowResponse:
-    return _serialize_receipt(_load_receipt(receipt_id, db, current_user.user_id))
+    return _serialize_receipt(_load_receipt(receipt_id, db, _resolve_current_shared_user_id(db, current_user)))
 
 
 @router.get("/{receipt_id}/ocr-artifacts/{artifact}")
@@ -345,8 +427,8 @@ def get_receipt_ocr_artifact(
 ) -> FileResponse:
     if artifact not in {"image", "layout", "text"}:
         raise HTTPException(status_code=404, detail="OCR artifact not found")
-    receipt = _load_receipt(receipt_id, db, current_user.user_id)
-    raw_json = receipt.ocr_result.raw_json if receipt.ocr_result is not None and isinstance(receipt.ocr_result.raw_json, dict) else {}
+    receipt = _load_receipt(receipt_id, db, _resolve_current_shared_user_id(db, current_user))
+    raw_json = receipt.parser_result.provider_json if receipt.parser_result is not None and isinstance(receipt.parser_result.provider_json, dict) else {}
     if artifact == "image":
         path_value = raw_json.get("boxed_image_path")
     elif artifact == "layout":
@@ -363,11 +445,11 @@ def parse_receipt(
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ParseReceiptResponse:
-    receipt = _load_receipt(receipt_id, db, current_user.user_id)
+    receipt = _load_receipt(receipt_id, db, _resolve_current_shared_user_id(db, current_user))
     enqueue_parse_job(db, receipt, force=force)
     db.commit()
-    refreshed = _load_receipt(receipt_id, db, current_user.user_id)
-    extraction_payload = refreshed.extraction.extracted_json if refreshed.extraction is not None else None
+    refreshed = _load_receipt(receipt_id, db, _resolve_current_shared_user_id(db, current_user))
+    extraction_payload = refreshed.parser_result.normalized_json if refreshed.parser_result is not None else None
     return ParseReceiptResponse(receipt=_serialize_receipt(refreshed), extracted_fields=extraction_payload)
 
 
@@ -378,57 +460,41 @@ def save_feedback(
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ReceiptWorkflowResponse:
-    receipt = _load_receipt(receipt_id, db, current_user.user_id)
+    shared_user_id = _resolve_current_shared_user_id(db, current_user)
+    receipt = _load_receipt(receipt_id, db, shared_user_id)
     now = _now()
-    if receipt.extraction is None:
+    if receipt.parser_result is None:
         raise HTTPException(status_code=400, detail="Receipt must be parsed before feedback")
 
-    original_data = receipt.extraction.extracted_json or {}
+    original_data = receipt.parser_result.normalized_json or {}
+    fields = dict(original_data.get("fields") or {})
     corrected_data = {
-        "merchant_name": payload.merchant_name if payload.merchant_name is not None else receipt.extraction.merchant_name,
+        "merchant_name": payload.merchant_name if payload.merchant_name is not None else fields.get("merchant_name"),
         "transaction_date": (
-            payload.transaction_date.date().isoformat()
+            payload.transaction_date.isoformat()
             if payload.transaction_date is not None
-            else (receipt.extraction.transaction_date.isoformat() if receipt.extraction.transaction_date else None)
+            else fields.get("transaction_date")
         ),
-        "total_amount": (
-            payload.total_amount
-            if payload.total_amount is not None
-            else (float(receipt.extraction.total_amount) if receipt.extraction.total_amount is not None else None)
-        ),
-        "tax_amount": (
-            payload.tax_amount
-            if payload.tax_amount is not None
-            else (float(receipt.extraction.tax_amount) if receipt.extraction.tax_amount is not None else None)
-        ),
-        "currency": payload.currency if payload.currency is not None else receipt.extraction.currency,
+        "total_amount": payload.total_amount if payload.total_amount is not None else fields.get("total_amount"),
+        "tax_amount": payload.tax_amount if payload.tax_amount is not None else fields.get("tax_amount"),
+        "currency": payload.currency if payload.currency is not None else fields.get("currency"),
     }
     db.add(
         ReceiptFeedback(
             receipt_id=receipt.id,
-            user_id=current_user.user_id,
+            user_id=shared_user_id,
             original_data_json=original_data,
             corrected_data_json=corrected_data,
             feedback_note=payload.feedback,
             created_at=now,
         )
     )
-    receipt.extraction.merchant_name = corrected_data["merchant_name"]
-    receipt.extraction.transaction_date = (
-        datetime.fromisoformat(corrected_data["transaction_date"]).date()
-        if corrected_data["transaction_date"]
-        else None
-    )
-    receipt.extraction.total_amount = Decimal(str(corrected_data["total_amount"])) if corrected_data["total_amount"] is not None else None
-    receipt.extraction.tax_amount = Decimal(str(corrected_data["tax_amount"])) if corrected_data["tax_amount"] is not None else None
-    receipt.extraction.currency = corrected_data["currency"]
-    receipt.extraction.extracted_json = _merge_corrected_extraction_payload(original_data, corrected_data, status="reviewed")
-    receipt.extraction.review_status = "reviewed"
-    receipt.extraction.updated_at = now
+    receipt.parser_result.normalized_json = _merge_corrected_extraction_payload(original_data, corrected_data, status="reviewed")
+    receipt.parser_result.updated_at = now
     receipt.status = "reviewed"
     receipt.updated_at = now
     db.commit()
-    return _serialize_receipt(_load_receipt(receipt_id, db, current_user.user_id))
+    return _serialize_receipt(_load_receipt(receipt_id, db, shared_user_id))
 
 
 @router.post("/{receipt_id}/confirm", response_model=ReceiptWorkflowResponse)
@@ -438,7 +504,8 @@ def confirm_receipt(
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ReceiptWorkflowResponse:
-    receipt = _load_receipt(receipt_id, db, current_user.user_id)
+    shared_user_id = _resolve_current_shared_user_id(db, current_user)
+    receipt = _load_receipt(receipt_id, db, shared_user_id)
     from app.services.finance_client import create_finance_transaction
 
     now = _now()
@@ -450,35 +517,39 @@ def confirm_receipt(
         description=payload.description,
         merchant_name=payload.merchant_name,
         transaction_date=payload.transaction_date,
+        receipt_id=receipt.id,
         access_token=current_user.token,
     )
     finance_transaction_id = finance_result["id"]
     finance_warning = finance_result["warning"]
 
-    if receipt.extraction is not None:
-        receipt.extraction.merchant_name = payload.merchant_name
-        receipt.extraction.transaction_date = payload.transaction_date.date()
-        receipt.extraction.total_amount = Decimal(str(payload.amount))
-        receipt.extraction.review_status = "confirmed"
+    if receipt.parser_result is not None:
         extracted_json = _merge_corrected_extraction_payload(
-            receipt.extraction.extracted_json,
+            receipt.parser_result.normalized_json,
             {
                 "merchant_name": payload.merchant_name,
-                "transaction_date": payload.transaction_date.date().isoformat(),
+                "transaction_date": payload.transaction_date.isoformat(),
                 "total_amount": payload.amount,
             },
             status="confirmed",
         )
+        review_defaults = dict(extracted_json.get("review_defaults") or {})
+        review_defaults["wallet_id"] = payload.wallet_id
+        review_defaults["category_id"] = payload.category_id
+        review_defaults["description"] = payload.description
+        extracted_json["review_defaults"] = review_defaults
         extracted_json["finance_transaction_id"] = finance_transaction_id
-        receipt.extraction.extracted_json = extracted_json
-        receipt.extraction.updated_at = now
+        receipt.parser_result.normalized_json = extracted_json
+        receipt.parser_result.suggested_category_id = int(payload.category_id) if payload.category_id else None
+        receipt.parser_result.suggested_description = payload.description
+        receipt.parser_result.updated_at = now
 
     receipt.status = "confirmed"
     receipt.processed_at = now
     receipt.updated_at = now
     db.commit()
     return _serialize_receipt(
-        _load_receipt(receipt_id, db, current_user.user_id),
+        _load_receipt(receipt_id, db, shared_user_id),
         finance_transaction_id=finance_transaction_id,
         finance_warning=finance_warning,
     )
@@ -490,7 +561,7 @@ def get_receipt_session(
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ReceiptWorkflowResponse:
-    return _serialize_session(_load_session(session_id, db, current_user.user_id))
+    return _serialize_session(_load_session(session_id, db, _resolve_current_shared_user_id(db, current_user)))
 
 
 @router.get("/sessions/{session_id}/ocr-artifacts/{artifact}")
@@ -502,7 +573,7 @@ def get_receipt_session_ocr_artifact(
 ) -> FileResponse:
     if artifact not in {"image", "layout", "text"}:
         raise HTTPException(status_code=404, detail="OCR artifact not found")
-    session = _load_session(session_id, db, current_user.user_id)
+    session = _load_session(session_id, db, _resolve_current_shared_user_id(db, current_user))
     raw_json = session.ocr_debug_json if isinstance(session.ocr_debug_json, dict) else {}
     if artifact == "image":
         path_value = raw_json.get("boxed_image_path")
@@ -520,10 +591,11 @@ def parse_receipt_session(
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ParseReceiptResponse:
-    session = _load_session(session_id, db, current_user.user_id)
+    shared_user_id = _resolve_current_shared_user_id(db, current_user)
+    session = _load_session(session_id, db, shared_user_id)
     enqueue_session_parse_job(db, session, force=force)
     db.commit()
-    refreshed = _load_session(session_id, db, current_user.user_id)
+    refreshed = _load_session(session_id, db, shared_user_id)
     return ParseReceiptResponse(receipt=_serialize_session(refreshed), extracted_fields=refreshed.extracted_json)
 
 
@@ -534,22 +606,21 @@ def save_session_feedback(
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ReceiptWorkflowResponse:
-    session = _load_session(session_id, db, current_user.user_id)
+    shared_user_id = _resolve_current_shared_user_id(db, current_user)
+    session = _load_session(session_id, db, shared_user_id)
     if session.extracted_json is None:
         raise HTTPException(status_code=400, detail="Receipt parse session must be parsed before feedback")
     corrected_data = {
         "merchant_name": payload.merchant_name if payload.merchant_name is not None else session.merchant_name,
-        "transaction_date": (
-            payload.transaction_date.date().isoformat()
-            if payload.transaction_date is not None
-            else (session.transaction_date.isoformat() if session.transaction_date else None)
+        "transaction_date": payload.transaction_date.isoformat() if payload.transaction_date is not None else (
+            session.transaction_date.isoformat() if session.transaction_date else None
         ),
         "total_amount": payload.total_amount if payload.total_amount is not None else (float(session.total_amount) if session.total_amount is not None else None),
         "tax_amount": payload.tax_amount if payload.tax_amount is not None else (float(session.tax_amount) if session.tax_amount is not None else None),
         "currency": payload.currency if payload.currency is not None else session.currency,
     }
     session.merchant_name = corrected_data["merchant_name"]
-    session.transaction_date = datetime.fromisoformat(corrected_data["transaction_date"]).date() if corrected_data["transaction_date"] else None
+    session.transaction_date = _coerce_transaction_date(corrected_data["transaction_date"])
     session.total_amount = Decimal(str(corrected_data["total_amount"])) if corrected_data["total_amount"] is not None else None
     session.tax_amount = Decimal(str(corrected_data["tax_amount"])) if corrected_data["tax_amount"] is not None else None
     session.currency = corrected_data["currency"]
@@ -560,7 +631,7 @@ def save_session_feedback(
     session.status = "reviewed"
     session.updated_at = _now()
     db.commit()
-    return _serialize_session(_load_session(session_id, db, current_user.user_id))
+    return _serialize_session(_load_session(session_id, db, shared_user_id))
 
 
 @router.post("/sessions/{session_id}/confirm", response_model=ReceiptWorkflowResponse)
@@ -570,10 +641,24 @@ def confirm_receipt_session(
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ReceiptWorkflowResponse:
-    session = _load_session(session_id, db, current_user.user_id)
+    shared_user_id = _resolve_current_shared_user_id(db, current_user)
+    session = _load_session(session_id, db, shared_user_id)
     session, receipt, finance_transaction_id, finance_warning = finalize_parse_session(db, session, payload, current_user)
-    refreshed = _load_session(str(session.id), db, current_user.user_id)
+    refreshed = _load_session(str(session.id), db, shared_user_id)
     serialized = _serialize_session(refreshed, finance_warning=finance_warning)
     serialized.finance_transaction_id = finance_transaction_id
-    serialized.confirmed_receipt = ReceiptMetadataResponse.model_validate(receipt)
+    serialized.confirmed_receipt = ReceiptMetadataResponse(
+        id=receipt.id,
+        user_id=receipt.user_id,
+        file_name=receipt.file_name,
+        original_url=receipt.image_url,
+        mime_type=receipt.mime_type,
+        file_size=int(receipt.file_size) if receipt.file_size is not None else None,
+        image_hash=receipt.image_hash,
+        status=receipt.status,
+        uploaded_at=receipt.uploaded_at,
+        processed_at=receipt.processed_at,
+        created_at=receipt.created_at,
+        updated_at=receipt.updated_at,
+    )
     return serialized

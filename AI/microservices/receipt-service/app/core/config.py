@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     veryfi_api_version: str = "v8"
     veryfi_timeout_seconds: int = 30
     veryfi_max_retries: int = 2
+    groq_api_key: str = ""
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_model: str = "openai/gpt-oss-20b"
+    groq_timeout_seconds: int = 20
+    groq_category_resolution_enabled: bool = False
     ocr_device: str = "auto"
     ocr_cpu_threads: int = 2
     ocr_primary_language: str = "vi"

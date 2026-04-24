@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsDateString, IsEnum, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export enum TransactionType {
   INCOME = 'INCOME',
@@ -7,10 +7,12 @@ export enum TransactionType {
 }
 
 export class CreateTransactionDto {
-  @IsUUID()
+  @Type(() => Number)
+  @IsInt()
   walletId!: string;
 
-  @IsUUID()
+  @Type(() => Number)
+  @IsInt()
   categoryId!: string;
 
   @IsEnum(TransactionType)
@@ -28,6 +30,15 @@ export class CreateTransactionDto {
   @IsOptional()
   @IsString()
   source?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  receiptId?: number;
+
+  @IsOptional()
+  @IsString()
+  sourceRefId?: string;
 
   @IsOptional()
   @IsString()

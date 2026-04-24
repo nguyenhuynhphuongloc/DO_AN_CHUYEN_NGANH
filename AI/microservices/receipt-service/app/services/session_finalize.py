@@ -13,14 +13,14 @@ from app.core.auth import AuthenticatedUser
 from app.core.config import settings
 from app.models.receipt import (
     Receipt,
-    ReceiptExtraction,
     ReceiptFeedback,
-    ReceiptOcrResult,
+    ReceiptParserResult,
     ReceiptParseSession,
     compute_image_hash,
 )
 from app.services.finance_client import create_finance_transaction
 from app.services.receipt_storage import delete_file_quietly, promote_temp_upload
+from app.services.shared_finance_lookup_service import resolve_shared_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,8 @@ def finalize_parse_session(
     payload,
     current_user: AuthenticatedUser,
 ) -> tuple[ReceiptParseSession, Receipt, str, str | None]:
-    if session.user_id != current_user.user_id:
+    shared_user_id = resolve_shared_user_id(db, email=current_user.email)
+    if session.user_id != shared_user_id:
         raise HTTPException(status_code=403, detail="Receipt parse session does not belong to the authenticated user")
     if session.status not in {"ready_for_review", "reviewed", "confirmed"}:
         raise HTTPException(status_code=400, detail="Receipt parse session must be parsed before confirmation")
@@ -80,9 +81,9 @@ def finalize_parse_session(
         image_hash = b""
 
     receipt = Receipt(
-        user_id=current_user.user_id,
+        user_id=shared_user_id,
         file_name=session.file_name,
-        original_url=permanent_url,
+        image_url=permanent_url,
         mime_type=session.mime_type,
         file_size=session.file_size,
         image_hash=compute_image_hash(image_hash) if image_hash else session.image_hash,
@@ -95,19 +96,9 @@ def finalize_parse_session(
     db.add(receipt)
     db.flush()
 
-    if session.ocr_raw_text or session.ocr_debug_json:
-        receipt.ocr_result = ReceiptOcrResult(
-            receipt_id=receipt.id,
-            ocr_provider=session.ocr_provider or "veryfi",
-            raw_text=session.ocr_raw_text,
-            raw_json=session.ocr_debug_json,
-            confidence_score=session.ocr_confidence_score,
-            created_at=now,
-        )
-
     corrected_fields = {
         "merchant_name": payload.merchant_name if payload.merchant_name is not None else session.merchant_name,
-        "transaction_date": payload.transaction_date.date().isoformat(),
+        "transaction_date": payload.transaction_date.isoformat(),
         "total_amount": payload.amount,
         "tax_amount": float(session.tax_amount) if session.tax_amount is not None else None,
         "currency": session.currency or "VND",
@@ -118,17 +109,19 @@ def finalize_parse_session(
         **corrected_fields,
     }
     extracted_json["review_status"] = "confirmed"
-
-    receipt.extraction = ReceiptExtraction(
+    receipt.parser_result = ReceiptParserResult(
         receipt_id=receipt.id,
-        merchant_name=corrected_fields["merchant_name"],
-        transaction_date=payload.transaction_date.date(),
-        total_amount=Decimal(str(payload.amount)),
-        tax_amount=Decimal(str(corrected_fields["tax_amount"])) if corrected_fields["tax_amount"] is not None else None,
-        currency=corrected_fields["currency"],
-        extracted_json=extracted_json,
-        confidence_score=session.extraction_confidence_score,
-        review_status="confirmed",
+        provider=session.ocr_provider or "veryfi",
+        raw_text=session.ocr_raw_text,
+        provider_json=session.ocr_debug_json,
+        normalized_json=extracted_json,
+        suggested_category_id=(
+            int(extracted_json["review_defaults"]["category_id"])
+            if isinstance(extracted_json.get("review_defaults"), dict)
+            and extracted_json["review_defaults"].get("category_id")
+            else None
+        ),
+        suggested_description=payload.description,
         created_at=now,
         updated_at=now,
     )
@@ -137,7 +130,7 @@ def finalize_parse_session(
         db.add(
             ReceiptFeedback(
                 receipt_id=receipt.id,
-                user_id=current_user.user_id,
+                user_id=shared_user_id,
                 original_data_json=session.extracted_json,
                 corrected_data_json=session.reviewer_feedback_json or corrected_fields,
                 feedback_note=session.reviewer_note,
@@ -153,13 +146,14 @@ def finalize_parse_session(
         description=payload.description,
         merchant_name=payload.merchant_name,
         transaction_date=payload.transaction_date,
+        receipt_id=receipt.id,
         access_token=current_user.token,
     )
     finance_transaction_id = finance_result["id"]
     finance_warning = finance_result["warning"]
 
-    receipt.extraction.extracted_json = {
-        **dict(receipt.extraction.extracted_json or {}),
+    receipt.parser_result.normalized_json = {
+        **dict(receipt.parser_result.normalized_json or {}),
         "finance_transaction_id": finance_transaction_id,
     }
     session.status = "confirmed"

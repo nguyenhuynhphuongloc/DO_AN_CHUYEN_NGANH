@@ -18,14 +18,15 @@ export type DashboardSummary = {
 };
 
 export type Wallet = {
-  id: string;
+  id: string | number;
   name: string;
   balance: number;
   currency: string;
+  isDefault?: boolean;
 };
 
 export type Category = {
-  id: string;
+  id: string | number;
   name: string;
   type: 'INCOME' | 'EXPENSE';
 };
@@ -37,13 +38,14 @@ export type Transaction = {
   type: 'INCOME' | 'EXPENSE';
   merchantName?: string;
   transactionDate: string;
+  receiptId?: string | number | null;
   wallet?: Wallet;
   category?: Category;
 };
 
 export type ReceiptMetadata = {
-  id: string;
-  user_id: string;
+  id: string | number;
+  user_id: string | number;
   file_name: string;
   original_url: string;
   mime_type: string | null;
@@ -57,8 +59,8 @@ export type ReceiptMetadata = {
 };
 
 export type ReceiptOcrResult = {
-  id: string;
-  receipt_id: string;
+  id: string | number;
+  receipt_id: string | number;
   ocr_provider: string;
   raw_text: string | null;
   raw_json: Record<string, unknown> | null;
@@ -97,8 +99,8 @@ export type ReceiptOcrDebug = {
 };
 
 export type ReceiptExtraction = {
-  id: string;
-  receipt_id: string;
+  id: string | number;
+  receipt_id: string | number;
   merchant_name: string | null;
   transaction_date: string | null;
   total_amount: number | null;
@@ -167,12 +169,22 @@ export type ReceiptStructuredExtraction = {
   extraction_notes?: string[] | null;
   parser_metadata?: Record<string, unknown> | null;
   provider_document_summary?: Record<string, unknown> | null;
+  review_defaults?: {
+    merchant_name?: string | null;
+    amount?: number | null;
+    transaction_time?: string | null;
+    description?: string | null;
+    wallet_id?: string | number | null;
+    category_id?: string | number | null;
+    category_name?: string | null;
+    category_reason?: string | null;
+  } | null;
 };
 
 export type ReceiptFeedback = {
   id: string;
-  receipt_id: string;
-  user_id: string;
+  receipt_id: string | number;
+  user_id: string | number;
   original_data_json: Record<string, unknown> | null;
   corrected_data_json: Record<string, unknown>;
   feedback_note: string | null;
@@ -181,7 +193,7 @@ export type ReceiptFeedback = {
 
 export type ReceiptJob = {
   id: string;
-  receipt_id: string;
+  receipt_id: string | number;
   job_type: string;
   status: string;
   error_message: string | null;
@@ -192,7 +204,7 @@ export type ReceiptJob = {
 
 export type ReceiptParseSessionMetadata = {
   id: string;
-  user_id: string;
+  user_id: string | number;
   file_name: string;
   temp_url: string;
   permanent_url: string | null;

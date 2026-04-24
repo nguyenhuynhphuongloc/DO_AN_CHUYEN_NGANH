@@ -14,6 +14,7 @@ def create_finance_transaction(
     description: str | None,
     merchant_name: str | None,
     transaction_date: datetime,
+    receipt_id: int | None,
     access_token: str,
 ) -> dict[str, str | None]:
     try:
@@ -31,6 +32,8 @@ def create_finance_transaction(
                 "merchantName": merchant_name,
                 "transactionDate": transaction_date.isoformat(),
                 "source": "receipt",
+                "receiptId": receipt_id,
+                "sourceRefId": str(receipt_id) if receipt_id is not None else None,
             },
             timeout=10,
         )

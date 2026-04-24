@@ -6,7 +6,7 @@ import time
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.models import Receipt, ReceiptExtraction, ReceiptFeedback, ReceiptJob, ReceiptOcrResult, ReceiptParseJob, ReceiptParseSession  # noqa: F401
+from app.models import Receipt, ReceiptFeedback, ReceiptJob, ReceiptParserResult, ReceiptParseJob, ReceiptParseSession  # noqa: F401
 from app.services.parse_pipeline import process_parse_job, process_session_parse_job
 from app.services.receipt_parser_service import get_receipt_parser_service
 from app.services.receipt_queue import claim_next_parse_job, claim_next_session_parse_job

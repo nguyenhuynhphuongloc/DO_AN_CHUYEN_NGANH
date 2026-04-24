@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from uuid import UUID
-
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
@@ -22,7 +20,7 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def get_latest_parse_job_query(receipt_id: UUID) -> Select[tuple[ReceiptJob]]:
+def get_latest_parse_job_query(receipt_id: int) -> Select[tuple[ReceiptJob]]:
     return (
         select(ReceiptJob)
         .where(ReceiptJob.receipt_id == receipt_id, ReceiptJob.job_type == PARSE_JOB_TYPE)
@@ -30,7 +28,7 @@ def get_latest_parse_job_query(receipt_id: UUID) -> Select[tuple[ReceiptJob]]:
     )
 
 
-def get_latest_parse_job(db: Session, receipt_id: UUID) -> ReceiptJob | None:
+def get_latest_parse_job(db: Session, receipt_id: int) -> ReceiptJob | None:
     return db.execute(get_latest_parse_job_query(receipt_id).limit(1)).scalar_one_or_none()
 
 
@@ -45,8 +43,7 @@ def has_completed_parse(receipt: Receipt, latest_job: ReceiptJob | None) -> bool
     return bool(
         latest_job is not None
         and latest_job.status == "ready_for_review"
-        and receipt.ocr_result is not None
-        and receipt.extraction is not None
+        and receipt.parser_result is not None
     )
 
 

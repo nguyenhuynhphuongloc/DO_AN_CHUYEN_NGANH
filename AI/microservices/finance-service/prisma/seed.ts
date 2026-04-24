@@ -10,6 +10,11 @@ async function main() {
     return;
   }
 
+  const parsedUserId = Number.parseInt(defaultUserId, 10);
+  if (!Number.isInteger(parsedUserId)) {
+    throw new Error('FINANCE_DEFAULT_USER_ID must be an integer that matches the shared finance database');
+  }
+
   const categories = [
     { name: 'Food', type: 'expense', icon: 'utensils' },
     { name: 'Transport', type: 'expense', icon: 'car' },
@@ -21,7 +26,7 @@ async function main() {
   for (const category of categories) {
     const existing = await prisma.category.findFirst({
       where: {
-        userId: defaultUserId,
+        userId: parsedUserId,
         name: category.name,
       },
     });
@@ -39,11 +44,11 @@ async function main() {
 
     await prisma.category.create({
       data: {
-        userId: defaultUserId,
+        userId: parsedUserId,
         name: category.name,
         type: category.type,
         icon: category.icon,
-        isSystem: true,
+        isDefault: true,
       },
     });
   }

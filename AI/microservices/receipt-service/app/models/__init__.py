@@ -1,9 +1,8 @@
 from app.models.receipt import (
     Receipt,
-    ReceiptExtraction,
     ReceiptFeedback,
     ReceiptJob,
-    ReceiptOcrResult,
+    ReceiptParserResult,
     ReceiptParseJob,
     ReceiptParseSession,
     compute_image_hash,
@@ -11,8 +10,7 @@ from app.models.receipt import (
 
 __all__ = [
     "Receipt",
-    "ReceiptOcrResult",
-    "ReceiptExtraction",
+    "ReceiptParserResult",
     "ReceiptFeedback",
     "ReceiptJob",
     "ReceiptParseSession",

@@ -42,6 +42,11 @@ class VeryfiNormalizerTests(unittest.TestCase):
         self.assertEqual(result["currency"], "USD")
         self.assertEqual(result["extracted_json"]["fields"]["payment_method"], "Visa ***1850")
         self.assertEqual(len(result["extracted_json"]["items"]), 2)
+        self.assertEqual(
+            result["extracted_json"]["description_text"],
+            "Ngay 15/08/2024 chi tai Walgreens so tien 29.53 USD thuoc nhom Personal Care",
+        )
+        self.assertEqual(result["extracted_json"]["review_defaults"]["description"], result["extracted_json"]["description_text"])
         self.assertNotIn("merchant_name", result["extracted_json"]["needs_review_fields"])
 
     def test_missing_critical_fields_are_marked_for_review(self) -> None:
