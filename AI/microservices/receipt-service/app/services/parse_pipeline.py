@@ -6,8 +6,6 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from uuid import UUID
-import cv2
-import numpy as np
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -20,87 +18,19 @@ from app.models.receipt import (
     ReceiptParseJob,
     ReceiptParseSession,
 )
-from app.services.extraction_service import extract_all
 from app.services.image_preprocess import preprocess_image_with_metadata
-from app.services.ocr_service import get_ocr_service
+from app.services.receipt_parser_normalizer import normalize_veryfi_document
+from app.services.receipt_parser_service import ReceiptParserResult, get_receipt_parser_service
 
 logger = logging.getLogger(__name__)
 
 
-def _write_ocr_artifacts(
-    *,
-    processed_path: Path,
-    ocr_payload: dict,
-    profile: str,
-) -> tuple[Path | None, Path, Path | None]:
+def _write_parser_artifacts(*, processed_path: Path, raw_text: str) -> tuple[Path | None, Path | None, Path | None]:
     artifacts_dir = processed_path.parent / "ocr_artifacts"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
-
-    image_output_path = artifacts_dir / f"{processed_path.stem}-boxes.png"
     text_output_path = artifacts_dir / f"{processed_path.stem}.txt"
-    layout_output_path = artifacts_dir / f"{processed_path.stem}-layout.png"
-
-    raw_text = str(ocr_payload.get("raw_text") or "")
-    text_output_path.write_text(raw_text, encoding="utf-8")
-
-    detected_boxes = list(ocr_payload.get("detected_boxes") or [])
-    image = cv2.imread(str(processed_path))
-    if image is None:
-        return None, text_output_path, None
-
-    ocr_image_path: Path | None = None
-    if detected_boxes:
-        ocr_canvas = image.copy()
-        for raw_box in detected_boxes:
-            if not isinstance(raw_box, list) or len(raw_box) < 4:
-                continue
-            points = []
-            for point in raw_box[:4]:
-                if not isinstance(point, (list, tuple)) or len(point) != 2:
-                    continue
-                points.append([int(round(float(point[0]))), int(round(float(point[1])))])
-            if len(points) != 4:
-                continue
-            box = cv2.convexHull(np.array(points, dtype="int32")).reshape((-1, 1, 2))
-            cv2.polylines(ocr_canvas, [box], isClosed=True, color=(0, 200, 255), thickness=2)
-
-        label = f"OCR boxes ({profile})"
-        cv2.putText(ocr_canvas, label, (16, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 200, 255), 2, cv2.LINE_AA)
-        if cv2.imwrite(str(image_output_path), ocr_canvas):
-            ocr_image_path = image_output_path
-
-    layout_payload = ocr_payload.get("layout")
-    layout_image_path: Path | None = None
-    layout_blocks = layout_payload.get("blocks") if isinstance(layout_payload, dict) else None
-    if isinstance(layout_blocks, list) and layout_blocks:
-        layout_canvas = image.copy()
-        palette = {
-            "header": (59, 130, 246),
-            "items": (16, 185, 129),
-            "totals": (245, 158, 11),
-            "footer": (168, 85, 247),
-            "payment_info": (236, 72, 153),
-            "metadata": (107, 114, 128),
-        }
-        for block in layout_blocks:
-            if not isinstance(block, dict):
-                continue
-            bbox = block.get("bbox")
-            if not isinstance(bbox, list) or len(bbox) != 4:
-                continue
-            label = str(block.get("label") or "unknown")
-            index = block.get("index")
-            color = palette.get(label, (239, 68, 68))
-            x1, y1, x2, y2 = [int(round(float(value))) for value in bbox]
-            cv2.rectangle(layout_canvas, (x1, y1), (x2, y2), color, 3)
-            caption = f"{index}. {label}" if index is not None else label
-            cv2.putText(layout_canvas, caption, (x1, max(y1 - 8, 20)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2, cv2.LINE_AA)
-
-        cv2.putText(layout_canvas, "Layout blocks", (16, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (30, 41, 59), 2, cv2.LINE_AA)
-        if cv2.imwrite(str(layout_output_path), layout_canvas):
-            layout_image_path = layout_output_path
-
-    return ocr_image_path, text_output_path, layout_image_path
+    text_output_path.write_text(raw_text or "", encoding="utf-8")
+    return None, text_output_path, None
 
 
 def _load_parse_job(db: Session, job_id: UUID) -> ReceiptJob:
@@ -178,214 +108,139 @@ def _to_date(value: object) -> date | None:
     return datetime.fromisoformat(str(value)).date()
 
 
-def _build_ocr_debug_json(
+def _build_parser_debug_json(
     processed_path: Path,
-    ocr_payload: dict,
+    parser_result: ReceiptParserResult,
+    extracted_fields: dict,
     preprocess_metadata: dict,
     *,
-    boxed_image_path: Path | None,
     text_output_path: Path | None,
-    layout_image_path: Path | None,
-    selected_path: str,
     timings: dict,
-    recovery_reasons: list[str],
 ) -> dict:
-    lines = list(ocr_payload.get("lines", []))
-    confidences = [float(value) for value in list(ocr_payload.get("confidences", []))]
+    raw_text = parser_result.raw_text or ""
+    lines = [line for line in raw_text.splitlines() if line.strip()]
     return {
+        "display_mode": "parser",
         "lines": lines,
-        "confidences": confidences,
         "processed_image_path": str(processed_path),
-        "boxed_image_path": str(boxed_image_path) if boxed_image_path is not None else None,
+        "boxed_image_path": None,
         "ocr_text_file_path": str(text_output_path) if text_output_path is not None else None,
-        "layout_image_path": str(layout_image_path) if layout_image_path is not None else None,
-        "device": ocr_payload.get("device"),
-        "ocr_language": ocr_payload.get("ocr_language"),
-        "fallback_used": ocr_payload.get("fallback_used"),
-        "low_quality_ratio": ocr_payload.get("low_quality_ratio"),
-        "line_count": ocr_payload.get("line_count"),
-        "detected_box_count": ocr_payload.get("detected_box_count"),
-        "short_line_ratio": ocr_payload.get("short_line_ratio"),
-        "raw_lines_before_postprocess": ocr_payload.get("raw_lines_before_postprocess"),
-        "postprocess": ocr_payload.get("postprocess"),
-        "runtime": ocr_payload.get("runtime"),
-        "engine_config": ocr_payload.get("engine_config"),
-        "ordering": ocr_payload.get("ordering"),
-        "layout": ocr_payload.get("layout"),
+        "layout_image_path": None,
+        "device": None,
+        "ocr_language": None,
+        "fallback_used": False,
+        "low_quality_ratio": None,
+        "line_count": len(lines),
+        "detected_box_count": None,
+        "short_line_ratio": None,
+        "runtime": parser_result.runtime,
+        "engine_config": {
+            "provider": parser_result.provider,
+            "api_version": settings.veryfi_api_version,
+            "timeout_seconds": settings.veryfi_timeout_seconds,
+            "max_retries": settings.veryfi_max_retries,
+        },
+        "ordering": None,
+        "layout": None,
         "preprocess": preprocess_metadata,
-        "profile": ocr_payload.get("profile"),
-        "selected_path": selected_path,
+        "profile": "veryfi",
+        "selected_path": "veryfi",
         "timings": timings,
-        "recovery_reasons": recovery_reasons,
+        "structured_json": extracted_fields.get("extracted_json"),
+        "provider_document_id": parser_result.document.get("id"),
+        "provider_payload_summary": {
+            "id": parser_result.document.get("id"),
+            "document_type": parser_result.document.get("document_type"),
+            "category": parser_result.document.get("category"),
+            "created_date": parser_result.document.get("created_date"),
+        },
+        "provider_payload": parser_result.document if settings.receipt_parser_debug_include_provider_payload else None,
     }
 
 
-def _run_attempt(
+def _prepare_processed_source(
     source_path: Path,
     processed_dir: Path,
     *,
     file_stem: str,
     profile: str,
-) -> tuple[Path, dict, dict, dict]:
+) -> tuple[Path, dict, float]:
+    if not settings.receipt_parser_preprocess_enabled:
+        return source_path, {"profile": "disabled", "output_size": None, "pipeline": []}, 0.0
+
     processed_path = processed_dir / f"{file_stem}-{profile}.png"
-
     preprocess_start = time.perf_counter()
-    _, preprocess_metadata = preprocess_image_with_metadata(str(source_path), str(processed_path), profile=profile)
-    preprocess_seconds = time.perf_counter() - preprocess_start
-
-    ocr_start = time.perf_counter()
-    ocr_payload = get_ocr_service().extract_text(str(processed_path), profile=profile, debug_tag=f"{file_stem}-{profile}")
-    ocr_seconds = time.perf_counter() - ocr_start
-
-    extraction_start = time.perf_counter()
-    extracted_fields = extract_all(
-        lines=list(ocr_payload.get("lines", [])),
-        raw_text=str(ocr_payload.get("raw_text", "")),
-        layout_blocks=((ocr_payload.get("layout") or {}).get("blocks") if isinstance(ocr_payload.get("layout"), dict) else None),
+    _, preprocess_metadata = preprocess_image_with_metadata(
+        str(source_path),
+        str(processed_path),
+        profile=settings.receipt_parser_preprocess_profile,
     )
-    extraction_seconds = time.perf_counter() - extraction_start
+    return processed_path, preprocess_metadata, time.perf_counter() - preprocess_start
 
-    timings = {
-        "preprocess_seconds": round(preprocess_seconds, 4),
-        "ocr_seconds": round(ocr_seconds, 4),
-        "extraction_seconds": round(extraction_seconds, 4),
-    }
+
+def _run_primary_parse(
+    processed_path: Path,
+    *,
+    debug_tag: str,
+) -> tuple[ReceiptParserResult, dict, float, float]:
+    parse_start = time.perf_counter()
+    parser_result = get_receipt_parser_service().parse_document(str(processed_path), external_id=debug_tag)
+    parse_seconds = time.perf_counter() - parse_start
+
+    normalize_start = time.perf_counter()
+    extracted_fields = normalize_veryfi_document(
+        parser_result.document,
+        raw_text=parser_result.raw_text,
+        runtime=parser_result.runtime,
+    )
+    normalize_seconds = time.perf_counter() - normalize_start
     logger.info(
-        "OCR attempt profile=%s device=%s det=%s rec=%s boxes=%s lines=%s image_size=%s timings=%s",
-        profile,
-        ocr_payload.get("device"),
-        (ocr_payload.get("runtime") or {}).get("text_detection_model_name"),
-        (ocr_payload.get("runtime") or {}).get("text_recognition_model_name"),
-        ocr_payload.get("detected_box_count"),
-        ocr_payload.get("line_count"),
-        preprocess_metadata.get("output_size"),
-        timings,
+        "Parser attempt provider=%s document_id=%s lines=%s image=%s parse_seconds=%.4f normalize_seconds=%.4f",
+        parser_result.provider,
+        parser_result.document.get("id"),
+        len([line for line in parser_result.raw_text.splitlines() if line.strip()]),
+        processed_path,
+        parse_seconds,
+        normalize_seconds,
     )
-    return processed_path, ocr_payload, extracted_fields, {**preprocess_metadata, "timings": timings}
-
-
-def _line_fragment_metrics(lines: list[str]) -> tuple[float, float]:
-    if not lines:
-        return 1.0, 1.0
-    fragmented = 0
-    short = 0
-    for line in lines:
-        normalized = line.strip()
-        alpha_count = sum(1 for char in normalized if char.isalpha())
-        if len(normalized) <= 4 or alpha_count <= 2:
-            short += 1
-        if len(normalized) <= 3 or alpha_count <= 1:
-            fragmented += 1
-    return fragmented / len(lines), short / len(lines)
-
-
-def _needs_recovery(
-    ocr_payload: dict,
-    extracted_fields: dict,
-    preprocess_metadata: dict,
-) -> tuple[bool, list[str]]:
-    reasons: list[str] = []
-    confidence = float(ocr_payload.get("confidence") or 0.0)
-    low_quality_ratio = float(ocr_payload.get("low_quality_ratio") or 0.0)
-    raw_text = str(ocr_payload.get("raw_text") or "")
-    merchant_name = extracted_fields.get("merchant_name")
-    transaction_date = extracted_fields.get("transaction_date")
-    total_amount = extracted_fields.get("total_amount")
-    line_count = int(ocr_payload.get("line_count") or 0)
-    lines = list(ocr_payload.get("lines", []))
-    fragmented_ratio, short_line_ratio = _line_fragment_metrics(lines)
-    postprocess = dict(ocr_payload.get("postprocess") or {})
-    extracted_json = dict(extracted_fields.get("extracted_json") or {})
-    field_confidence = dict(extracted_json.get("field_confidence") or {})
-    merchant_confidence = field_confidence.get("merchant_name")
-    header_lines = list((extracted_json.get("zones") or {}).get("header") or [])
-    header_fragmented_ratio, header_short_ratio = _line_fragment_metrics(header_lines)
-    corruption_signal_score = low_quality_ratio + float(postprocess.get("postprocess_low_quality_ratio") or 0.0)
-
-    if confidence < settings.ocr_fast_confidence_threshold:
-        reasons.append("low_confidence")
-    if low_quality_ratio >= settings.ocr_fast_low_quality_threshold:
-        reasons.append("corrupted_text_ratio")
-    if corruption_signal_score >= settings.ocr_fast_max_corruption_signal_score:
-        reasons.append("strong_vietnamese_corruption")
-    short_text = len(raw_text.strip()) < settings.ocr_fast_min_text_length
-    if short_text:
-        reasons.append("short_ocr_output")
-    if line_count < settings.ocr_fast_min_detected_lines and (total_amount in (None, "") or short_text or confidence < settings.ocr_fast_confidence_threshold):
-        reasons.append("too_few_detected_lines")
-    if fragmented_ratio >= settings.ocr_fast_max_fragmented_line_ratio:
-        reasons.append("fragmented_line_output")
-    if header_lines and header_short_ratio >= settings.ocr_fast_max_short_header_ratio:
-        reasons.append("fragmented_header_lines")
-    if header_lines and header_fragmented_ratio >= settings.ocr_fast_max_fragmented_line_ratio:
-        reasons.append("weak_header_quality")
-    if short_line_ratio >= settings.ocr_fast_max_short_header_ratio and line_count >= settings.ocr_fast_min_detected_lines:
-        reasons.append("excessive_short_lines")
-    if total_amount in (None, ""):
-        reasons.append("missing_total_amount")
-    merchant_is_weak = merchant_confidence is None or float(merchant_confidence) < settings.ocr_fast_merchant_confidence_threshold
-    if merchant_is_weak and (
-        total_amount in (None, "")
-        or low_quality_ratio >= settings.ocr_fast_low_quality_threshold
-        or fragmented_ratio >= settings.ocr_fast_max_fragmented_line_ratio
-        or short_text
-    ):
-        reasons.append("weak_merchant_candidate")
-    if not merchant_name and not transaction_date:
-        reasons.append("missing_critical_context")
-    if preprocess_metadata.get("rotated_90") and (
-        total_amount in (None, "")
-        or confidence < settings.ocr_fast_confidence_threshold
-        or fragmented_ratio >= settings.ocr_fast_max_fragmented_line_ratio
-    ):
-        reasons.append("orientation_corrected")
-    if abs(float(preprocess_metadata.get("deskew_angle") or 0.0)) >= 1.5 and total_amount in (None, ""):
-        reasons.append("deskew_needed")
-    return bool(reasons), sorted(set(reasons))
+    return parser_result, extracted_fields, parse_seconds, normalize_seconds
 
 
 def _persist_receipt_results(
     job: ReceiptJob,
     processed_path: Path,
-    boxed_image_path: Path | None,
     text_output_path: Path | None,
-    layout_image_path: Path | None,
-    ocr_payload: dict,
+    parser_result: ReceiptParserResult,
     extracted_fields: dict,
     *,
     preprocess_metadata: dict,
     timings: dict,
-    selected_path: str,
-    recovery_reasons: list[str],
 ) -> None:
     now = _job_now(job)
     receipt = job.receipt
-    raw_text = str(ocr_payload.get("raw_text", ""))
-    confidence = min(max(float(ocr_payload.get("confidence", 0.0)), 0.0), 1.0)
+    raw_text = parser_result.raw_text
+    confidence = min(max(float(extracted_fields.get("confidence_score") or 0.0), 0.0), 1.0)
     confidence_decimal = Decimal(f"{confidence:.4f}")
-    raw_json = _build_ocr_debug_json(
+    raw_json = _build_parser_debug_json(
         processed_path,
-        ocr_payload,
+        parser_result,
+        extracted_fields,
         preprocess_metadata,
-        boxed_image_path=boxed_image_path,
         text_output_path=text_output_path,
-        layout_image_path=layout_image_path,
-        selected_path=selected_path,
         timings=timings,
-        recovery_reasons=recovery_reasons,
     )
 
     if receipt.ocr_result is None:
         receipt.ocr_result = ReceiptOcrResult(
             receipt_id=receipt.id,
-            ocr_provider=str(ocr_payload.get("provider", "paddleocr")),
+            ocr_provider=parser_result.provider,
             raw_text=raw_text,
             raw_json=raw_json,
             confidence_score=confidence_decimal,
             created_at=now,
         )
     else:
-        receipt.ocr_result.ocr_provider = str(ocr_payload.get("provider", "paddleocr"))
+        receipt.ocr_result.ocr_provider = parser_result.provider
         receipt.ocr_result.raw_text = raw_text
         receipt.ocr_result.raw_json = raw_json
         receipt.ocr_result.confidence_score = confidence_decimal
@@ -396,9 +251,9 @@ def _persist_receipt_results(
     tax_amount = Decimal(str(extracted_fields["tax_amount"])) if extracted_fields.get("tax_amount") is not None else None
     extraction_payload = extracted_fields.get("extracted_json") or {}
     extraction_payload["parse_debug"] = {
-        "selected_path": selected_path,
+        "selected_path": "veryfi",
         "timings": timings,
-        "recovery_reasons": recovery_reasons,
+        "provider": parser_result.provider,
     }
     extraction_confidence = Decimal(f"{float(extracted_fields.get('confidence_score') or confidence):.4f}")
 
@@ -431,34 +286,27 @@ def _persist_receipt_results(
 def _persist_session_results(
     job: ReceiptParseJob,
     processed_path: Path,
-    boxed_image_path: Path | None,
     text_output_path: Path | None,
-    layout_image_path: Path | None,
-    ocr_payload: dict,
+    parser_result: ReceiptParserResult,
     extracted_fields: dict,
     *,
     preprocess_metadata: dict,
     timings: dict,
-    selected_path: str,
-    recovery_reasons: list[str],
 ) -> None:
     now = _job_now(job)
     session = job.session
-    confidence = min(max(float(ocr_payload.get("confidence", 0.0)), 0.0), 1.0)
+    confidence = min(max(float(extracted_fields.get("confidence_score") or 0.0), 0.0), 1.0)
     extraction_confidence = float(extracted_fields.get("confidence_score") or confidence)
-    session.ocr_provider = str(ocr_payload.get("provider", "paddleocr"))
-    session.ocr_raw_text = str(ocr_payload.get("raw_text", ""))
+    session.ocr_provider = parser_result.provider
+    session.ocr_raw_text = parser_result.raw_text
     session.ocr_confidence_score = Decimal(f"{confidence:.4f}")
-    session.ocr_debug_json = _build_ocr_debug_json(
+    session.ocr_debug_json = _build_parser_debug_json(
         processed_path,
-        ocr_payload,
+        parser_result,
+        extracted_fields,
         preprocess_metadata,
-        boxed_image_path=boxed_image_path,
         text_output_path=text_output_path,
-        layout_image_path=layout_image_path,
-        selected_path=selected_path,
         timings=timings,
-        recovery_reasons=recovery_reasons,
     )
     session.merchant_name = extracted_fields.get("merchant_name")
     session.transaction_date = _to_date(extracted_fields.get("transaction_date"))
@@ -467,9 +315,9 @@ def _persist_session_results(
     session.currency = str(extracted_fields.get("currency")) if extracted_fields.get("currency") else None
     extracted_json = dict(extracted_fields.get("extracted_json") or {})
     extracted_json["parse_debug"] = {
-        "selected_path": selected_path,
+        "selected_path": "veryfi",
         "timings": timings,
-        "recovery_reasons": recovery_reasons,
+        "provider": parser_result.provider,
     }
     session.extracted_json = extracted_json
     session.extraction_confidence_score = Decimal(f"{extraction_confidence:.4f}")
@@ -479,68 +327,20 @@ def _persist_session_results(
 
 def _build_total_timings(
     job: ReceiptJob | ReceiptParseJob,
-    fast_timings: dict,
-    recovery_timings: dict | None = None,
+    attempt_timings: dict,
 ) -> dict:
     queue_delay = 0.0
     if job.started_at is not None:
         queue_delay = max((job.started_at - job.created_at).total_seconds(), 0.0)
     total = queue_delay
-    total += float(fast_timings.get("preprocess_seconds") or 0.0)
-    total += float(fast_timings.get("ocr_seconds") or 0.0)
-    total += float(fast_timings.get("extraction_seconds") or 0.0)
-    if recovery_timings:
-        total += float(recovery_timings.get("preprocess_seconds") or 0.0)
-        total += float(recovery_timings.get("ocr_seconds") or 0.0)
-        total += float(recovery_timings.get("extraction_seconds") or 0.0)
+    total += float(attempt_timings.get("preprocess_seconds") or 0.0)
+    total += float(attempt_timings.get("parser_seconds") or 0.0)
+    total += float(attempt_timings.get("normalize_seconds") or 0.0)
     return {
         "queue_delay_seconds": round(queue_delay, 4),
-        "fast_path": fast_timings,
-        "recovery_path": recovery_timings,
+        "primary_path": attempt_timings,
         "total_parse_seconds": round(total, 4),
     }
-
-
-def _run_profiled_parse(
-    source_path: Path,
-    processed_dir: Path,
-    *,
-    file_stem: str,
-    job: ReceiptJob | ReceiptParseJob,
-) -> tuple[Path, dict, dict, dict, str, list[str]]:
-    fast_processed_path, fast_ocr_payload, fast_extracted_fields, fast_preprocess = _run_attempt(
-        source_path,
-        processed_dir,
-        file_stem=file_stem,
-        profile="fast",
-    )
-    needs_recovery, recovery_reasons = _needs_recovery(fast_ocr_payload, fast_extracted_fields, fast_preprocess)
-    if not needs_recovery:
-        timings = _build_total_timings(job, fast_preprocess["timings"])
-        preprocess_metadata = dict(fast_preprocess)
-        preprocess_metadata.pop("timings", None)
-        logger.info("Selected fast OCR path for job %s", job.id)
-        return fast_processed_path, fast_ocr_payload, fast_extracted_fields, {**preprocess_metadata, "timings": timings}, "fast", []
-
-    recovery_processed_path, recovery_ocr_payload, recovery_extracted_fields, recovery_preprocess = _run_attempt(
-        source_path,
-        processed_dir,
-        file_stem=file_stem,
-        profile="recovery",
-    )
-    timings = _build_total_timings(job, fast_preprocess["timings"], recovery_preprocess["timings"])
-    recovery_score = float(recovery_extracted_fields.get("confidence_score") or recovery_ocr_payload.get("confidence") or 0.0)
-    fast_score = float(fast_extracted_fields.get("confidence_score") or fast_ocr_payload.get("confidence") or 0.0)
-    if recovery_score >= fast_score:
-        preprocess_metadata = dict(recovery_preprocess)
-        preprocess_metadata.pop("timings", None)
-        logger.info("Selected recovery OCR path for job %s (%s)", job.id, ", ".join(recovery_reasons))
-        return recovery_processed_path, recovery_ocr_payload, recovery_extracted_fields, {**preprocess_metadata, "timings": timings}, "recovery", recovery_reasons
-
-    preprocess_metadata = dict(fast_preprocess)
-    preprocess_metadata.pop("timings", None)
-    logger.info("Kept fast OCR result for job %s after recovery comparison (%s)", job.id, ", ".join(recovery_reasons))
-    return fast_processed_path, fast_ocr_payload, fast_extracted_fields, {**preprocess_metadata, "timings": timings}, "fast", recovery_reasons
 
 
 def process_parse_job(db: Session, job_id: UUID) -> None:
@@ -555,34 +355,44 @@ def process_parse_job(db: Session, job_id: UUID) -> None:
         _set_receipt_phase(job, "preprocessing")
         db.commit()
 
-        processed_path, ocr_payload, extracted_fields, preprocess_metadata, selected_path, recovery_reasons = _run_profiled_parse(
+        processed_path, preprocess_metadata, preprocess_seconds = _prepare_processed_source(
             source_path,
             processed_dir,
             file_stem=source_path.stem,
-            job=job,
+            profile="veryfi",
         )
-        boxed_image_path, text_output_path, layout_image_path = _write_ocr_artifacts(
+
+        _set_receipt_phase(job, "ocr_running")
+        db.commit()
+
+        parser_result, extracted_fields, parser_seconds, normalize_seconds = _run_primary_parse(
+            processed_path,
+            debug_tag=source_path.stem,
+        )
+        _, text_output_path, _ = _write_parser_artifacts(
             processed_path=processed_path,
-            ocr_payload=ocr_payload,
-            profile=selected_path,
+            raw_text=parser_result.raw_text,
         )
 
         _set_receipt_phase(job, "extracting")
         db.commit()
 
-        timings = preprocess_metadata.pop("timings", {})
+        timings = _build_total_timings(
+            job,
+            {
+                "preprocess_seconds": round(preprocess_seconds, 4),
+                "parser_seconds": round(parser_seconds, 4),
+                "normalize_seconds": round(normalize_seconds, 4),
+            },
+        )
         _persist_receipt_results(
             job,
             processed_path,
-            boxed_image_path,
             text_output_path,
-            layout_image_path,
-            ocr_payload,
+            parser_result,
             extracted_fields,
             preprocess_metadata=preprocess_metadata,
             timings=timings,
-            selected_path=selected_path,
-            recovery_reasons=recovery_reasons,
         )
         _set_receipt_phase(job, "ready_for_review", finished=True)
         db.commit()
@@ -590,7 +400,7 @@ def process_parse_job(db: Session, job_id: UUID) -> None:
         logger.exception("Receipt parse failed for job %s", job_id)
         db.rollback()
         failed_job = _load_parse_job(db, job_id)
-        _set_receipt_phase(failed_job, "failed", error_message=str(exc) or "Receipt OCR failed", finished=True)
+        _set_receipt_phase(failed_job, "failed", error_message=str(exc) or "Receipt parsing failed", finished=True)
         db.commit()
 
 
@@ -606,34 +416,44 @@ def process_session_parse_job(db: Session, job_id: UUID) -> None:
         _set_session_phase(job, "preprocessing")
         db.commit()
 
-        processed_path, ocr_payload, extracted_fields, preprocess_metadata, selected_path, recovery_reasons = _run_profiled_parse(
+        processed_path, preprocess_metadata, preprocess_seconds = _prepare_processed_source(
             source_path,
             processed_dir,
             file_stem=source_path.stem,
-            job=job,
+            profile="veryfi",
         )
-        boxed_image_path, text_output_path, layout_image_path = _write_ocr_artifacts(
+
+        _set_session_phase(job, "ocr_running")
+        db.commit()
+
+        parser_result, extracted_fields, parser_seconds, normalize_seconds = _run_primary_parse(
+            processed_path,
+            debug_tag=source_path.stem,
+        )
+        _, text_output_path, _ = _write_parser_artifacts(
             processed_path=processed_path,
-            ocr_payload=ocr_payload,
-            profile=selected_path,
+            raw_text=parser_result.raw_text,
         )
 
         _set_session_phase(job, "extracting")
         db.commit()
 
-        timings = preprocess_metadata.pop("timings", {})
+        timings = _build_total_timings(
+            job,
+            {
+                "preprocess_seconds": round(preprocess_seconds, 4),
+                "parser_seconds": round(parser_seconds, 4),
+                "normalize_seconds": round(normalize_seconds, 4),
+            },
+        )
         _persist_session_results(
             job,
             processed_path,
-            boxed_image_path,
             text_output_path,
-            layout_image_path,
-            ocr_payload,
+            parser_result,
             extracted_fields,
             preprocess_metadata=preprocess_metadata,
             timings=timings,
-            selected_path=selected_path,
-            recovery_reasons=recovery_reasons,
         )
         _set_session_phase(job, "ready_for_review", finished=True)
         db.commit()
@@ -641,5 +461,5 @@ def process_session_parse_job(db: Session, job_id: UUID) -> None:
         logger.exception("Receipt parse session failed for job %s", job_id)
         db.rollback()
         failed_job = _load_session_parse_job(db, job_id)
-        _set_session_phase(failed_job, "failed", error_message=str(exc) or "Receipt OCR failed", finished=True)
+        _set_session_phase(failed_job, "failed", error_message=str(exc) or "Receipt parsing failed", finished=True)
         db.commit()

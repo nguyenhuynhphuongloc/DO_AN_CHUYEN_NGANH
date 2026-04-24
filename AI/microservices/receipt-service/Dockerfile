@@ -44,8 +44,6 @@ EXPOSE 8003
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003"]
 
 FROM runtime AS prod
-RUN PYTHONPATH=/app python -c "from app.services.ocr_pipeline import get_textline_orientation_classifier; get_textline_orientation_classifier()._get_model(); print('Preloaded text line orientation model')"
-
 EXPOSE 8003
 
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003"]

@@ -1,0 +1,89 @@
+{
+  "name": "Receipt OCR Chatbot Endpoint",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "receipt-ocr-chatbot",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "1",
+      "name": "Receipt OCR Chatbot Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "receipt-ocr-chatbot-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $input.first();\nconst binary = source.binary ?? $binary ?? {};\nconst rawCategories = source.json?.categories_json ?? $json?.categories_json ?? null;\n\nreturn [{\n  json: {\n    categories_json: typeof rawCategories === 'string' ? rawCategories : rawCategories ? JSON.stringify(rawCategories) : null\n  },\n  binary\n}];"
+      },
+      "id": "2",
+      "name": "Prepare Request For Core",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": "receipt-ocr-core-workflow",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "3",
+      "name": "Execute Receipt OCR Core",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $json ?? {};\n\nif (!result.ok) {\n  return [{\n    json: {\n      statusCode: result.statusCode ?? 400,\n      body: result.error ?? {\n        error_code: 'OCR_FAILED',\n        message: 'The chatbot OCR workflow did not return structured data.'\n      }\n    }\n  }];\n}\n\nconst data = result.data ?? {};\nreturn [{\n  json: {\n    statusCode: 200,\n    body: {\n      mode: 'chatbot_ocr',\n      ocr_data: {\n        merchant_name: data.merchant_name ?? null,\n        transaction_datetime: data.transaction_datetime ?? null,\n        total_amount: Number.isFinite(data.total_amount) ? data.total_amount : 0,\n        tax_amount: data.tax_amount ?? null,\n        currency: data.currency ?? 'VND',\n        payment_method: data.payment_method ?? null,\n        ai_suggested_category: data.ai_suggested_category ?? null,\n        ai_suggested_category_id: data.ai_suggested_category_id ?? null,\n        warnings: Array.isArray(data.warnings) ? data.warnings : [],\n        needs_review: Boolean(data.needs_review)\n      }\n    }\n  }\n}];"
+      },
+      "id": "4",
+      "name": "Build Chatbot OCR Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.body }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode }}"
+        }
+      },
+      "id": "5",
+      "name": "Respond To Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1220, 300]
+    }
+  ],
+  "connections": {
+    "Receipt OCR Chatbot Webhook": {
+      "main": [[{ "node": "Prepare Request For Core", "type": "main", "index": 0 }]]
+    },
+    "Prepare Request For Core": {
+      "main": [[{ "node": "Execute Receipt OCR Core", "type": "main", "index": 0 }]]
+    },
+    "Execute Receipt OCR Core": {
+      "main": [[{ "node": "Build Chatbot OCR Response", "type": "main", "index": 0 }]]
+    },
+    "Build Chatbot OCR Response": {
+      "main": [[{ "node": "Respond To Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "receipt-ocr-chatbot-workflow-v1",
+  "id": "receipt-ocr-chatbot-workflow",
+  "tags": []
+}

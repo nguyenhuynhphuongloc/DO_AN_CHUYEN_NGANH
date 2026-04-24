@@ -6,17 +6,24 @@ import { ReceiptOcrModule } from "../src/receipt-ocr/ReceiptOcrModule";
 import { createMockConfirmedTransactionHandler } from "../src/receipt-ocr/mockConfirmedTransaction";
 import type {
   ConfirmedOcrTransactionRequest,
-  OcrSuccessResponse,
+  OcrFormModeResponse,
   WalletOption
 } from "../src/receipt-ocr/types";
 
-const OCR_RESPONSE: OcrSuccessResponse = {
-  total_amount: 150000,
-  currency: "VND",
-  transaction_datetime: "2023-10-25T14:30:00Z",
-  merchant_name: "Highlands Coffee",
-  payment_method: "Credit Card",
-  ai_suggested_category: "Ăn uống"
+const OCR_RESPONSE: OcrFormModeResponse = {
+  mode: "ocr_form",
+  receipt_data: {
+    total_amount: 150000,
+    tax_amount: null,
+    currency: "VND",
+    transaction_datetime: "2023-10-25T14:30:00Z",
+    merchant_name: "Highlands Coffee",
+    payment_method: "credit_card",
+    ai_suggested_category: "Food & Dining",
+    ai_suggested_category_id: "category-food",
+    warnings: ["missing_tax_amount"],
+    needs_review: true
+  }
 };
 
 const WALLETS: WalletOption[] = [
@@ -54,9 +61,9 @@ describe("ReceiptOcrModule", () => {
 
       const body = JSON.parse(String(init?.body)) as ConfirmedOcrTransactionRequest;
       expect(body.wallet_id).toBe("wallet-1");
-      expect(body.final_category).toBe("Di chuyển");
+      expect(body.final_category).toBe("Transport");
       expect(body.notes).toBe("Taxi to client meeting");
-      expect(body.original_suggested_category).toBe("Ăn uống");
+      expect(body.original_suggested_category).toBe("Food & Dining");
       expect((init?.headers as Record<string, string>)["x-user-id"]).toBe("user-1");
 
       return new Response(
@@ -100,7 +107,7 @@ describe("ReceiptOcrModule", () => {
         saveEndpoint="/api/transactions/confirmed-ocr"
         fetchImpl={fetchMock}
         walletOptions={WALLETS}
-        categoryOptions={["Ăn uống", "Di chuyển"]}
+        categoryOptions={["Food & Dining", "Transport"]}
         saveRequestHeaders={{ "x-user-id": "user-1" }}
       />
     );
@@ -115,7 +122,7 @@ describe("ReceiptOcrModule", () => {
       expect(screen.getByDisplayValue("Highlands Coffee")).toBeInTheDocument();
     });
 
-    await user.selectOptions(screen.getByLabelText(/^category$/i), "Di chuyển");
+    await user.selectOptions(screen.getByLabelText(/^category$/i), "Transport");
     await user.type(screen.getByLabelText(/notes/i), "Taxi to client meeting");
     await user.click(screen.getByRole("button", { name: /save transaction/i }));
 
@@ -215,11 +222,15 @@ describe("createMockConfirmedTransactionHandler", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        ...OCR_RESPONSE,
+        ...OCR_RESPONSE.receipt_data,
+        transaction_datetime: OCR_RESPONSE.receipt_data.transaction_datetime ?? "2023-10-25T14:30:00Z",
+        merchant_name: OCR_RESPONSE.receipt_data.merchant_name ?? "Highlands Coffee",
+        payment_method: OCR_RESPONSE.receipt_data.payment_method ?? "credit_card",
+        ai_suggested_category: OCR_RESPONSE.receipt_data.ai_suggested_category ?? "Food & Dining",
         wallet_id: "wallet-1",
-        final_category: "Ăn uống",
+        final_category: "Food & Dining",
         notes: "Business coffee",
-        original_suggested_category: "Ăn uống"
+        original_suggested_category: "Food & Dining"
       } satisfies ConfirmedOcrTransactionRequest)
     });
 

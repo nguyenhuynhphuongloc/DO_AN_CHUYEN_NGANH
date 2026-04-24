@@ -1,8 +1,8 @@
 import { BrowserRouter } from "react-router-dom";
 
-import { AuthProvider } from "./auth/AuthContext";
-import { AppConfig, AppConfigProvider, defaultAppConfig } from "./config";
+import { AuthProvider } from "../features/auth/AuthContext";
 import { AppRoutes } from "./AppRoutes";
+import { AppConfig, AppConfigProvider, defaultAppConfig } from "./config";
 
 export function App({ config = defaultAppConfig }: { config?: AppConfig }) {
   return (

@@ -98,7 +98,7 @@ def finalize_parse_session(
     if session.ocr_raw_text or session.ocr_debug_json:
         receipt.ocr_result = ReceiptOcrResult(
             receipt_id=receipt.id,
-            ocr_provider=session.ocr_provider or "paddleocr",
+            ocr_provider=session.ocr_provider or "veryfi",
             raw_text=session.ocr_raw_text,
             raw_json=session.ocr_debug_json,
             confidence_score=session.ocr_confidence_score,

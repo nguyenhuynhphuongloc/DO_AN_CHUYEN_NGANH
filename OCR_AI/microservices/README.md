@@ -27,4 +27,4 @@ Root scripts:
 - `npm run migrate:auth`
 - `npm run migrate:finance`
 
-For the standard full local workflow, use the root Docker stack so frontend, both microservices, OCR runtime, and local PostgreSQL start together through one `docker compose` entrypoint.
+For the standard full local workflow, use the root Docker stack so frontend, both microservices, and OCR runtime start together through one `docker compose` entrypoint while `auth-service` and `finance-service` keep using the Neon URLs defined in their own `.env` files.

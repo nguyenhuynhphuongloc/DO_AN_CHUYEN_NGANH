@@ -4,30 +4,30 @@
 TBD - created by archiving change setup-docker-local-full-system. Update Purpose after archive.
 ## Requirements
 ### Requirement: The repository provides one Docker local entrypoint for the full system
-The system SHALL provide a root-level Docker local stack that can start the frontend, `auth-service`, `finance-service`, OCR runtime, and local PostgreSQL dependencies from one orchestration entrypoint.
+The system SHALL provide a root-level Docker local stack that can start the frontend, `auth-service`, `finance-service`, and OCR runtime from one orchestration entrypoint while preserving the configured external database connectivity of the microservices.
 
-#### Scenario: Developer starts the local stack
+#### Scenario: Developer starts the Neon-backed local stack
 - **WHEN** a developer runs the documented Docker local startup command
-- **THEN** the full development system starts through one root orchestration flow rather than separate manual commands for each service
+- **THEN** the full development system starts through one root orchestration flow and `auth-service` plus `finance-service` run against the database URLs configured for those services rather than a separately started manual process
 
 ### Requirement: Docker local runtime preserves service and database boundaries
-The Docker local stack SHALL preserve the current architecture boundaries such that `auth-service` uses `auth_db`, `finance-service` uses `finance_db`, and OCR remains a stateless integration runtime without dedicated persistence tables.
+The Docker local stack SHALL preserve the current architecture boundaries such that `auth-service` uses its configured `AUTH_DATABASE_URL`, `finance-service` uses its configured `FINANCE_DATABASE_URL`, and OCR remains a stateless integration runtime without dedicated persistence tables.
 
 #### Scenario: Developer inspects the Docker local architecture
 - **WHEN** a developer reviews the Docker local configuration
-- **THEN** they find separate app services, local database wiring for `auth_db` and `finance_db`, and no OCR persistence service or receipt database
+- **THEN** they find separate app services, no duplicated auth or finance database URLs in the root orchestrator env contract, and no OCR persistence service or receipt database
 
-### Requirement: Docker local stack includes local database bootstrap for both service databases
-The Docker local stack SHALL initialize local PostgreSQL so both `auth_db` and `finance_db` are available for migrations and runtime usage by their respective services.
+### Requirement: Docker local stack sources database URLs from service-local env files
+The Docker local stack SHALL source `AUTH_DATABASE_URL` from `microservices/auth-service/.env` and `FINANCE_DATABASE_URL` from `microservices/finance-service/.env` so that each microservice keeps ownership of its own database connection configuration.
 
-#### Scenario: Services connect after container startup
-- **WHEN** the local database container becomes ready
-- **THEN** `auth-service` can run against `auth_db` and `finance-service` can run against `finance_db` without requiring external Neon databases
+#### Scenario: Root Docker stack uses service-local connection strings
+- **WHEN** a developer configures Neon connection strings in the service-local env files and starts the root Docker stack
+- **THEN** `auth-service` connects using the value from `microservices/auth-service/.env` and `finance-service` connects using the value from `microservices/finance-service/.env`
 
 ### Requirement: Docker local stack documents the developer startup contract
-The Docker local stack SHALL include developer-facing commands, environment expectations, and port mappings needed to boot, inspect, and stop the full local system.
+The Docker local stack SHALL include developer-facing commands, environment expectations, and port mappings needed to boot, inspect, and stop the full local system, including which values belong in root `.env` versus service-local `.env` files.
 
 #### Scenario: Developer follows Docker local instructions
 - **WHEN** a developer reads the Docker local documentation
-- **THEN** they can start the stack, access the frontend and service endpoints, and understand which env values or secrets must be provided
+- **THEN** they can prepare the required root and service-local env files, start the stack, and understand that auth and finance persistence targets are Neon-backed
 

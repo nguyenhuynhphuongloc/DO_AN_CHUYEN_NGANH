@@ -30,4 +30,4 @@ services:
       - ./storage/n8n:/home/node/.n8n
       - ./workflows:/workflows
     command:
-      - "n8n import:workflow --input=/workflows/receipt-ocr-workflow.json && n8n start"
+      - "n8n import:workflow --input=/workflows/receipt-ocr-core-workflow.json && n8n import:workflow --input=/workflows/receipt-ocr-workflow.json && n8n import:workflow --input=/workflows/receipt-ocr-chatbot-workflow.json && n8n start"

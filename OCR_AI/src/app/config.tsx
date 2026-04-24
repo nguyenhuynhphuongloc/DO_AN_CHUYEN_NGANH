@@ -3,13 +3,17 @@ import { createContext, PropsWithChildren, useContext } from "react";
 export interface AppConfig {
   authServiceUrl: string;
   financeServiceUrl: string;
-  ocrEndpoint: string;
+  ocrFormEndpoint: string;
+  ocrChatbotEndpoint: string;
 }
 
 export const defaultAppConfig: AppConfig = {
   authServiceUrl: import.meta.env.VITE_AUTH_SERVICE_URL ?? "http://127.0.0.1:5002",
   financeServiceUrl: import.meta.env.VITE_FINANCE_SERVICE_URL ?? "http://127.0.0.1:5003",
-  ocrEndpoint: import.meta.env.VITE_OCR_ENDPOINT ?? "http://127.0.0.1:5001/webhook/receipt-ocr"
+  ocrFormEndpoint:
+    import.meta.env.VITE_OCR_FORM_ENDPOINT ?? "http://127.0.0.1:5001/webhook/receipt-ocr-form",
+  ocrChatbotEndpoint:
+    import.meta.env.VITE_OCR_CHATBOT_ENDPOINT ?? "http://127.0.0.1:5001/webhook/receipt-ocr-chatbot"
 };
 
 const AppConfigContext = createContext<AppConfig>(defaultAppConfig);

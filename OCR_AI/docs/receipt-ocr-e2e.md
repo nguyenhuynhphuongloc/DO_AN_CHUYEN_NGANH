@@ -11,7 +11,7 @@ This repository now implements the agreed workflow end to end:
 5. user uploads receipt to n8n OCR webhook
 6. OCR result is reviewed and corrected in the protected OCR page
 7. frontend submits confirmed OCR data to `finance-service`
-8. `finance-service` persists only the confirmed business fields into `finance_db.transactions`
+8. `finance-service` persists only the confirmed business fields into `finance_db.transactions` through its configured Neon connection
 
 ## Services
 
@@ -40,7 +40,7 @@ This repository now implements the agreed workflow end to end:
 
 ## Standard local run flow
 
-The standard local development workflow is the root Docker stack. It starts frontend, `auth-service`, `finance-service`, OCR runtime, and local PostgreSQL together.
+The standard local development workflow is the root Docker stack. It starts frontend, `auth-service`, `finance-service`, and OCR runtime together, while auth and finance persist to Neon using their own service-local env files.
 
 ### 1. Prepare Docker env
 
@@ -50,19 +50,33 @@ cp .env.example .env
 
 Set at least:
 
-- `AUTH_JWT_SECRET`
-- `AUTH_REFRESH_TOKEN_SECRET`
 - `VERYFI_CLIENT_ID`
 - `VERYFI_USERNAME`
 - `VERYFI_API_KEY`
 
-### 2. Start the full stack
+### 2. Prepare microservice env
+
+```bash
+cp microservices/auth-service/.env.example microservices/auth-service/.env
+cp microservices/finance-service/.env.example microservices/finance-service/.env
+```
+
+Set at least:
+
+- `AUTH_DATABASE_URL`
+- `AUTH_JWT_SECRET`
+- `AUTH_REFRESH_TOKEN_SECRET`
+- `FINANCE_DATABASE_URL`
+
+`AUTH_AUTO_MIGRATE` and `FINANCE_AUTO_MIGRATE` are read from the service-local env files. If either flag is `true`, that service will run migrations directly against Neon on startup.
+
+### 3. Start the full stack
 
 ```bash
 npm run docker:up
 ```
 
-### 3. Inspect or stop the stack
+### 4. Inspect or stop the stack
 
 ```bash
 npm run docker:ps
@@ -76,7 +90,8 @@ The Docker local stack exposes:
 - OCR webhook: `http://localhost:5001/webhook/receipt-ocr`
 - auth-service: `http://localhost:5002`
 - finance-service: `http://localhost:5003`
-- PostgreSQL: `localhost:5432`
+- auth persistence target: `AUTH_DATABASE_URL` from `microservices/auth-service/.env`
+- finance persistence target: `FINANCE_DATABASE_URL` from `microservices/finance-service/.env`
 
 ## Manual run flow
 
@@ -90,15 +105,11 @@ npm install
 
 ### 2. Configure frontend
 
-```bash
-cp .env.example .env.local
-```
+Create `.env.local` with:
 
-Set:
-
-- `VITE_AUTH_SERVICE_URL`
-- `VITE_FINANCE_SERVICE_URL`
-- `VITE_OCR_ENDPOINT`
+- `VITE_AUTH_SERVICE_URL=http://localhost:5002`
+- `VITE_FINANCE_SERVICE_URL=http://localhost:5003`
+- `VITE_OCR_ENDPOINT=http://localhost:5001/webhook/receipt-ocr`
 
 ### 3. Configure OCR backend
 
@@ -121,6 +132,7 @@ Set:
 - `AUTH_JWT_SECRET`
 - `AUTH_REFRESH_TOKEN_SECRET`
 - `FINANCE_DATABASE_URL`
+- optional: `AUTH_AUTO_MIGRATE`, `FINANCE_AUTO_MIGRATE`
 
 ### 5. Start services
 
@@ -141,6 +153,14 @@ npm run dev
 - the OCR module submits the final confirmed payload with `wallet_id`, `final_category`, `notes`, and the canonical OCR fields
 - `finance-service` persists only the confirmed invoice fields in `finance_db.transactions`
 - no receipt review record, OCR job record, raw OCR archive, or receipt lifecycle table is created anywhere in the flow
+
+## Env file matrix
+
+- root `.env`: root Docker stack ports and OCR/frontend variables
+- `microservices/auth-service/.env`: auth Docker and manual-run database URL, auth secrets, and auth migration flags
+- `microservices/finance-service/.env`: finance Docker and manual-run database URL plus finance migration flags
+- `backend/receipt-ocr/.env`: OCR-only Docker stack config
+- root `.env.local`: frontend-only Vite config for non-Docker local dev
 
 ## Canonical contracts
 

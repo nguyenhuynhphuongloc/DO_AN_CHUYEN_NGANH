@@ -33,7 +33,7 @@ function isProcessing(receipt: ReceiptWorkflow | null) {
 
 function describeStatus(receipt: ReceiptWorkflow | null) {
   if (!receipt) {
-    return 'Upload a receipt to begin OCR parsing.';
+    return 'Upload a receipt to begin parsing.';
   }
 
   if (receipt.active_job?.status === 'failed') {
@@ -123,7 +123,7 @@ export function ReceiptWorkspace() {
   const [transactionDate, setTransactionDate] = useState('');
   const [description, setDescription] = useState('');
   const [feedback, setFeedback] = useState('');
-  const [status, setStatus] = useState('Upload a receipt to begin OCR parsing.');
+  const [status, setStatus] = useState('Upload a receipt to begin parsing.');
   const [error, setError] = useState('');
   const [isSubmittingParse, setIsSubmittingParse] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -137,10 +137,15 @@ export function ReceiptWorkspace() {
 
   function syncFromReceipt(receiptData: ReceiptWorkflow) {
     const extraction = receiptData.extraction_result;
+    const extractionDetails =
+      extraction?.extracted_json && typeof extraction.extracted_json === 'object'
+        ? (extraction.extracted_json as ReceiptStructuredExtraction)
+        : null;
     setReceipt(receiptData);
     setMerchantName(extraction?.merchant_name ?? '');
     setAmount(extraction?.total_amount !== null && extraction?.total_amount !== undefined ? String(extraction.total_amount) : '');
     setTransactionDate(buildDateTimeInput(extraction?.transaction_date));
+    setDescription((prev) => prev || extractionDetails?.description_text || '');
     setFeedback(receiptData.latest_feedback?.feedback_note ?? '');
     setStatus(describeStatus(receiptData));
     setReceiptId(receiptData.receipt?.id ?? receiptData.confirmed_receipt?.id ?? null);
@@ -303,7 +308,7 @@ export function ReceiptWorkspace() {
       return;
     }
     setIsSubmittingParse(true);
-    setStatus(force ? 'Requeueing OCR parse...' : 'Queueing OCR parse...');
+    setStatus(force ? 'Requeueing parser run...' : 'Queueing parser run...');
     setError('');
     try {
       const payload = sessionId ? await parseReceiptSession(sessionId, { force }) : await parseReceipt(receiptId as string, { force });

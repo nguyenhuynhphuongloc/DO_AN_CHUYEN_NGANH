@@ -8,7 +8,8 @@ import type { AppConfig } from "../src/app/config";
 const TEST_CONFIG: AppConfig = {
   authServiceUrl: "http://auth-service.test",
   financeServiceUrl: "http://finance-service.test",
-  ocrEndpoint: "http://ocr-service.test/webhook/receipt-ocr"
+  ocrFormEndpoint: "http://ocr-service.test/webhook/receipt-ocr-form",
+  ocrChatbotEndpoint: "http://ocr-service.test/webhook/receipt-ocr-chatbot"
 };
 
 describe("frontend auth flow", () => {

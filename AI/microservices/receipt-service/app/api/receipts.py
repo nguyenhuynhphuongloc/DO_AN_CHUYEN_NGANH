@@ -120,6 +120,7 @@ def _serialize_receipt(receipt: Receipt, *, finance_transaction_id: str | None =
             lines=[str(line) for line in raw_json.get("lines", [])] if isinstance(raw_json.get("lines"), list) else [],
             provider=receipt.ocr_result.ocr_provider,
             confidence_score=float(receipt.ocr_result.confidence_score) if receipt.ocr_result.confidence_score is not None else None,
+            display_mode=str(raw_json.get("display_mode")) if raw_json.get("display_mode") else None,
             boxed_image_url=_build_receipt_artifact_url(receipt.id, "image") if raw_json.get("boxed_image_path") else None,
             layout_image_url=_build_receipt_artifact_url(receipt.id, "layout") if raw_json.get("layout_image_path") else None,
             text_file_url=_build_receipt_artifact_url(receipt.id, "text") if raw_json.get("ocr_text_file_path") else None,
@@ -138,6 +139,10 @@ def _serialize_receipt(receipt: Receipt, *, finance_transaction_id: str | None =
             engine_config=raw_json.get("engine_config") if isinstance(raw_json.get("engine_config"), dict) else None,
             ordering=raw_json.get("ordering") if isinstance(raw_json.get("ordering"), dict) else None,
             layout=raw_json.get("layout") if isinstance(raw_json.get("layout"), dict) else None,
+            structured_json=raw_json.get("structured_json") if isinstance(raw_json.get("structured_json"), dict) else None,
+            provider_document_id=raw_json.get("provider_document_id"),
+            provider_payload_summary=raw_json.get("provider_payload_summary") if isinstance(raw_json.get("provider_payload_summary"), dict) else None,
+            provider_payload=raw_json.get("provider_payload") if isinstance(raw_json.get("provider_payload"), dict) else None,
         )
 
     return ReceiptWorkflowResponse(
@@ -160,13 +165,13 @@ def _serialize_session(session: ReceiptParseSession, *, finance_warning: str | N
     ocr_debug_json = session.ocr_debug_json if isinstance(session.ocr_debug_json, dict) else {}
     ocr_result = None
     if session.ocr_raw_text is not None or session.ocr_debug_json is not None:
-        ocr_result = ReceiptOcrResultResponse(
-            id=session.id,
-            receipt_id=session.id,
-            ocr_provider=session.ocr_provider or "paddleocr",
-            raw_text=session.ocr_raw_text,
-            raw_json=session.ocr_debug_json,
-            confidence_score=float(session.ocr_confidence_score) if session.ocr_confidence_score is not None else None,
+            ocr_result = ReceiptOcrResultResponse(
+                id=session.id,
+                receipt_id=session.id,
+                ocr_provider=session.ocr_provider or "veryfi",
+                raw_text=session.ocr_raw_text,
+                raw_json=session.ocr_debug_json,
+                confidence_score=float(session.ocr_confidence_score) if session.ocr_confidence_score is not None else None,
             created_at=session.created_at,
         )
 
@@ -205,6 +210,7 @@ def _serialize_session(session: ReceiptParseSession, *, finance_warning: str | N
             lines=[str(line) for line in ocr_debug_json.get("lines", [])] if isinstance(ocr_debug_json.get("lines"), list) else [],
             provider=session.ocr_provider,
             confidence_score=float(session.ocr_confidence_score) if session.ocr_confidence_score is not None else None,
+            display_mode=str(ocr_debug_json.get("display_mode")) if ocr_debug_json.get("display_mode") else None,
             boxed_image_url=_build_session_artifact_url(session.id, "image") if ocr_debug_json.get("boxed_image_path") else None,
             layout_image_url=_build_session_artifact_url(session.id, "layout") if ocr_debug_json.get("layout_image_path") else None,
             text_file_url=_build_session_artifact_url(session.id, "text") if ocr_debug_json.get("ocr_text_file_path") else None,
@@ -223,6 +229,10 @@ def _serialize_session(session: ReceiptParseSession, *, finance_warning: str | N
             engine_config=ocr_debug_json.get("engine_config") if isinstance(ocr_debug_json.get("engine_config"), dict) else None,
             ordering=ocr_debug_json.get("ordering") if isinstance(ocr_debug_json.get("ordering"), dict) else None,
             layout=ocr_debug_json.get("layout") if isinstance(ocr_debug_json.get("layout"), dict) else None,
+            structured_json=ocr_debug_json.get("structured_json") if isinstance(ocr_debug_json.get("structured_json"), dict) else None,
+            provider_document_id=ocr_debug_json.get("provider_document_id"),
+            provider_payload_summary=ocr_debug_json.get("provider_payload_summary") if isinstance(ocr_debug_json.get("provider_payload_summary"), dict) else None,
+            provider_payload=ocr_debug_json.get("provider_payload") if isinstance(ocr_debug_json.get("provider_payload"), dict) else None,
         ) if ocr_result is not None else None,
         extraction_result=extraction_result,
         latest_feedback=latest_feedback,

@@ -1,8 +1,17 @@
 {
-  "total_amount": 150000,
-  "currency": "VND",
-  "transaction_datetime": "2023-10-25T14:30:00Z",
-  "merchant_name": "Highlands Coffee",
-  "payment_method": "Credit Card",
-  "ai_suggested_category": "Ăn uống"
+  "mode": "ocr_form",
+  "receipt_data": {
+    "merchant_name": "Highlands Coffee",
+    "transaction_datetime": "2023-10-25T14:30:00Z",
+    "total_amount": 150000,
+    "tax_amount": null,
+    "currency": "VND",
+    "payment_method": "credit_card",
+    "ai_suggested_category": "Food & Dining",
+    "ai_suggested_category_id": "category-food",
+    "warnings": [
+      "missing_tax_amount"
+    ],
+    "needs_review": true
+  }
 }

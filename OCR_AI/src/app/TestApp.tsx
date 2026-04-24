@@ -1,21 +1,24 @@
+import { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 
-import { AuthProvider } from "./auth/AuthContext";
+import { AuthProvider } from "../features/auth/AuthContext";
 import { AppConfig, AppConfigProvider, defaultAppConfig } from "./config";
 import { AppRoutes } from "./AppRoutes";
 
 export function TestApp({
-  initialEntries = ["/login"],
-  config = defaultAppConfig
+  config = defaultAppConfig,
+  initialEntries = ["/"],
+  children
 }: {
-  initialEntries?: string[];
   config?: AppConfig;
+  initialEntries?: string[];
+  children?: ReactNode;
 }) {
   return (
     <AppConfigProvider value={config}>
       <AuthProvider>
         <MemoryRouter initialEntries={initialEntries}>
-          <AppRoutes />
+          {children ?? <AppRoutes />}
         </MemoryRouter>
       </AuthProvider>
     </AppConfigProvider>

@@ -112,6 +112,7 @@ class ReceiptOcrDebugResponse(BaseModel):
     lines: list[str]
     provider: str | None
     confidence_score: float | None
+    display_mode: str | None = None
     boxed_image_url: str | None = None
     layout_image_url: str | None = None
     text_file_url: str | None = None
@@ -130,6 +131,10 @@ class ReceiptOcrDebugResponse(BaseModel):
     engine_config: dict | None = None
     ordering: dict | None = None
     layout: dict | None = None
+    structured_json: dict | None = None
+    provider_document_id: str | int | None = None
+    provider_payload_summary: dict | None = None
+    provider_payload: dict | None = None
 
 
 class SessionFeedbackResponse(BaseModel):

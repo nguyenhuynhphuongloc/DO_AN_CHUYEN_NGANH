@@ -71,6 +71,7 @@ export type ReceiptOcrDebug = {
   lines: string[];
   provider: string | null;
   confidence_score: number | null;
+  display_mode?: string | null;
   boxed_image_url?: string | null;
   layout_image_url?: string | null;
   text_file_url?: string | null;
@@ -89,6 +90,10 @@ export type ReceiptOcrDebug = {
   engine_config?: Record<string, unknown> | null;
   ordering?: Record<string, unknown> | null;
   layout?: Record<string, unknown> | null;
+  structured_json?: Record<string, unknown> | null;
+  provider_document_id?: string | number | null;
+  provider_payload_summary?: Record<string, unknown> | null;
+  provider_payload?: Record<string, unknown> | null;
 };
 
 export type ReceiptExtraction = {
@@ -160,6 +165,8 @@ export type ReceiptStructuredExtraction = {
   description_text?: string | null;
   extraction_version?: string | null;
   extraction_notes?: string[] | null;
+  parser_metadata?: Record<string, unknown> | null;
+  provider_document_summary?: Record<string, unknown> | null;
 };
 
 export type ReceiptFeedback = {

@@ -4,11 +4,11 @@
 TBD - created by archiving change finalize-ocr-e2e-module. Update Purpose after archive.
 ## Requirements
 ### Requirement: The module includes local run and integration documentation
-The system SHALL document how to run the OCR backend flow, frontend review module, `auth-service`, and `finance-service` together in local development, and that documentation SHALL define the Docker-based full-system startup flow as the standard local orchestration path.
+The system SHALL document how to run the OCR backend flow, frontend review module, `auth-service`, and `finance-service` together in local development, and that documentation SHALL define the Docker-based full-system startup flow as using service-local auth and finance database env files for Neon-backed persistence.
 
 #### Scenario: Developer follows local setup documentation
 - **WHEN** a developer reads the module documentation
-- **THEN** they can configure the environment, start the supported services through the documented Docker local stack, and identify the OCR and finance transaction endpoints needed for manual testing
+- **THEN** they can configure root Docker env plus the `auth-service` and `finance-service` env files, start the supported services through the documented Docker local stack, and identify the OCR and finance transaction endpoints needed for manual testing
 
 ### Requirement: The module documents reusable embedding and packaging guidance
 The system SHALL document how the OCR solution can be plugged into another host system, including which pieces are reusable, which endpoints are configurable, and that confirmed OCR data is handed to `finance-service` as transaction input rather than to a receipt-specific persistence backend.

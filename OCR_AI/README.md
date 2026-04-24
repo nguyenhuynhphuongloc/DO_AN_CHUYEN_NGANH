@@ -3,7 +3,7 @@
 Reusable local-development OCR + finance backend workspace. The repo now contains:
 
 - a Docker Compose + n8n + Veryfi backend foundation
-- a root Docker local stack for frontend + auth-service + finance-service + OCR + PostgreSQL
+- a root Docker local stack for frontend + auth-service + finance-service + OCR
 - a React + TypeScript OCR frontend with `/register`, `/login`, and protected `/ocr`
 - a reusable `ReceiptOcrModule` component
 - a Neon-backed `auth-service` for `auth_db`
@@ -30,7 +30,7 @@ This starts:
 - OCR n8n runtime on `http://localhost:5001`
 - `auth-service` on `http://localhost:5002`
 - `finance-service` on `http://localhost:5003`
-- local PostgreSQL on `localhost:5432`
+- Neon-backed auth and finance persistence using the service-local `.env` files
 
 ## Run frontend only
 

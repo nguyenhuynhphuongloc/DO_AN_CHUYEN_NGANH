@@ -1,287 +1,89 @@
 {
-  "name": "Receipt OCR Webhook",
+  "name": "Receipt OCR Form Endpoint",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "receipt-ocr",
+        "path": "receipt-ocr-form",
         "responseMode": "responseNode",
         "options": {}
       },
       "id": "1",
-      "name": "Receipt OCR Webhook",
+      "name": "Receipt OCR Form Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [
-        200,
-        300
-      ],
-      "webhookId": "receipt-ocr-webhook"
+      "position": [200, 300],
+      "webhookId": "receipt-ocr-form-webhook"
     },
     {
       "parameters": {
-        "jsCode": "const binary = $binary ?? {};\nconst upload = binary.receipt;\n\nif (!upload) {\n  return [{\n    json: {\n      valid: false,\n      statusCode: 400,\n      body: {\n        error_code: 'INVALID_INPUT',\n        message: 'A receipt image is required in the multipart field \\\"receipt\\\".'\n      }\n    }\n  }];\n}\n\nconst mimeType = upload.mimeType ?? '';\nif (!mimeType.startsWith('image/')) {\n  return [{\n    json: {\n      valid: false,\n      statusCode: 400,\n      body: {\n        error_code: 'INVALID_INPUT',\n        message: 'Only image uploads are supported for receipt OCR.'\n      }\n    },\n    binary\n  }];\n}\n\nreturn [{\n  json: {\n    valid: true,\n    binaryPropertyName: 'receipt'\n  },\n  binary\n}];"
+        "jsCode": "const source = $input.first();\nconst binary = source.binary ?? $binary ?? {};\nconst rawCategories = source.json?.categories_json ?? $json?.categories_json ?? null;\n\nreturn [{\n  json: {\n    categories_json: typeof rawCategories === 'string' ? rawCategories : rawCategories ? JSON.stringify(rawCategories) : null\n  },\n  binary\n}];"
       },
       "id": "2",
-      "name": "Validate Receipt Upload",
+      "name": "Prepare Request For Core",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        440,
-        300
-      ]
+      "position": [440, 300]
     },
     {
       "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json.valid }}",
-              "value2": true
-            }
-          ]
+        "source": "database",
+        "workflowId": "receipt-ocr-core-workflow",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
         }
       },
       "id": "3",
-      "name": "Has Valid Receipt?",
-      "type": "n8n-nodes-base.if",
+      "name": "Execute Receipt OCR Core",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $json ?? {};\n\nif (!result.ok) {\n  return [{\n    json: {\n      statusCode: result.statusCode ?? 400,\n      body: result.error ?? {\n        error_code: 'OCR_FAILED',\n        message: 'The OCR form workflow did not return structured data.'\n      }\n    }\n  }];\n}\n\nconst data = result.data ?? {};\nreturn [{\n  json: {\n    statusCode: 200,\n    body: {\n      mode: 'ocr_form',\n      receipt_data: {\n        merchant_name: data.merchant_name ?? null,\n        transaction_datetime: data.transaction_datetime ?? null,\n        total_amount: Number.isFinite(data.total_amount) ? data.total_amount : 0,\n        tax_amount: data.tax_amount ?? null,\n        currency: data.currency ?? 'VND',\n        payment_method: data.payment_method ?? null,\n        ai_suggested_category: data.ai_suggested_category ?? null,\n        ai_suggested_category_id: data.ai_suggested_category_id ?? null,\n        warnings: Array.isArray(data.warnings) ? data.warnings : [],\n        needs_review: Boolean(data.needs_review)\n      }\n    }\n  }\n}];"
+      },
+      "id": "4",
+      "name": "Build OCR Form Response",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        680,
-        300
-      ]
+      "position": [960, 300]
     },
     {
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ $json.body }}",
         "options": {
-          "responseCode": 400
-        }
-      },
-      "id": "4",
-      "name": "Respond Invalid Input",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        920,
-        460
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.veryfi.com/api/v8/partner/documents",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Accept",
-              "value": "application/json"
-            },
-            {
-              "name": "CLIENT-ID",
-              "value": "={{ $env.VERYFI_CLIENT_ID }}"
-            },
-            {
-              "name": "AUTHORIZATION",
-              "value": "={{ `apikey ${$env.VERYFI_USERNAME}:${$env.VERYFI_API_KEY}` }}"
-            }
-          ]
-        },
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "confidence_details",
-              "value": "true"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "multipart-form-data",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "file",
-              "value": "={{ $binary.receipt.data }}",
-              "parameterType": "formBinaryData"
-            }
-          ]
-        },
-        "options": {
-          "response": {
-            "response": {
-              "fullResponse": false
-            }
-          }
+          "responseCode": "={{ $json.statusCode }}"
         }
       },
       "id": "5",
-      "name": "Veryfi OCR Request",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        940,
-        220
-      ],
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "const payload = $json ?? {};\nconst requiredConfidence = Number($env.OCR_REQUIRED_CONFIDENCE ?? '0.65');\nconst fallbackCurrency = String($env.OCR_DEFAULT_CURRENCY ?? 'VND').toUpperCase();\n\nfunction normalizeDate(value) {\n  if (!value) return null;\n  if (/^\\d{4}-\\d{2}-\\d{2}T/.test(value)) return value;\n  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return `${value}T00:00:00Z`;\n  const date = new Date(value);\n  if (Number.isNaN(date.getTime())) return null;\n  return date.toISOString();\n}\n\nfunction mapCategory(sourceValues) {\n  const source = sourceValues.filter(Boolean).join(' ').toLowerCase();\n  if (/(coffee|restaurant|cafe|tea|food|drink|highlands|starbucks|pho|bun)/.test(source)) return 'Ăn uống';\n  if (/(taxi|grab|uber|bus|train|flight|transport|parking)/.test(source)) return 'Di chuyển';\n  if (/(electric|water|internet|utility|bill|phone)/.test(source)) return 'Hóa đơn';\n  if (/(market|mart|store|shop|retail|supermarket)/.test(source)) return 'Mua sắm';\n  return 'Khác';\n}\n\nfunction buildError(errorCode, message, details = undefined) {\n  return [{\n    json: {\n      ok: false,\n      statusCode: 400,\n      body: {\n        error_code: errorCode,\n        message,\n        ...(details ? { details } : {})\n      }\n    }\n  }];\n}\n\nif (payload.error || payload.statusCode >= 400) {\n  return buildError('OCR_FAILED', 'Veryfi OCR request failed before a usable extraction was returned.');\n}\n\nif (payload.blurry === true) {\n  return buildError('BLURRY_IMAGE', 'The receipt image is too blurry for reliable OCR extraction.');\n}\n\nconst totalAmount = Number(payload.total ?? payload.grand_total ?? payload.total_amount);\nconst currency = String(payload.currency_code ?? fallbackCurrency).toUpperCase();\nconst merchantName = String(payload.vendor?.name ?? payload.vendor_name ?? payload.vendor ?? '').trim();\nconst transactionDatetime = normalizeDate(payload.date ?? payload.transaction_date ?? payload.created_date);\nconst paymentMethod = String(payload.payment?.display_name ?? payload.payment?.type ?? payload.payment_method ?? 'Unknown').trim() || 'Unknown';\nconst suggestedCategory = mapCategory([\n  payload.category,\n  payload.line_items?.map((item) => item.description).join(' '),\n  merchantName\n]);\n\nconst confidenceValues = [];\nconst confidenceDetails = payload.confidence_details ?? {};\nfor (const key of ['total', 'vendor_name', 'date']) {\n  const value = Number(confidenceDetails[key]);\n  if (!Number.isNaN(value)) confidenceValues.push(value);\n}\nconst lowestConfidence = confidenceValues.length ? Math.min(...confidenceValues) : 1;\nif (lowestConfidence < requiredConfidence) {\n  return buildError('BLURRY_IMAGE', 'The receipt image did not meet the configured OCR confidence threshold.', { lowest_confidence: lowestConfidence });\n}\n\nconst missingFields = [];\nif (!Number.isFinite(totalAmount)) missingFields.push('total_amount');\nif (!currency) missingFields.push('currency');\nif (!merchantName) missingFields.push('merchant_name');\nif (!transactionDatetime) missingFields.push('transaction_datetime');\nif (missingFields.length > 0) {\n  return buildError('INSUFFICIENT_DATA', 'OCR completed but required receipt fields could not be derived reliably.', { missing_fields: missingFields });\n}\n\nreturn [{\n  json: {\n    ok: true,\n    statusCode: 200,\n    body: {\n      total_amount: totalAmount,\n      currency,\n      transaction_datetime: transactionDatetime,\n      merchant_name: merchantName,\n      payment_method: paymentMethod,\n      ai_suggested_category: suggestedCategory\n    }\n  }\n}];"
-      },
-      "id": "6",
-      "name": "Normalize OCR Response",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1180,
-        220
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json.ok }}",
-              "value2": true
-            }
-          ]
-        }
-      },
-      "id": "7",
-      "name": "OCR Success?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1420,
-        220
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ $json.body }}",
-        "options": {
-          "responseCode": 200
-        }
-      },
-      "id": "8",
-      "name": "Respond Success",
+      "name": "Respond To Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [
-        1660,
-        140
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ $json.body }}",
-        "options": {
-          "responseCode": 400
-        }
-      },
-      "id": "9",
-      "name": "Respond OCR Error",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        1660,
-        320
-      ]
+      "position": [1220, 300]
     }
   ],
   "connections": {
-    "Receipt OCR Webhook": {
-      "main": [
-        [
-          {
-            "node": "Validate Receipt Upload",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Receipt OCR Form Webhook": {
+      "main": [[{ "node": "Prepare Request For Core", "type": "main", "index": 0 }]]
     },
-    "Validate Receipt Upload": {
-      "main": [
-        [
-          {
-            "node": "Has Valid Receipt?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Prepare Request For Core": {
+      "main": [[{ "node": "Execute Receipt OCR Core", "type": "main", "index": 0 }]]
     },
-    "Has Valid Receipt?": {
-      "main": [
-        [
-          {
-            "node": "Veryfi OCR Request",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Respond Invalid Input",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Execute Receipt OCR Core": {
+      "main": [[{ "node": "Build OCR Form Response", "type": "main", "index": 0 }]]
     },
-    "Veryfi OCR Request": {
-      "main": [
-        [
-          {
-            "node": "Normalize OCR Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Normalize OCR Response": {
-      "main": [
-        [
-          {
-            "node": "OCR Success?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "OCR Success?": {
-      "main": [
-        [
-          {
-            "node": "Respond Success",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Respond OCR Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Build OCR Form Response": {
+      "main": [[{ "node": "Respond To Webhook", "type": "main", "index": 0 }]]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "receipt-ocr-workflow-v1",
-  "id": "receipt-ocr-workflow",
+  "versionId": "receipt-ocr-form-workflow-v1",
+  "id": "receipt-ocr-form-workflow",
   "tags": []
 }

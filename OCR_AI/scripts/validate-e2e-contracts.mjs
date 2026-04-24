@@ -28,18 +28,35 @@ const financeConfirmedOcrResponse = await readJson(
 const financeServiceError = await readJson("microservices/finance-service/fixtures/service-error.json");
 
 const canonicalOcrKeys = [
-  "total_amount",
-  "currency",
-  "transaction_datetime",
   "merchant_name",
+  "transaction_datetime",
+  "total_amount",
+  "tax_amount",
+  "currency",
   "payment_method",
-  "ai_suggested_category"
+  "ai_suggested_category",
+  "ai_suggested_category_id",
+  "warnings",
+  "needs_review"
 ];
 
-expectKeys(ocrSuccess, canonicalOcrKeys, "contracts/ocr-success.json");
+assert.equal(ocrSuccess.mode, "ocr_form");
+expectKeys(ocrSuccess, ["mode", "receipt_data"], "contracts/ocr-success.json");
+expectKeys(ocrSuccess.receipt_data, canonicalOcrKeys, "contracts/ocr-success.json:receipt_data");
 expectKeys(
   confirmedOcrRequest,
-  [...canonicalOcrKeys, "wallet_id", "final_category", "notes", "original_suggested_category"],
+  [
+    "total_amount",
+    "currency",
+    "transaction_datetime",
+    "merchant_name",
+    "payment_method",
+    "ai_suggested_category",
+    "wallet_id",
+    "final_category",
+    "notes",
+    "original_suggested_category"
+  ],
   "contracts/confirmed-ocr-transaction-request.json"
 );
 expectKeys(
@@ -76,7 +93,7 @@ assert.deepEqual(
   "Finance service error fixture drifted from canonical service error contract"
 );
 
-assert.equal(typeof ocrSuccess.total_amount, "number");
+assert.equal(typeof ocrSuccess.receipt_data.total_amount, "number");
 assert.equal(typeof confirmedOcrRequest.wallet_id, "string");
 assert.equal(typeof confirmedOcrRequest.final_category, "string");
 assert.equal(

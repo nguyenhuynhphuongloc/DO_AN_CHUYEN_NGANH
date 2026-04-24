@@ -1,11 +1,9 @@
-import type { ReactNode } from "react";
 import { FormEvent, useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
-import { useAuth } from "../auth/AuthContext";
-import { InlineMessage } from "../components/InlineMessage";
-import { PageShell } from "../components/PageShell";
-import type { ApiError } from "../../receipt-ocr/types";
+import { InlineMessage } from "../../components/shared/InlineMessage";
+import { useAuth } from "../../features/auth/AuthContext";
+import type { ApiError } from "../../types/ocr";
 
 function getErrorMessage(error: unknown) {
   if (error && typeof error === "object" && "message" in error) {
@@ -21,6 +19,7 @@ export function LoginPage() {
   const { login, isAuthenticated } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -43,9 +42,11 @@ export function LoginPage() {
     }
 
     setIsSubmitting(true);
-
     try {
       await login({ email, password });
+      if (!rememberMe) {
+        sessionStorage.setItem("vanilla-ledger.ephemeral-login", "true");
+      }
       navigate(redirectTo, { replace: true });
     } catch (submissionError) {
       setError(getErrorMessage(submissionError));
@@ -55,68 +56,63 @@ export function LoginPage() {
   }
 
   return (
-    <PageShell
-      title="Login"
-      description="Authenticate with auth-service, then continue to the protected OCR transaction flow."
-    >
-      <div className="mx-auto max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <Field label="Email">
-            <input
-              className={INPUT_CLASS}
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-            />
-          </Field>
+    <div className="auth-shell">
+      <section className="auth-shell__hero">
+        <div className="section-header__eyebrow">Personal finance workspace</div>
+        <h1>Operate money, receipts, and AI guidance from one clear workspace.</h1>
+        <p>
+          Keep dashboards, OCR receipt capture, and AI assistance in one light, easier-to-read flow.
+        </p>
+        <div className="auth-hero__metrics">
+          <article><strong>Dashboard-ready</strong><span>KPI-rich shell after login</span></article>
+          <article><strong>OCR-first ingestion</strong><span>Preview, edit, confirm, and save</span></article>
+          <article><strong>AI workspace</strong><span>Chatbot and OCR under one module</span></article>
+        </div>
+      </section>
 
-          <Field label="Password">
-            <input
-              className={INPUT_CLASS}
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Enter your password"
-            />
-          </Field>
+      <section className="auth-shell__card">
+        <div className="auth-brand">
+          <div className="brand-mark">V</div>
+          <div>
+            <strong>Vanilla Ledger</strong>
+            <span>Finance management</span>
+          </div>
+        </div>
+        <div className="auth-shell__copy">
+          <div className="section-header__eyebrow">Welcome back</div>
+          <h2>Login</h2>
+          <p>Enter the command layer for budgets, transactions, reports, receipts, and AI Vanilla.</p>
+        </div>
 
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <label className="field">
+            <span>Email</span>
+            <input className="field-control" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
+          </label>
+          <label className="field">
+            <span>Password</span>
+            <input className="field-control" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" />
+          </label>
+          <div className="auth-form__row">
+            <label className="checkbox">
+              <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />
+              <span>Remember me</span>
+            </label>
+            <button className="text-button" type="button">Forgot password</button>
+          </div>
           {error ? <InlineMessage tone="error">{error}</InlineMessage> : null}
-
-          <button
-            className="inline-flex w-full items-center justify-center rounded-full bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:bg-slate-400"
-            type="submit"
-            disabled={isSubmitting}
-          >
+          <button className="button button--accent button--block" type="submit" disabled={isSubmitting}>
             {isSubmitting ? "Logging in..." : "Login"}
           </button>
+          <div className="auth-social">
+            <span>Social login placeholder</span>
+          </div>
         </form>
 
-        <p className="mt-4 text-center text-sm text-slate-500">
-          Need an account?{" "}
-          <Link className="font-medium text-sky-700 hover:text-sky-800" to="/register">
-            Register
-          </Link>
+        <p className="auth-form__footer">
+          Need an account? <Link to="/register">Create one</Link>
         </p>
-      </div>
-    </PageShell>
-  );
-}
-
-const INPUT_CLASS =
-  "w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100";
-
-function Field({
-  label,
-  children
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <label className="block space-y-1">
-      <span className="text-sm font-medium text-slate-700">{label}</span>
-      {children}
-    </label>
+      </section>
+    </div>
   );
 }
