@@ -162,6 +162,11 @@ class ParseReceiptResponse(BaseModel):
     extracted_fields: dict | None
 
 
+class ReceiptDiscardResponse(BaseModel):
+    session_id: UUID
+    status: str
+
+
 class ReceiptFeedbackRequest(BaseModel):
     feedback: str | None = None
     merchant_name: str | None = None

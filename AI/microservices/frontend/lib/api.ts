@@ -240,6 +240,15 @@ export async function confirmReceiptSession(
   return parseJson<ReceiptWorkflow>(response);
 }
 
+export async function discardReceiptSession(id: string): Promise<{ session_id: string; status: string }> {
+  const response = await fetch(`${receiptApiUrl}/receipts/sessions/${id}/discard`, {
+    method: 'POST',
+    headers: createHeaders(undefined, { auth: true }),
+  });
+
+  return parseJson<{ session_id: string; status: string }>(response);
+}
+
 export async function getReceiptArtifactBlob(url: string): Promise<Blob> {
   const absoluteUrl = url.startsWith('http') ? url : `${receiptApiUrl}${url}`;
   const response = await fetch(absoluteUrl, {

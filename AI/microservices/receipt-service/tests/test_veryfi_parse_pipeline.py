@@ -9,8 +9,9 @@ from unittest.mock import patch
 from uuid import uuid4
 
 try:
-    from app.services.parse_pipeline import process_session_parse_job
+    from app.services.parse_pipeline import process_parse_job, process_session_parse_job
 except ModuleNotFoundError as exc:  # pragma: no cover - environment-dependent test import
+    process_parse_job = None  # type: ignore[assignment]
     process_session_parse_job = None  # type: ignore[assignment]
     _IMPORT_ERROR = exc
 else:
@@ -32,6 +33,7 @@ class _FakeDB:
 def _make_job(temp_path: str):
     session = SimpleNamespace(
         id=uuid4(),
+        user_id=42,
         temp_url=temp_path,
         updated_at=datetime.utcnow(),
         status="queued",
@@ -62,6 +64,30 @@ def _make_job(temp_path: str):
     return job
 
 
+def _make_receipt_job(temp_path: str):
+    receipt = SimpleNamespace(
+        id=101,
+        user_id=42,
+        image_url=temp_path,
+        updated_at=datetime.utcnow(),
+        processed_at=None,
+        status="uploaded",
+        parser_result=None,
+        feedback_items=[],
+    )
+    job = SimpleNamespace(
+        id=uuid4(),
+        receipt=receipt,
+        receipt_id=receipt.id,
+        created_at=datetime.utcnow(),
+        started_at=datetime.utcnow(),
+        finished_at=None,
+        status="queued",
+        error_message=None,
+    )
+    return job
+
+
 @unittest.skipIf(process_session_parse_job is None, f"parse pipeline dependencies unavailable: {_IMPORT_ERROR}")
 class ParsePipelineSessionTests(unittest.TestCase):
     def test_process_session_parse_job_persists_veryfi_result(self) -> None:
@@ -79,6 +105,7 @@ class ParsePipelineSessionTests(unittest.TestCase):
             extracted_fields = {
                 "merchant_name": "Store",
                 "transaction_date": "2024-08-15",
+                "transaction_datetime": "2024-08-15T09:45:00",
                 "total_amount": 25.50,
                 "tax_amount": 1.5,
                 "currency": "USD",
@@ -87,8 +114,14 @@ class ParsePipelineSessionTests(unittest.TestCase):
                     "fields": {
                         "merchant_name": "Store",
                         "transaction_date": "2024-08-15",
+                        "transaction_datetime": "2024-08-15T09:45:00",
                         "total_amount": 25.50,
                         "currency": "USD",
+                    },
+                    "review_defaults": {
+                        "merchant_name": "Store",
+                        "amount": 25.50,
+                        "transaction_time": "2024-08-15T09:45:00",
                     },
                     "needs_review_fields": [],
                 },
@@ -104,6 +137,8 @@ class ParsePipelineSessionTests(unittest.TestCase):
                     "app.services.parse_pipeline._run_primary_parse",
                     return_value=(parser_result, extracted_fields, 0.2, 0.05),
                 ),
+                patch("app.services.parse_pipeline.get_default_wallet_id", return_value=None),
+                patch("app.services.parse_pipeline.get_allowed_categories", return_value=[]),
             ):
                 process_session_parse_job(db, job.id)
 
@@ -111,7 +146,9 @@ class ParsePipelineSessionTests(unittest.TestCase):
             self.assertEqual(job.session.status, "ready_for_review")
             self.assertEqual(job.session.ocr_provider, "veryfi")
             self.assertEqual(job.session.merchant_name, "Store")
+            self.assertEqual(job.session.transaction_date.isoformat(), "2024-08-15T09:45:00")
             self.assertEqual(job.session.extracted_json["fields"]["total_amount"], 25.50)
+            self.assertEqual(job.session.extracted_json["fields"]["transaction_datetime"], "2024-08-15T09:45:00")
             self.assertGreaterEqual(db.commit_count, 4)
 
     def test_process_session_parse_job_marks_job_failed_on_parser_error(self) -> None:
@@ -136,6 +173,103 @@ class ParsePipelineSessionTests(unittest.TestCase):
 
             self.assertEqual(job.status, "failed")
             self.assertEqual(job.session.status, "failed")
+            self.assertEqual(job.error_message, "veryfi unavailable")
+            self.assertEqual(db.rollback_count, 1)
+
+
+@unittest.skipIf(process_parse_job is None, f"parse pipeline dependencies unavailable: {_IMPORT_ERROR}")
+class ParsePipelineReceiptTests(unittest.TestCase):
+    def test_process_parse_job_persists_veryfi_result(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir) / "receipt.jpg"
+            temp_path.write_bytes(b"fake-image")
+            job = _make_receipt_job(str(temp_path))
+            db = _FakeDB()
+            parser_result = SimpleNamespace(
+                provider="veryfi",
+                raw_text="Store\nTOTAL 25.50",
+                document={"id": 101, "document_type": "receipt", "category": "Meals"},
+                runtime={"provider": "veryfi", "parser_seconds": 0.2},
+            )
+            extracted_fields = {
+                "merchant_name": "Store",
+                "transaction_date": "2024-08-15",
+                "transaction_datetime": "2024-08-15T09:45:00",
+                "total_amount": 25.50,
+                "tax_amount": 1.5,
+                "currency": "USD",
+                "confidence_score": 0.88,
+                "extracted_json": {
+                    "fields": {
+                        "merchant_name": "Store",
+                        "transaction_date": "2024-08-15",
+                        "transaction_datetime": "2024-08-15T09:45:00",
+                        "total_amount": 25.50,
+                        "currency": "USD",
+                    },
+                    "receipt_summary": {
+                        "merchant_name": "Store",
+                        "transaction_date": "2024-08-15",
+                        "transaction_datetime": "2024-08-15T09:45:00",
+                        "total_amount": 25.50,
+                        "currency": "USD",
+                        "provider_category": "Meals",
+                        "line_items": [],
+                    },
+                    "needs_review_fields": [],
+                    "review_defaults": {
+                        "merchant_name": "Store",
+                        "amount": 25.50,
+                        "transaction_time": "2024-08-15T09:45:00",
+                    },
+                },
+            }
+
+            with (
+                patch("app.services.parse_pipeline._load_parse_job", return_value=job),
+                patch(
+                    "app.services.parse_pipeline._prepare_processed_source",
+                    return_value=(temp_path, {"profile": "disabled"}, 0.0),
+                ),
+                patch(
+                    "app.services.parse_pipeline._run_primary_parse",
+                    return_value=(parser_result, extracted_fields, 0.2, 0.05),
+                ),
+                patch("app.services.parse_pipeline.get_default_wallet_id", return_value=None),
+                patch("app.services.parse_pipeline.get_allowed_categories", return_value=[]),
+            ):
+                process_parse_job(db, job.id)
+
+            self.assertEqual(job.status, "ready_for_review")
+            self.assertEqual(job.receipt.status, "ready_for_review")
+            self.assertIsNotNone(job.receipt.parser_result)
+            self.assertEqual(job.receipt.parser_result.provider, "veryfi")
+            self.assertEqual(job.receipt.parser_result.normalized_json["fields"]["total_amount"], 25.50)
+            self.assertEqual(job.receipt.parser_result.normalized_json["fields"]["transaction_datetime"], "2024-08-15T09:45:00")
+            self.assertGreaterEqual(db.commit_count, 4)
+
+    def test_process_parse_job_marks_job_failed_on_parser_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir) / "receipt.jpg"
+            temp_path.write_bytes(b"fake-image")
+            job = _make_receipt_job(str(temp_path))
+            db = _FakeDB()
+
+            with (
+                patch("app.services.parse_pipeline._load_parse_job", return_value=job),
+                patch(
+                    "app.services.parse_pipeline._prepare_processed_source",
+                    return_value=(temp_path, {"profile": "disabled"}, 0.0),
+                ),
+                patch(
+                    "app.services.parse_pipeline._run_primary_parse",
+                    side_effect=RuntimeError("veryfi unavailable"),
+                ),
+            ):
+                process_parse_job(db, job.id)
+
+            self.assertEqual(job.status, "failed")
+            self.assertEqual(job.receipt.status, "failed")
             self.assertEqual(job.error_message, "veryfi unavailable")
             self.assertEqual(db.rollback_count, 1)
 

@@ -37,9 +37,14 @@ class VeryfiNormalizerTests(unittest.TestCase):
 
         self.assertEqual(result["merchant_name"], "Walgreens")
         self.assertEqual(result["transaction_date"], "2024-08-15")
+        self.assertEqual(result["transaction_datetime"], "2024-08-15T15:56:56")
         self.assertEqual(result["total_amount"], 29.53)
         self.assertEqual(result["tax_amount"], 1.93)
         self.assertEqual(result["currency"], "USD")
+        self.assertEqual(result["extracted_json"]["fields"]["transaction_datetime"], "2024-08-15T15:56:56")
+        self.assertEqual(result["extracted_json"]["review_defaults"]["transaction_time"], "2024-08-15T15:56:56")
+        self.assertEqual(result["extracted_json"]["receipt_summary"]["provider_category"], "Personal Care")
+        self.assertEqual(result["extracted_json"]["receipt_summary"]["line_items"], result["extracted_json"]["items"])
         self.assertEqual(result["extracted_json"]["fields"]["payment_method"], "Visa ***1850")
         self.assertEqual(len(result["extracted_json"]["items"]), 2)
         self.assertEqual(
@@ -70,6 +75,33 @@ class VeryfiNormalizerTests(unittest.TestCase):
             sorted(result["extracted_json"]["needs_review_fields"]),
             ["currency", "merchant_name", "total_amount", "transaction_date"],
         )
+
+    def test_invalid_date_and_empty_currency_are_normalized_to_nullable_review_safe_values(self) -> None:
+        document = {
+            "id": 44,
+            "document_type": "receipt",
+            "date": "15/08/2024",
+            "total": 120000,
+            "currency_code": "",
+            "vendor": {"name": "Mini Stop"},
+            "line_items": [{"description": "Drink", "quantity": 1, "total": 120000}],
+        }
+
+        result = normalize_veryfi_document(
+            document,
+            raw_text="Mini Stop\nDrink\nTOTAL 120000",
+            runtime={"provider": "veryfi"},
+        )
+
+        self.assertEqual(result["merchant_name"], "Mini Stop")
+        self.assertIsNone(result["transaction_date"])
+        self.assertIsNone(result["transaction_datetime"])
+        self.assertIsNone(result["currency"])
+        self.assertIsNone(result["extracted_json"]["fields"]["transaction_date"])
+        self.assertIsNone(result["extracted_json"]["fields"]["transaction_datetime"])
+        self.assertIsNone(result["extracted_json"]["review_defaults"]["transaction_time"])
+        self.assertIn("transaction_date", result["extracted_json"]["needs_review_fields"])
+        self.assertIn("currency", result["extracted_json"]["needs_review_fields"])
 
 
 if __name__ == "__main__":

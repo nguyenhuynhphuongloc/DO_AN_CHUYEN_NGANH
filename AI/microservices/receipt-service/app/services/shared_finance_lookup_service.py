@@ -24,6 +24,47 @@ def resolve_shared_user_id(db: Session, *, email: str) -> int:
     return int(row["id"])
 
 
+def ensure_default_wallet(db: Session, *, user_id: int) -> None:
+    existing_wallet = db.execute(
+        text(
+            """
+            SELECT id, is_default
+            FROM public.wallets
+            WHERE user_id = :user_id
+            ORDER BY is_default DESC, created_at ASC, id ASC
+            LIMIT 1
+            """
+        ),
+        {"user_id": user_id},
+    ).mappings().first()
+
+    if existing_wallet is None:
+        db.execute(
+            text(
+                """
+                INSERT INTO public.wallets (user_id, name, wallet_type, currency, balance, is_default)
+                VALUES (:user_id, 'Default Wallet', 'cash', 'VND', 0, TRUE)
+                """
+            ),
+            {"user_id": user_id},
+        )
+        db.commit()
+        return
+
+    if not bool(existing_wallet["is_default"]):
+        db.execute(
+            text(
+                """
+                UPDATE public.wallets
+                SET is_default = TRUE, updated_at = NOW()
+                WHERE id = :wallet_id
+                """
+            ),
+            {"wallet_id": existing_wallet["id"]},
+        )
+        db.commit()
+
+
 def get_allowed_categories(db: Session, *, user_id: int, transaction_type: str = "EXPENSE") -> list[dict[str, Any]]:
     rows = db.execute(
         text(
@@ -50,6 +91,7 @@ def get_allowed_categories(db: Session, *, user_id: int, transaction_type: str =
 
 
 def get_wallet_suggestions(db: Session, *, user_id: int) -> list[dict[str, Any]]:
+    ensure_default_wallet(db, user_id=user_id)
     rows = db.execute(
         text(
             """

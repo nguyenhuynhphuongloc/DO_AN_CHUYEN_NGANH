@@ -4,7 +4,6 @@ import hmac
 import json
 import time
 from dataclasses import dataclass
-from uuid import UUID
 
 from fastapi import Header, HTTPException
 
@@ -13,7 +12,7 @@ from app.core.config import settings
 
 @dataclass
 class AuthenticatedUser:
-    user_id: UUID
+    user_id: str
     email: str
     role: str
     token: str
@@ -71,12 +70,7 @@ def verify_access_token(token: str) -> AuthenticatedUser:
     if not isinstance(subject, str) or not isinstance(email, str) or not isinstance(role, str):
         raise _unauthorized("Invalid access token")
 
-    try:
-        user_id = UUID(subject)
-    except ValueError as exc:
-        raise _unauthorized("Invalid access token") from exc
-
-    return AuthenticatedUser(user_id=user_id, email=email, role=role, token=token)
+    return AuthenticatedUser(user_id=subject, email=email, role=role, token=token)
 
 
 def get_current_user(authorization: str | None = Header(default=None)) -> AuthenticatedUser:

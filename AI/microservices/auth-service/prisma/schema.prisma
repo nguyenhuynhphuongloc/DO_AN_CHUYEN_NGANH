@@ -7,52 +7,47 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserCurrency {
+  VND
+
+  @@map("enum_users_currency")
+}
+
+enum UserRole {
+  USER @map("user")
+
+  @@map("enum_users_role")
+}
+
 model User {
-  id            String         @id @default(uuid())
-  fullName      String         @map("full_name")
-  email         String         @unique
-  passwordHash  String         @map("password_hash")
-  avatarUrl     String?        @map("avatar_url")
-  status        String         @default("active")
-  emailVerified Boolean        @default(false) @map("email_verified")
-  lastLoginAt   DateTime?      @map("last_login_at")
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
-  userRoles     UserRole[]
-  refreshTokens RefreshToken[]
+  id                      Int            @id @default(autoincrement())
+  name                    String?
+  currency                UserCurrency?  @default(VND)
+  avatarId                Int?           @map("avatar_id")
+  updatedAt               DateTime       @default(now()) @map("updated_at")
+  createdAt               DateTime       @default(now()) @map("created_at")
+  email                   String         @unique(map: "users_email_idx")
+  resetPasswordToken      String?        @map("reset_password_token")
+  resetPasswordExpiration DateTime?      @map("reset_password_expiration")
+  salt                    String?
+  hash                    String?
+  loginAttempts           Decimal?       @map("login_attempts")
+  lockUntil               DateTime?      @map("lock_until")
+  role                    UserRole       @default(USER)
+  refreshTokens           RefreshToken[]
 
   @@map("users")
 }
 
-model Role {
-  id          String     @id @default(uuid())
-  name        String     @unique
-  description String?
-  createdAt   DateTime   @default(now()) @map("created_at")
-  userRoles   UserRole[]
-
-  @@map("roles")
-}
-
-model UserRole {
-  userId     String    @map("user_id")
-  roleId     String    @map("role_id")
-  assignedAt DateTime  @default(now()) @map("assigned_at")
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role       Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
-  @@id([userId, roleId])
-  @@map("user_roles")
-}
-
 model RefreshToken {
-  id         String    @id @default(uuid())
-  userId     String    @map("user_id")
-  tokenHash  String    @unique @map("token_hash")
-  expiresAt  DateTime  @map("expires_at")
-  revokedAt  DateTime? @map("revoked_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String    @id
+  userId    Int       @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId], map: "refresh_tokens_user_id_idx")
   @@map("refresh_tokens")
 }

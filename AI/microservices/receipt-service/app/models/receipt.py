@@ -66,10 +66,7 @@ class ReceiptParserResult(Base):
     raw_text: Mapped[str | None] = mapped_column(Text)
     provider_json: Mapped[dict | None] = mapped_column(JSONB)
     normalized_json: Mapped[dict | None] = mapped_column(JSONB)
-    suggested_category_id: Mapped[int | None] = mapped_column(
-        Integer,
-        ForeignKey("categories.id", ondelete="SET NULL"),
-    )
+    suggested_category_id: Mapped[int | None] = mapped_column(Integer)
     suggested_description: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

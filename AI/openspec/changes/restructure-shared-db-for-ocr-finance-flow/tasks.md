@@ -19,6 +19,7 @@
 - [x] 3.2 Add a category-resolution service that sends normalized receipt context plus DB-backed allowed categories to Groq and returns only valid category suggestions.
 - [x] 3.3 Add a description-generation helper that creates a default human-readable description from parsed receipt context and selected category.
 - [x] 3.4 Ensure parser-result persistence stores raw text, normalized JSON, suggested category, and generated description before user confirmation.
+- [x] 3.5 Expand the normalized receipt JSON contract so it explicitly preserves merchant name, transaction date/time, total amount, currency, provider category context, and line items for downstream review and finance mapping.
 
 ## 4. Review Flow And Frontend Changes
 
@@ -26,10 +27,12 @@
 - [x] 4.2 Prefill the review form from normalized parser output, wallet defaults, and AI-backed category suggestions from the shared database.
 - [x] 4.3 Update the parser/debug panel to emphasize parser text and structured JSON while removing confidence-heavy clutter from the primary confirmation experience.
 - [x] 4.4 Preserve user override behavior so edited wallet, category, and description values replace suggestions at confirmation time.
+- [x] 4.5 Preserve parsed receipts as resumable review drafts when the user leaves the flow, and add an explicit discard/no-save path that removes the draft without persisting a confirmed receipt.
 
 ## 5. Migration Validation And Service Rollout
 
-- [ ] 5.1 Validate end-to-end receipt upload, Veryfi parse, Groq category suggestion, review, and confirmed transaction persistence against the shared Neon schema.
-- [ ] 5.2 Verify that transactions created from OCR can be queried back with wallet, category, merchant name, description, and receipt linkage intact.
-- [ ] 5.3 Validate failure paths for missing wallets, invalid category suggestions, partial parser output, and abandoned review sessions.
-- [x] 5.4 Record rollout notes, migration decisions, and follow-up cleanup tasks for any legacy finance-service or receipt-service code that still assumes the old schema.
+- [x] 5.1 Validate end-to-end receipt upload, Veryfi parse, Groq category suggestion, review, and confirmed transaction persistence against the shared Neon schema.
+- [x] 5.2 Verify that transactions created from OCR can be queried back with wallet, category, merchant name, description, and receipt linkage intact.
+- [x] 5.3 Validate failure paths for missing wallets, invalid category suggestions, partial parser output, and abandoned review sessions.
+- [x] 5.4 Validate draft lifecycle behavior: resume after leaving review, explicit discard/no-save, and promotion from draft receipt/session into confirmed receipt plus linked transaction.
+- [x] 5.5 Record rollout notes, migration decisions, and follow-up cleanup tasks for any legacy finance-service or receipt-service code that still assumes the old schema.

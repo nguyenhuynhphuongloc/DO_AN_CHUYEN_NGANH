@@ -22,6 +22,10 @@ The system SHALL use normalized Veryfi-derived receipt data as the input to Groq
 - **WHEN** normalized receipt context is missing or ambiguous
 - **THEN** the system SHALL allow the category suggestion to remain empty or uncertain rather than forcing an invented category
 
+#### Scenario: Provider category is present in parser output
+- **WHEN** Veryfi or another parser returns its own category label
+- **THEN** that provider category SHALL be treated as context inside the normalized receipt JSON and SHALL NOT bypass DB-constrained category selection
+
 ### Requirement: Category selection remains review-first and user-overridable
 The system SHALL treat AI category output as a suggestion for the review form and SHALL require explicit user confirmation before the final transaction category is persisted.
 

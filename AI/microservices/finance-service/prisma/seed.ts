@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { CategoryType, PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -16,11 +16,11 @@ async function main() {
   }
 
   const categories = [
-    { name: 'Food', type: 'expense', icon: 'utensils' },
-    { name: 'Transport', type: 'expense', icon: 'car' },
-    { name: 'Shopping', type: 'expense', icon: 'shopping-bag' },
-    { name: 'Salary', type: 'income', icon: 'wallet' },
-    { name: 'Other Income', type: 'income', icon: 'badge-dollar-sign' },
+    { name: 'Food', type: CategoryType.EXPENSE, icon: 'utensils' },
+    { name: 'Transport', type: CategoryType.EXPENSE, icon: 'car' },
+    { name: 'Shopping', type: CategoryType.EXPENSE, icon: 'shopping-bag' },
+    { name: 'Salary', type: CategoryType.INCOME, icon: 'wallet' },
+    { name: 'Other Income', type: CategoryType.INCOME, icon: 'badge-dollar-sign' },
   ];
 
   for (const category of categories) {

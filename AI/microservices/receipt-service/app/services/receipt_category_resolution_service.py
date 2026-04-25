@@ -103,7 +103,14 @@ class ReceiptCategoryResolutionService:
                     "content": json.dumps(
                         {
                             "receipt": normalized_receipt,
-                            "allowed_categories": [candidate.__dict__ for candidate in candidates],
+                            "allowed_categories": [
+                                {
+                                    "id": candidate.id,
+                                    "name": candidate.name,
+                                    "type": candidate.type,
+                                }
+                                for candidate in candidates
+                            ],
                         },
                         ensure_ascii=False,
                     ),

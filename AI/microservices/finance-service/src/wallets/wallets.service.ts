@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/library';
 import { AuthenticatedUser } from 'src/common/auth/authenticated-user.interface';
 import { resolveSharedDbUser } from 'src/common/auth/resolve-shared-db-user';
+import { ensureDefaultWallet } from 'src/common/wallets/ensure-default-wallet';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateWalletDto } from './dto/create-wallet.dto';
 
@@ -11,6 +12,7 @@ export class WalletsService {
 
   async findAll(user: AuthenticatedUser) {
     const dbUser = await resolveSharedDbUser(this.prisma, user);
+    await ensureDefaultWallet(this.prisma, dbUser.id, dbUser.currency);
     const wallets = await this.prisma.wallet.findMany({
       where: { userId: dbUser.id },
       include: {
@@ -39,6 +41,9 @@ export class WalletsService {
 
   async create(user: AuthenticatedUser, body: CreateWalletDto) {
     const dbUser = await resolveSharedDbUser(this.prisma, user);
+    const existingWallets = await this.prisma.wallet.count({
+      where: { userId: dbUser.id },
+    });
     const wallet = await this.prisma.wallet.create({
       data: {
         userId: dbUser.id,
@@ -46,7 +51,7 @@ export class WalletsService {
         balance: new Decimal(body.initialBalance),
         currency: body.currency ?? 'VND',
         walletType: 'cash',
-        isDefault: false,
+        isDefault: existingWallets === 0,
       },
     });
 

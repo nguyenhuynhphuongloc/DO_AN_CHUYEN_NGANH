@@ -14,6 +14,7 @@ from app.models.receipt import Receipt, ReceiptFeedback, ReceiptParseSession, Re
 from app.schemas.receipt import (
     ParseReceiptResponse,
     ReceiptConfirmRequest,
+    ReceiptDiscardResponse,
     ReceiptExtractionResponse,
     ReceiptFeedbackResponse,
     ReceiptFeedbackRequest,
@@ -33,7 +34,7 @@ from app.services.receipt_queue import (
     get_active_session_parse_job,
 )
 from app.services.receipt_storage import store_temp_upload
-from app.services.session_finalize import finalize_parse_session, utc_now
+from app.services.session_finalize import discard_parse_session, finalize_parse_session, utc_now
 from app.services.shared_finance_lookup_service import get_transaction_by_receipt_id, resolve_shared_user_id
 
 router = APIRouter(prefix="/receipts", tags=["receipts"])
@@ -91,16 +92,31 @@ def _load_session(session_id: str, db: Session, user_id: int | None = None) -> R
 def _coerce_transaction_date(value: object) -> datetime | None:
     if value in (None, ""):
         return None
-    text_value = str(value)
+    text_value = str(value).replace("Z", "+00:00")
     if len(text_value) == 10:
         return datetime.fromisoformat(f"{text_value}T12:00:00")
     return datetime.fromisoformat(text_value)
 
 
+def _normalized_transaction_fields(value: object) -> tuple[str | None, str | None]:
+    coerced = _coerce_transaction_date(value)
+    if coerced is None:
+        return None, None
+    raw_text = str(value)
+    date_value = coerced.date().isoformat()
+    if len(raw_text) == 10:
+        return date_value, None
+    return date_value, coerced.isoformat()
+
+
 def _merge_corrected_extraction_payload(original_data: dict | None, corrected_fields: dict, *, status: str) -> dict:
     payload = dict(original_data or {})
     fields = dict(payload.get("fields") or {})
-    fields.update(corrected_fields)
+    fields.update({key: value for key, value in corrected_fields.items() if key != "transaction_date"})
+    if "transaction_date" in corrected_fields:
+        transaction_date, transaction_datetime = _normalized_transaction_fields(corrected_fields.get("transaction_date"))
+        fields["transaction_date"] = transaction_date
+        fields["transaction_datetime"] = transaction_datetime
     payload["fields"] = fields
 
     review_defaults = dict(payload.get("review_defaults") or {})
@@ -109,8 +125,24 @@ def _merge_corrected_extraction_payload(original_data: dict | None, corrected_fi
     if "total_amount" in corrected_fields:
         review_defaults["amount"] = corrected_fields.get("total_amount")
     if "transaction_date" in corrected_fields:
-        review_defaults["transaction_time"] = corrected_fields.get("transaction_date")
+        transaction_date, transaction_datetime = _normalized_transaction_fields(corrected_fields.get("transaction_date"))
+        review_defaults["transaction_time"] = transaction_datetime or transaction_date
     payload["review_defaults"] = review_defaults
+
+    receipt_summary = dict(payload.get("receipt_summary") or {})
+    if "merchant_name" in corrected_fields:
+        receipt_summary["merchant_name"] = corrected_fields.get("merchant_name")
+    if "total_amount" in corrected_fields:
+        receipt_summary["total_amount"] = corrected_fields.get("total_amount")
+    if "currency" in corrected_fields:
+        receipt_summary["currency"] = corrected_fields.get("currency")
+    if "transaction_date" in corrected_fields:
+        transaction_date, transaction_datetime = _normalized_transaction_fields(corrected_fields.get("transaction_date"))
+        receipt_summary["transaction_date"] = transaction_date
+        receipt_summary["transaction_datetime"] = transaction_datetime
+    if payload.get("items") is not None and "line_items" not in receipt_summary:
+        receipt_summary["line_items"] = list(payload.get("items") or [])
+    payload["receipt_summary"] = receipt_summary
 
     needs_review_fields = set(payload.get("needs_review_fields") or [])
     for field_name, field_value in corrected_fields.items():
@@ -178,7 +210,11 @@ def _build_receipt_extraction(parser_result: ReceiptParserResult | None) -> Rece
         id=parser_result.id,
         receipt_id=parser_result.receipt_id,
         merchant_name=fields.get("merchant_name"),
-        transaction_date=_coerce_transaction_date(fields.get("transaction_date")).date() if fields.get("transaction_date") else None,
+        transaction_date=(
+            _coerce_transaction_date(fields.get("transaction_datetime") or fields.get("transaction_date")).date()
+            if fields.get("transaction_datetime") or fields.get("transaction_date")
+            else None
+        ),
         total_amount=float(fields["total_amount"]) if fields.get("total_amount") is not None else None,
         tax_amount=float(fields["tax_amount"]) if fields.get("tax_amount") is not None else None,
         currency=fields.get("currency"),
@@ -265,7 +301,11 @@ def _serialize_session(session: ReceiptParseSession, *, finance_warning: str | N
             id=0,
             receipt_id=session.confirmed_receipt_id or 0,
             merchant_name=session.merchant_name,
-            transaction_date=_coerce_transaction_date(fields.get("transaction_date")).date() if fields.get("transaction_date") else None,
+            transaction_date=(
+                _coerce_transaction_date(fields.get("transaction_datetime") or fields.get("transaction_date")).date()
+                if fields.get("transaction_datetime") or fields.get("transaction_date")
+                else None
+            ),
             total_amount=float(session.total_amount) if session.total_amount is not None else None,
             tax_amount=float(session.tax_amount) if session.tax_amount is not None else None,
             currency=session.currency,
@@ -473,7 +513,7 @@ def save_feedback(
         "transaction_date": (
             payload.transaction_date.isoformat()
             if payload.transaction_date is not None
-            else fields.get("transaction_date")
+            else fields.get("transaction_datetime") or fields.get("transaction_date")
         ),
         "total_amount": payload.total_amount if payload.total_amount is not None else fields.get("total_amount"),
         "tax_amount": payload.tax_amount if payload.tax_amount is not None else fields.get("tax_amount"),
@@ -662,3 +702,15 @@ def confirm_receipt_session(
         updated_at=receipt.updated_at,
     )
     return serialized
+
+
+@router.post("/sessions/{session_id}/discard", response_model=ReceiptDiscardResponse)
+def discard_receipt_session(
+    session_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ReceiptDiscardResponse:
+    shared_user_id = _resolve_current_shared_user_id(db, current_user)
+    session = _load_session(session_id, db, shared_user_id)
+    discard_parse_session(db, session, current_user)
+    return ReceiptDiscardResponse(session_id=session.id, status="discarded")

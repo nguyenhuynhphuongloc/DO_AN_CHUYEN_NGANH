@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import { TransactionType as PrismaTransactionType } from '@prisma/client';
 import { AuthenticatedUser } from 'src/common/auth/authenticated-user.interface';
 import { resolveSharedDbUser } from 'src/common/auth/resolve-shared-db-user';
+import { ensureDefaultWallet } from 'src/common/wallets/ensure-default-wallet';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
@@ -9,6 +11,7 @@ export class DashboardService {
 
   async getSummary(user: AuthenticatedUser) {
     const dbUser = await resolveSharedDbUser(this.prisma, user);
+    await ensureDefaultWallet(this.prisma, dbUser.id, dbUser.currency);
     const [walletCount, transactionCount, walletAggregate, groupedTransactions, recentTransactions] =
       await Promise.all([
         this.prisma.wallet.count({
@@ -41,8 +44,12 @@ export class DashboardService {
         }),
       ]);
 
-    const income = Number(groupedTransactions.find((item) => item.type === 'income')?._sum.amount ?? 0);
-    const expense = Number(groupedTransactions.find((item) => item.type === 'expense')?._sum.amount ?? 0);
+    const income = Number(
+      groupedTransactions.find((item) => item.type === PrismaTransactionType.INCOME)?._sum.amount ?? 0,
+    );
+    const expense = Number(
+      groupedTransactions.find((item) => item.type === PrismaTransactionType.EXPENSE)?._sum.amount ?? 0,
+    );
 
     return {
       walletCount,

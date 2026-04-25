@@ -47,13 +47,39 @@ def cleanup_expired_parse_sessions(db: Session) -> int:
     )
     cleaned = 0
     for session in sessions:
-        delete_file_quietly(session.temp_url)
+        _delete_session_artifacts(session)
         logger.info("Cleaning expired parse session %s", session.id)
         db.delete(session)
         cleaned += 1
     if cleaned:
         db.commit()
     return cleaned
+
+
+def _delete_session_artifacts(session: ReceiptParseSession) -> None:
+    delete_file_quietly(session.temp_url)
+    raw_json = session.ocr_debug_json if isinstance(session.ocr_debug_json, dict) else {}
+    for key in ("processed_image_path", "boxed_image_path", "ocr_text_file_path", "layout_image_path"):
+        value = raw_json.get(key)
+        if value:
+            delete_file_quietly(str(value))
+
+
+def discard_parse_session(
+    db: Session,
+    session: ReceiptParseSession,
+    current_user: AuthenticatedUser,
+) -> None:
+    shared_user_id = resolve_shared_user_id(db, email=current_user.email)
+    if session.user_id != shared_user_id:
+        raise HTTPException(status_code=403, detail="Receipt parse session does not belong to the authenticated user")
+    if session.finalized_at is not None or session.confirmed_receipt_id is not None:
+        raise HTTPException(status_code=400, detail="Confirmed receipt sessions cannot be discarded")
+
+    _delete_session_artifacts(session)
+    logger.info("Discarding parse session %s", session.id)
+    db.delete(session)
+    db.commit()
 
 
 def finalize_parse_session(
@@ -74,7 +100,6 @@ def finalize_parse_session(
         return session, confirmed_receipt, session.finance_transaction_id or "", None
 
     now = utc_now()
-    permanent_url = promote_temp_upload(session.temp_url, session.file_name)
     try:
         image_hash = Path(session.temp_url).read_bytes()
     except OSError:
@@ -83,7 +108,7 @@ def finalize_parse_session(
     receipt = Receipt(
         user_id=shared_user_id,
         file_name=session.file_name,
-        image_url=permanent_url,
+        image_url=session.temp_url,
         mime_type=session.mime_type,
         file_size=session.file_size,
         image_hash=compute_image_hash(image_hash) if image_hash else session.image_hash,
@@ -104,9 +129,34 @@ def finalize_parse_session(
         "currency": session.currency or "VND",
     }
     extracted_json = dict(session.extracted_json or {})
-    extracted_json["fields"] = {
+    fields = {
         **dict(extracted_json.get("fields") or {}),
         **corrected_fields,
+        "transaction_date": payload.transaction_date.date().isoformat(),
+        "transaction_datetime": payload.transaction_date.isoformat(),
+    }
+    extracted_json["fields"] = fields
+    review_defaults = dict(extracted_json.get("review_defaults") or {})
+    review_defaults["merchant_name"] = corrected_fields["merchant_name"]
+    review_defaults["amount"] = payload.amount
+    review_defaults["transaction_time"] = payload.transaction_date.isoformat()
+    review_defaults["wallet_id"] = payload.wallet_id
+    review_defaults["category_id"] = payload.category_id
+    review_defaults["description"] = payload.description
+    extracted_json["review_defaults"] = review_defaults
+    extracted_json["receipt_summary"] = {
+        **dict(extracted_json.get("receipt_summary") or {}),
+        "merchant_name": corrected_fields["merchant_name"],
+        "transaction_date": payload.transaction_date.date().isoformat(),
+        "transaction_datetime": payload.transaction_date.isoformat(),
+        "total_amount": payload.amount,
+        "currency": corrected_fields["currency"],
+        "provider_category": (
+            dict(extracted_json.get("parser_metadata") or {}).get("category")
+            if isinstance(extracted_json.get("parser_metadata"), dict)
+            else None
+        ),
+        "line_items": list(extracted_json.get("items") or []),
     }
     extracted_json["review_status"] = "confirmed"
     receipt.parser_result = ReceiptParserResult(
@@ -138,19 +188,39 @@ def finalize_parse_session(
             )
         )
 
-    finance_result = create_finance_transaction(
-        wallet_id=payload.wallet_id,
-        category_id=payload.category_id,
-        transaction_type=payload.type,
-        amount=payload.amount,
-        description=payload.description,
-        merchant_name=payload.merchant_name,
-        transaction_date=payload.transaction_date,
-        receipt_id=receipt.id,
-        access_token=current_user.token,
-    )
+    db.commit()
+    db.refresh(receipt)
+
+    try:
+        finance_result = create_finance_transaction(
+            wallet_id=payload.wallet_id,
+            category_id=payload.category_id,
+            transaction_type=payload.type,
+            amount=payload.amount,
+            description=payload.description,
+            merchant_name=payload.merchant_name,
+            transaction_date=payload.transaction_date,
+            receipt_id=receipt.id,
+            access_token=current_user.token,
+        )
+    except Exception:
+        logger.exception("Finance transaction creation failed for parse session %s; removing provisional receipt %s", session.id, receipt.id)
+        try:
+            db.delete(receipt)
+            db.commit()
+        except Exception:
+            db.rollback()
+            logger.exception("Failed to clean up provisional receipt %s after finance error", receipt.id)
+        raise
+
     finance_transaction_id = finance_result["id"]
     finance_warning = finance_result["warning"]
+
+    try:
+        permanent_url = promote_temp_upload(session.temp_url, session.file_name)
+    except OSError:
+        logger.warning("Could not promote temp upload for parse session %s; keeping temp path", session.id)
+        permanent_url = session.temp_url
 
     receipt.parser_result.normalized_json = {
         **dict(receipt.parser_result.normalized_json or {}),

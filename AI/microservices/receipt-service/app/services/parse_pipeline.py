@@ -253,7 +253,11 @@ def _apply_shared_review_suggestions(
     suggested_description = build_receipt_description(
         merchant_name=review_defaults.get("merchant_name") or extracted_fields.get("merchant_name"),
         category_name=suggested_category_name or parser_metadata.get("category"),
-        transaction_date=review_defaults.get("transaction_time") or extracted_fields.get("transaction_date"),
+        transaction_date=(
+            review_defaults.get("transaction_time")
+            or extracted_fields.get("transaction_datetime")
+            or extracted_fields.get("transaction_date")
+        ),
         total_amount=review_defaults.get("amount") or extracted_fields.get("total_amount"),
         currency=extracted_fields.get("currency"),
     )
@@ -358,7 +362,7 @@ def _persist_session_results(
         timings=timings,
     )
     session.merchant_name = extracted_fields.get("merchant_name")
-    transaction_date = extracted_fields.get("transaction_date")
+    transaction_date = extracted_fields.get("transaction_datetime") or extracted_fields.get("transaction_date")
     session.transaction_date = datetime.fromisoformat(str(transaction_date)) if transaction_date else None
     session.total_amount = Decimal(str(extracted_fields["total_amount"])) if extracted_fields.get("total_amount") is not None else None
     session.tax_amount = Decimal(str(extracted_fields["tax_amount"])) if extracted_fields.get("tax_amount") is not None else None

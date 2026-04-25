@@ -125,6 +125,7 @@ export type ReceiptStructuredItem = {
 export type ReceiptStructuredFields = {
   merchant_name?: string | null;
   transaction_date?: string | null;
+  transaction_datetime?: string | null;
   total_amount?: number | null;
   currency?: string | null;
   subtotal_amount?: number | null;
@@ -140,6 +141,16 @@ export type ReceiptStructuredFields = {
   guest_count?: number | null;
   time_in?: string | null;
   time_out?: string | null;
+};
+
+export type ReceiptSummary = {
+  merchant_name?: string | null;
+  transaction_date?: string | null;
+  transaction_datetime?: string | null;
+  total_amount?: number | null;
+  currency?: string | null;
+  provider_category?: string | null;
+  line_items?: ReceiptStructuredItem[] | null;
 };
 
 export type ReceiptStructuredExtraction = {
@@ -169,6 +180,7 @@ export type ReceiptStructuredExtraction = {
   extraction_notes?: string[] | null;
   parser_metadata?: Record<string, unknown> | null;
   provider_document_summary?: Record<string, unknown> | null;
+  receipt_summary?: ReceiptSummary | null;
   review_defaults?: {
     merchant_name?: string | null;
     amount?: number | null;

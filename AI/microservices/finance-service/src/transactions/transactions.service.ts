@@ -1,12 +1,13 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { TransactionType as PrismaTransactionType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { AuthenticatedUser } from 'src/common/auth/authenticated-user.interface';
 import { resolveSharedDbUser } from 'src/common/auth/resolve-shared-db-user';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 
-function toDatabaseTransactionType(type: 'INCOME' | 'EXPENSE') {
-  return type.toLowerCase();
+function toDatabaseTransactionType(type: 'INCOME' | 'EXPENSE'): PrismaTransactionType {
+  return type === 'INCOME' ? PrismaTransactionType.INCOME : PrismaTransactionType.EXPENSE;
 }
 
 function formatOverspendAmount(amount: number) {
@@ -90,16 +91,17 @@ export class TransactionsService {
     const balanceDelta = body.type === 'INCOME' ? body.amount : -body.amount;
     const overspendAmount = body.type === 'EXPENSE' ? Math.max(body.amount - currentBalance, 0) : 0;
 
-    const [, transaction] = await this.prisma.$transaction([
-      this.prisma.wallet.update({
+    const transaction = await this.prisma.$transaction(async (tx) => {
+      await tx.wallet.update({
         where: { id: walletId },
         data: {
           balance: {
             increment: new Decimal(balanceDelta),
           },
         },
-      }),
-      this.prisma.transaction.create({
+      });
+
+      return tx.transaction.create({
         data: {
           userId: dbUser.id,
           walletId,
@@ -117,8 +119,8 @@ export class TransactionsService {
           wallet: true,
           category: true,
         },
-      }),
-    ]);
+      });
+    });
 
     return {
       ...transaction,

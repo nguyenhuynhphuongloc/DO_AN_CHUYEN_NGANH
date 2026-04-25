@@ -7,15 +7,41 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserCurrency {
+  VND
+
+  @@map("enum_users_currency")
+}
+
+enum UserRole {
+  USER @map("user")
+
+  @@map("enum_users_role")
+}
+
+enum CategoryType {
+  EXPENSE @map("expense")
+  INCOME  @map("income")
+
+  @@map("enum_categories_type")
+}
+
+enum TransactionType {
+  EXPENSE @map("expense")
+  INCOME  @map("income")
+
+  @@map("enum_transactions_type")
+}
+
 model User {
   id           Int           @id @default(autoincrement())
   name         String?
-  currency     String?       @default("VND")
+  currency     UserCurrency? @default(VND)
   avatarId     Int?          @map("avatar_id")
   updatedAt    DateTime      @default(now()) @map("updated_at")
   createdAt    DateTime      @default(now()) @map("created_at")
   email        String
-  role         String        @default("user")
+  role         UserRole      @default(USER)
   categories   Category[]
   wallets      Wallet[]
   transactions Transaction[]
@@ -26,7 +52,7 @@ model User {
 model Category {
   id           Int           @id @default(autoincrement())
   name         String
-  type         String
+  type         CategoryType
   icon         String?
   color        String?
   userId       Int?          @map("user_id")
@@ -57,7 +83,7 @@ model Wallet {
 
 model Transaction {
   id           Int       @id @default(autoincrement())
-  type         String
+  type         TransactionType
   amount       Decimal
   categoryId   Int       @map("category_id")
   description  String?

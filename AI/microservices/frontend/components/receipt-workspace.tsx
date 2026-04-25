@@ -5,6 +5,7 @@ import { ChangeEvent, DragEvent, FormEvent, useEffect, useMemo, useState } from 
 import {
   confirmReceipt,
   confirmReceiptSession,
+  discardReceiptSession,
   getCategories,
   getReceipt,
   getReceiptSession,
@@ -144,7 +145,13 @@ export function ReceiptWorkspace() {
     setReceipt(receiptData);
     setMerchantName(extraction?.merchant_name ?? '');
     setAmount(extraction?.total_amount !== null && extraction?.total_amount !== undefined ? String(extraction.total_amount) : '');
-    setTransactionDate(buildDateTimeInput(extraction?.transaction_date));
+    setTransactionDate(
+      buildDateTimeInput(
+        extractionDetails?.review_defaults?.transaction_time ??
+          extractionDetails?.fields?.transaction_datetime ??
+          extraction?.transaction_date,
+      ),
+    );
     setDescription((prev) => prev || extractionDetails?.review_defaults?.description || extractionDetails?.description_text || '');
     setWalletId((prev) => prev || String(extractionDetails?.review_defaults?.wallet_id ?? ''));
     setCategoryId((prev) => prev || String(extractionDetails?.review_defaults?.category_id ?? ''));
@@ -363,7 +370,15 @@ export function ReceiptWorkspace() {
             ? String(parsedFields.total_amount)
             : '',
         );
-        setTransactionDate(buildDateTimeInput(parsedFields.transaction_date ? String(parsedFields.transaction_date) : null));
+        setTransactionDate(
+          buildDateTimeInput(
+            parsedFields.transaction_datetime
+              ? String(parsedFields.transaction_datetime)
+              : parsedFields.transaction_date
+                ? String(parsedFields.transaction_date)
+                : null,
+          ),
+        );
       }
     } catch (err) {
       if (err instanceof MissingAuthSessionError) {
@@ -431,6 +446,34 @@ export function ReceiptWorkspace() {
         return;
       }
       setError(err instanceof Error ? err.message : 'Unable to confirm receipt');
+    }
+  }
+
+  async function handleDiscard() {
+    if (!sessionId) {
+      return;
+    }
+
+    setStatus('Discarding receipt draft...');
+    setError('');
+    try {
+      await discardReceiptSession(sessionId);
+      setReceipt(null);
+      setReceiptId(null);
+      setSessionId(null);
+      setMerchantName('');
+      setAmount('');
+      setTransactionDate('');
+      setDescription('');
+      setFeedback('');
+      setStatus('Receipt draft discarded');
+      router.replace('/receipts/upload');
+    } catch (err) {
+      if (err instanceof MissingAuthSessionError) {
+        router.replace('/login');
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Unable to discard receipt draft');
     }
   }
 
@@ -637,6 +680,16 @@ export function ReceiptWorkspace() {
             >
               Confirm receipt
             </button>
+            {sessionId ? (
+              <button
+                type="button"
+                onClick={() => void handleDiscard()}
+                className="rounded-full border border-red-300 px-5 py-3 text-sm font-semibold text-red-700 disabled:opacity-60"
+                disabled={!reviewReady}
+              >
+                Discard draft
+              </button>
+            ) : null}
           </div>
         </form>
       </div>

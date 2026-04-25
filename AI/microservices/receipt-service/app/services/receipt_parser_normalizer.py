@@ -50,7 +50,29 @@ def _coerce_date(value: Any) -> str | None:
     try:
         return datetime.fromisoformat(normalized).date().isoformat()
     except ValueError:
-        return normalized if len(normalized) == 10 else None
+        if (
+            len(normalized) == 10
+            and normalized[4:5] == "-"
+            and normalized[7:8] == "-"
+            and normalized[:4].isdigit()
+            and normalized[5:7].isdigit()
+            and normalized[8:10].isdigit()
+        ):
+            return normalized
+        return None
+
+
+def _coerce_datetime(value: Any) -> str | None:
+    normalized = _clean_text(value)
+    if normalized is None:
+        return None
+    candidate = normalized.replace("Z", "+00:00")
+    if "T" not in candidate and " " not in candidate:
+        return None
+    try:
+        return datetime.fromisoformat(candidate).isoformat()
+    except ValueError:
+        return None
 
 
 def _confidence(candidate: Any, *, present_default: float | None = None) -> float | None:
@@ -121,6 +143,7 @@ def normalize_veryfi_document(document: dict[str, Any], *, raw_text: str, runtim
     merchant_address = _clean_text(vendor.get("address")) or _clean_text(document.get("bill_to_address"))
     merchant_phone = _clean_text(vendor.get("phone_number")) or _clean_text(document.get("phone"))
     transaction_date = _coerce_date(document.get("date"))
+    transaction_datetime = _coerce_datetime(document.get("date"))
     total_amount = _to_float(document.get("total"))
     tax_amount = _to_float(document.get("tax"))
     subtotal_amount = _to_float(document.get("subtotal"))
@@ -137,6 +160,7 @@ def normalize_veryfi_document(document: dict[str, Any], *, raw_text: str, runtim
     field_confidence: dict[str, float | None] = {
         "merchant_name": _confidence(vendor, present_default=0.88 if merchant_name else None),
         "transaction_date": _confidence(document.get("date"), present_default=0.84 if transaction_date else None),
+        "transaction_datetime": _confidence(document.get("date"), present_default=0.84 if transaction_datetime else None),
         "total_amount": _confidence(document.get("total"), present_default=0.9 if total_amount is not None else None),
         "currency": _confidence(document.get("currency_code"), present_default=0.8 if currency else None),
         "payment_method": _confidence(payment, present_default=0.75 if payment_method else None),
@@ -165,6 +189,7 @@ def normalize_veryfi_document(document: dict[str, Any], *, raw_text: str, runtim
     fields = {
         "merchant_name": merchant_name,
         "transaction_date": transaction_date,
+        "transaction_datetime": transaction_datetime,
         "total_amount": total_amount,
         "currency": currency,
         "subtotal_amount": subtotal_amount,
@@ -198,6 +223,15 @@ def normalize_veryfi_document(document: dict[str, Any], *, raw_text: str, runtim
         },
         "fields": fields,
         "items": line_items,
+        "receipt_summary": {
+            "merchant_name": merchant_name,
+            "transaction_date": transaction_date,
+            "transaction_datetime": transaction_datetime,
+            "total_amount": total_amount,
+            "currency": currency,
+            "provider_category": category,
+            "line_items": line_items,
+        },
         "field_confidence": field_confidence,
         "needs_review_fields": sorted(set(review_fields)),
         "description_text": description_text,
@@ -217,7 +251,7 @@ def normalize_veryfi_document(document: dict[str, Any], *, raw_text: str, runtim
         "review_defaults": {
             "merchant_name": merchant_name,
             "amount": total_amount,
-            "transaction_time": transaction_date,
+            "transaction_time": transaction_datetime or transaction_date,
             "description": description_text,
         },
     }
@@ -232,6 +266,7 @@ def normalize_veryfi_document(document: dict[str, Any], *, raw_text: str, runtim
     return {
         "merchant_name": merchant_name,
         "transaction_date": transaction_date,
+        "transaction_datetime": transaction_datetime,
         "total_amount": total_amount,
         "tax_amount": tax_amount,
         "currency": currency,

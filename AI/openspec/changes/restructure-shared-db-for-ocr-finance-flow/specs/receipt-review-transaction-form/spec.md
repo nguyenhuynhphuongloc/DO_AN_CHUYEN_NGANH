@@ -22,6 +22,10 @@ The system SHALL prefill review fields from normalized parser output and databas
 - **WHEN** the review form loads with valid suggestions
 - **THEN** the category field SHALL be prefilled from the AI category suggestion and the wallet field SHALL be prefilled from DB-backed defaults or configured user defaults
 
+#### Scenario: Review form needs item-level context
+- **WHEN** the user inspects why the parser chose certain values
+- **THEN** the review/debug experience SHALL be able to reference line items and provider category context from the normalized receipt JSON without expanding the primary form beyond the six business fields
+
 ### Requirement: Default description is generated and remains editable
 The system SHALL generate a default human-readable description from parsed receipt context and SHALL allow the user to modify it before confirmation.
 
@@ -32,3 +36,14 @@ The system SHALL generate a default human-readable description from parsed recei
 #### Scenario: User edits the generated description
 - **WHEN** the user changes the description before confirmation
 - **THEN** the user-edited description SHALL be saved instead of the generated default
+
+### Requirement: Review flow preserves draft and discard semantics
+The system SHALL distinguish between leaving a parsed receipt in draft review state and explicitly discarding it.
+
+#### Scenario: User leaves the review page without confirming
+- **WHEN** the user navigates away after OCR parsing has already completed
+- **THEN** the parsed receipt SHALL remain resumable as a draft review item until it expires or is explicitly discarded
+
+#### Scenario: User chooses not to save the receipt
+- **WHEN** the user explicitly discards the parsed receipt
+- **THEN** the system SHALL remove the draft review item and SHALL NOT create a confirmed receipt or finance transaction

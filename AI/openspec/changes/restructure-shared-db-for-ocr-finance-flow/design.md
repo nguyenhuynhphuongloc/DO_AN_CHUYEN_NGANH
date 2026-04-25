@@ -8,8 +8,10 @@ The target product direction is:
 receipt image
   -> Veryfi OCR/parser
   -> normalized receipt JSON
+     (merchant name, date/time, total amount, currency, provider category context, line items)
+  -> map normalized JSON into review fields
   -> Groq category analysis over allowed DB categories
-  -> review form
+  -> review draft/session
   -> confirmed transaction in shared PostgreSQL
 ```
 
@@ -33,9 +35,11 @@ Constraints:
 - Add explicit wallet support instead of overloading budgets or other finance tables with wallet semantics.
 - Extend transaction persistence so OCR-confirmed transactions can store `merchant_name`, `receipt_id`, and source metadata.
 - Add receipt and parser-result persistence tables that preserve raw and normalized OCR/AI outputs before confirmation.
+- Preserve a stable normalized receipt JSON contract that can be reused by review UI, category selection, debug output, and later finance persistence.
 - Add a DB-backed category-resolution flow where Groq chooses only from categories that exist for the current user or system scope.
 - Keep the review form minimal: merchant name, amount, transaction time, wallet, category, and description.
 - Generate a default description from parsed receipt data and selected category while preserving user override.
+- Preserve parsed receipts as resumable drafts until explicit confirmation, and support explicit discard/no-save behavior without persisting a confirmed receipt.
 - Keep the application logically split into services/modules, but make those services depend on one shared DB contract.
 
 **Non-Goals:**
@@ -78,11 +82,24 @@ The design will introduce or align separate receipt-layer tables for uploaded re
 Why this approach:
 - OCR/parser output is probabilistic and reviewable; transactions are authoritative user-confirmed finance facts.
 - The system must preserve parser text, structured JSON, and suggested category/description before the user confirms anything.
+- The system must preserve a normalized receipt JSON payload containing merchant name, transaction date/time, total amount, currency, provider category context, and line items before the user confirms anything.
 - Receipt-linked transaction history enables traceability without turning transactions into parser debug stores.
 
 Alternatives considered:
 - Persist only transactions and discard intermediate OCR/parser state. Rejected because the review workflow requires inspection before save.
 - Store all parser data directly on transactions. Rejected because unconfirmed parse state and confirmed finance state have different lifecycles.
+
+### 3a. Parsed receipts remain drafts until the user confirms or discards them
+The system will keep parsed receipt sessions as resumable drafts after OCR/AI processing. Promotion into a durable confirmed receipt record happens only at confirmation time, while explicit discard removes the draft without keeping a confirmed receipt.
+
+Why this approach:
+- Users may leave the review flow after OCR has already finished, and the system must let them resume instead of forcing a full re-upload.
+- Confirmation is the boundary where finance truth is created, so receipt permanence and finance linkage should follow that same boundary.
+- Explicit discard is different from timeout-based cleanup: it represents a user choice not to save the receipt.
+
+Alternatives considered:
+- Create the durable receipt record immediately after OCR and keep it forever even if the user abandons review. Rejected because it keeps unwanted receipt records the user chose not to save.
+- Delete all draft state as soon as the user leaves the page. Rejected because it makes the OCR flow fragile and frustrating for resumable review.
 
 ### 4. Groq will perform constrained category selection, not open-ended category invention
 Groq will receive normalized receipt data plus the allowed categories from the shared DB and will return a suggested category from that set only. The system will not allow Groq to invent categories outside the DB.
@@ -91,6 +108,7 @@ Why this approach:
 - Category consistency must remain tied to the user’s finance taxonomy.
 - It prevents the model from returning labels that have no corresponding DB record.
 - It makes the output explainable and implementable in a deterministic confirmation flow.
+- It keeps parser/provider categories as context only; the finance category still comes from DB-backed suggestion and user confirmation.
 
 Alternatives considered:
 - Use Veryfi category directly as the final finance category. Rejected because Veryfi categories do not match the app’s DB taxonomy.
@@ -127,6 +145,7 @@ Alternatives considered:
 - [Introducing wallets requires data migration and UI changes before full benefit appears] -> Mitigation: keep wallet schema minimal at first and support a default wallet path for existing users.
 - [Receipt and transaction tables may duplicate some business fields] -> Mitigation: treat receipt-layer data as pre-confirmation traceability and transaction-layer data as confirmed finance truth.
 - [Description generation can sound unnatural in edge cases] -> Mitigation: use simple deterministic templates first, optionally with model assistance, and keep the field user-editable.
+- [Users may expect "do not save" to delete drafts immediately] -> Mitigation: distinguish explicit discard from passive timeout cleanup and make discard semantics part of the API/UI contract.
 
 ## Migration Plan
 
@@ -135,9 +154,10 @@ Alternatives considered:
 3. Backfill minimal defaults where required, such as default wallets or null-safe merchant fields.
 4. Align backend services/modules to the shared schema contract before switching confirmation writes.
 5. Introduce the Groq-backed category-resolution service and parser-result persistence path.
-6. Update the review form and confirmation API to consume wallet/category/description suggestions from the shared DB-backed flow.
-7. Validate end-to-end receipt upload, parse, review, confirm, and transaction lookup against the shared DB.
-8. Roll back by reverting service reads/writes to the previous contract only if schema migration steps were designed to be additive; otherwise require a reverse migration plan before deployment.
+6. Update the review form and confirmation API to consume wallet/category/description suggestions from the shared DB-backed flow and to preserve resumable drafts until confirmation.
+7. Add explicit discard/no-save behavior so draft receipt sessions can be removed without creating a confirmed receipt.
+8. Validate end-to-end receipt upload, parse, review, resume, discard, confirm, and transaction lookup against the shared DB.
+9. Roll back by reverting service reads/writes to the previous contract only if schema migration steps were designed to be additive; otherwise require a reverse migration plan before deployment.
 
 ## Open Questions
 
@@ -145,3 +165,4 @@ Alternatives considered:
 - Should Groq also return a suggested wallet, or should wallet selection remain purely DB-default/manual in this change?
 - How much receipt/provider payload should remain visible in the debug panel once the primary form has been reduced?
 - Should description generation be fully deterministic from templates in v1, with Groq used only for category selection, or should Groq also participate in wording the default description?
+- Should parser/provider category remain visible in debug JSON only, or should it also appear as a read-only comparison field in review?
