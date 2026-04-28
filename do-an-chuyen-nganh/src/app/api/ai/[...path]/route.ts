@@ -4,7 +4,7 @@ const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> }
 ) {
   const path = (await params).path.join('/')
   const url = `${AI_SERVICE_URL}/api/${path}`

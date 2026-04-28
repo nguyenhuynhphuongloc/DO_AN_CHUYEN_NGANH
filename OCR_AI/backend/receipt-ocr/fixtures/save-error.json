@@ -1,4 +1,0 @@
-{
-  "error_code": "INVALID_PAYLOAD",
-  "message": "Reviewed receipt payload is missing required fields."
-}

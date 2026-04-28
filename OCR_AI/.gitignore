@@ -1,7 +1,0 @@
-node_modules/
-dist/
-backend/receipt-ocr/storage/n8n/*
-!backend/receipt-ocr/storage/n8n/.gitkeep
-backend/receipt-ocr/.env
-microservices/**/.env
-.env.local

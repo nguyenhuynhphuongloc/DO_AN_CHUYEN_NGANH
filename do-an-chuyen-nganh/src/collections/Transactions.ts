@@ -4,7 +4,7 @@ export const Transactions: CollectionConfig = {
   slug: 'transactions',
   admin: {
     useAsTitle: 'description',
-    defaultColumns: ['type', 'amount', 'category', 'date', 'description'],
+    defaultColumns: ['type', 'amount', 'merchantName', 'category', 'date'],
   },
   access: {
     read: ({ req: { user } }) => {
@@ -49,8 +49,19 @@ export const Transactions: CollectionConfig = {
       name: 'amount',
       type: 'number',
       required: true,
-      label: 'Số tiền (VND)',
+      label: 'Số tiền',
       min: 0,
+    },
+    {
+      name: 'merchantName',
+      type: 'text',
+      label: 'Tên cửa hàng',
+    },
+    {
+      name: 'currency',
+      type: 'text',
+      label: 'Loại tiền',
+      defaultValue: 'VND',
     },
     {
       name: 'category',
@@ -87,6 +98,19 @@ export const Transactions: CollectionConfig = {
       type: 'upload',
       relationTo: 'media',
       label: 'Hóa đơn',
+    },
+    {
+      name: 'sourceType',
+      type: 'select',
+      label: 'Nguồn tạo giao dịch',
+      defaultValue: 'manual',
+      options: [
+        { label: 'Nhập tay', value: 'manual' },
+        { label: 'Quét hóa đơn AI', value: 'receipt_ai' },
+      ],
+      admin: {
+        position: 'sidebar',
+      },
     },
     {
       name: 'user',

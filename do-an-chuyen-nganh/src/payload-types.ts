@@ -194,11 +194,14 @@ export interface Transaction {
   id: number;
   type: 'income' | 'expense';
   amount: number;
+  merchantName?: string | null;
+  currency?: string | null;
   category: number | Category;
   description?: string | null;
   date: string;
   note?: string | null;
   receipt?: (number | null) | Media;
+  sourceType?: ('manual' | 'receipt_ai') | null;
   user: number | User;
   updatedAt: string;
   createdAt: string;
@@ -367,11 +370,14 @@ export interface CategoriesSelect<T extends boolean = true> {
 export interface TransactionsSelect<T extends boolean = true> {
   type?: T;
   amount?: T;
+  merchantName?: T;
+  currency?: T;
   category?: T;
   description?: T;
   date?: T;
   note?: T;
   receipt?: T;
+  sourceType?: T;
   user?: T;
   updatedAt?: T;
   createdAt?: T;

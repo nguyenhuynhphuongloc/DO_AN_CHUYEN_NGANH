@@ -1,67 +1,132 @@
-# Payload Blank Template
+# FinTrack Website
 
-This template comes configured with the bare minimum to get started on anything you need.
+`do-an-chuyen-nganh` is the main FinTrack website. It runs on Payload CMS + Next.js and uses an external PostgreSQL database through `DATABASE_URL`.
 
-## Quick start
+This repository now also contains the minimal embedded AI runtime that the website needs for:
 
-This template can be deployed directly from our Cloud hosting and it will setup MongoDB and cloud S3 object storage for media.
+- AI-assisted text parsing from chat input
+- Receipt OCR parsing and category suggestion
 
-## Quick Start - local setup
+## Docker layout
 
-To spin up this template locally, follow these steps:
+Run Docker from the root of this repository.
 
-### Clone
+The local stack contains:
 
-After you click the `Deploy` button above, you'll want to have standalone copy of this repo on your machine. If you've already cloned this repo, skip to [Development](#development).
+- `web`: Payload + Next.js website
+- `receipt-ai`: embedded FastAPI service for `nlp/parse`, `ai/advisor`, and `ocr/receipt`
 
-### Development
+The embedded AI runtime lives in:
 
-1. First [clone the repo](#clone) if you have not done so already
-2. `cd my-project && cp .env.example .env` to copy the example environment variables. You'll need to add the `MONGODB_URL` from your Cloud project to your `.env` if you want to use S3 storage and the MongoDB database that was created for you.
+- `services/receipt-ai/`
 
-3. `pnpm install && pnpm dev` to install dependencies and start the dev server
-4. open `http://localhost:3000` to open the app in your browser
+The stack keeps using the existing external Neon/Postgres database. This change does not add a local database container.
 
-That's it! Changes made in `./src` will be reflected in your app. Follow the on-screen instructions to login and create your first admin user. Then check out [Production](#production) once you're ready to build and serve your app, and [Deployment](#deployment) when you're ready to go live.
+## Environment variables
 
-#### Docker (Optional)
+Create `.env` from `.env.example` and set at least:
 
-If you prefer to use Docker for local development instead of a local MongoDB instance, the provided docker-compose.yml file can be used.
+- `DATABASE_URL`
+- `PAYLOAD_SECRET`
 
-To do so, follow these steps:
+For full receipt OCR support, also set:
 
-- Modify the `MONGODB_URL` in your `.env` file to `mongodb://127.0.0.1/<dbname>`
-- Modify the `docker-compose.yml` file's `MONGODB_URL` to match the above `<dbname>`
-- Run `docker-compose up` to start the database, optionally pass `-d` to run in the background.
+- `VERYFI_CLIENT_ID`
+- `VERYFI_CLIENT_SECRET`
+- `VERYFI_USERNAME`
+- `VERYFI_API_KEY`
+- `GROQ_API_KEY`
 
-## How it works
+`AI_SERVICE_URL` is used differently depending on the run mode:
 
-The Payload config is tailored specifically to the needs of most websites. It is pre-configured in the following ways:
+- local non-Docker run: `http://localhost:8000`
+- Docker Compose run: overridden inside the `web` container to `http://receipt-ai:8000`
 
-### Collections
+## Start with Docker Compose
 
-See the [Collections](https://payloadcms.com/docs/configuration/collections) docs for details on how to extend this functionality.
+From the repository root:
 
-- #### Users (Authentication)
+```bash
+docker compose up --build
+```
 
-  Users are auth-enabled collections that have access to the admin panel.
+After startup:
 
-  For additional help, see the official [Auth Example](https://github.com/payloadcms/payload/tree/main/examples/auth) or the [Authentication](https://payloadcms.com/docs/authentication/overview#authentication-overview) docs.
+- website: `http://localhost:3000`
+- embedded AI service: `http://localhost:8000`
 
-- #### Media
+## Local run without Docker
 
-  This is the uploads enabled collection. It features pre-configured sizes, focal point and manual resizing to help you manage your pictures.
+Website:
 
-### Docker
+```bash
+pnpm install
+pnpm dev
+```
 
-Alternatively, you can use [Docker](https://www.docker.com) to spin up this template locally. To do so, follow these steps:
+Embedded AI runtime:
 
-1. Follow [steps 1 and 2 from above](#development), the docker-compose file will automatically use the `.env` file in your project root
-1. Next run `docker-compose up`
-1. Follow [steps 4 and 5 from above](#development) to login and create your first admin user
+```bash
+cd services/receipt-ai
+pip install -r requirements.txt
+uvicorn app:app --host 127.0.0.1 --port 8000 --reload
+```
 
-That's it! The Docker instance will help you get up and running quickly while also standardizing the development environment across your teams.
+## Persisted data
 
-## Questions
+Website media uploads are stored in the Docker volume:
 
-If you have any issues or questions, reach out to us on [Discord](https://discord.com/invite/payload) or start a [GitHub discussion](https://github.com/payloadcms/payload/discussions).
+- `media-data`
+
+This keeps uploaded receipt files available after the `web` container is recreated.
+
+## Quick smoke checks
+
+1. Open `http://localhost:3000`
+2. Open `http://localhost:3000/auth/login`
+3. Register or log in
+4. Open `http://localhost:3000/chat`
+5. Open `http://localhost:3000/scan`
+
+## Common failure modes
+
+### Website does not start
+
+Check:
+
+- `docker compose logs web`
+- `DATABASE_URL`
+- `PAYLOAD_SECRET`
+
+### OCR route fails
+
+Check:
+
+- `docker compose logs receipt-ai`
+- `VERYFI_*`
+- `GROQ_*`
+
+### Chat AI routes fail
+
+Check:
+
+- `docker compose logs receipt-ai`
+- `AI_SERVICE_URL` inside the `web` container
+
+### Media upload fails in Docker
+
+Check:
+
+- `docker compose ps`
+- `docker compose logs web`
+
+The compose stack intentionally runs the `web` service as root in local Docker mode so the mounted `media-data` volume remains writable after container recreation.
+
+## Useful commands
+
+```bash
+docker compose ps
+docker compose logs -f web
+docker compose logs -f receipt-ai
+docker compose restart web
+```
