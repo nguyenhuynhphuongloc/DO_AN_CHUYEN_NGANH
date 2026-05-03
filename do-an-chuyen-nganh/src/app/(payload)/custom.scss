@@ -1,0 +1,56 @@
+/* Giao diện Admin: Nền trắng, Input & Button màu xám */
+:root {
+  --theme-bg: #ffffff;
+  --theme-elevation-0: #ffffff;
+  --theme-elevation-50: #ffffff;
+  --theme-elevation-100: #f1f5f9; /* Màu xám cho các vùng elevation */
+  --theme-elevation-150: #e2e8f0;
+  
+  /* Màu nền cho các ô nhập liệu */
+  --theme-input-bg: #f1f5f9;
+  --theme-input-border-color: #e2e8f0;
+}
+
+/* Ép giao diện kể cả ở chế độ Dark mode */
+[data-theme='dark'] {
+  --theme-bg: #ffffff;
+  --theme-elevation-0: #ffffff;
+  --theme-elevation-50: #ffffff;
+  --theme-elevation-100: #f1f5f9;
+  --theme-elevation-150: #e2e8f0;
+  --theme-input-bg: #f1f5f9;
+  --theme-text: #0f172a;
+}
+
+/* Tùy chỉnh cụ thể cho các nút bấm (Button) sang màu xám */
+.btn--style-primary {
+  background-color: #334155 !important; /* Xám đậm cho nút chính */
+  border-color: #334155 !important;
+  color: #ffffff !important;
+}
+
+.btn--style-primary:hover {
+  background-color: #1e293b !important;
+}
+
+.btn--style-secondary {
+  background-color: #f1f5f9 !important; /* Xám nhạt cho nút phụ */
+  border-color: #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+.btn--style-secondary:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* Các Input field */
+input, select, textarea, .payload-rich-text {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Tinh chỉnh Sidebar để đồng bộ */
+.nav {
+    background-color: #f8fafc !important;
+    border-right: 1px solid #e2e8f0 !important;
+}

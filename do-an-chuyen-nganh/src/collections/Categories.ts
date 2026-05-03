@@ -41,19 +41,86 @@ export const Categories: CollectionConfig = {
     beforeDelete: [
       async ({ req, id }) => {
         try {
-          const transactions = await req.payload.find({
+          const categoryToDelete = await req.payload.findByID({
+            collection: 'categories',
+            id,
+          })
+
+          if (!categoryToDelete) return
+
+          // 1. Không cho phép xóa danh mục mặc định (trừ admin)
+          if (categoryToDelete.isDefault && req.user?.role !== 'admin') {
+            throw new Error('Không thể xóa danh mục mặc định của hệ thống.')
+          }
+
+          // 2. Kiểm tra xem có giao dịch nào liên quan không
+          const transactionsCount = await req.payload.find({
             collection: 'transactions',
             where: {
               category: { equals: id }
             },
             limit: 1,
           })
-          
-          if (transactions.totalDocs > 0) {
-            throw new Error('Cảnh báo: Không thể xóa danh mục này vì đang có các giao dịch liên quan.')
+
+          if (transactionsCount.totalDocs > 0) {
+            // 3. Chỉ tìm danh mục thay thế khi thực sự có giao dịch
+            const fallbackCategory = await req.payload.find({
+              collection: 'categories',
+              where: {
+                and: [
+                  { isDefault: { equals: true } },
+                  { type: { equals: categoryToDelete.type } },
+                  { id: { not_equals: id } }
+                ]
+              },
+              limit: 1,
+            })
+
+            let targetId = fallbackCategory.totalDocs > 0 ? fallbackCategory.docs[0].id : null
+
+            // Nếu không có danh mục mặc định, tìm bất kỳ danh mục nào khác cùng loại
+            if (!targetId) {
+              const anyOtherCategory = await req.payload.find({
+                collection: 'categories',
+                where: {
+                  and: [
+                    { type: { equals: categoryToDelete.type } },
+                    { id: { not_equals: id } }
+                  ]
+                },
+                limit: 1,
+              })
+              if (anyOtherCategory.totalDocs > 0) {
+                targetId = anyOtherCategory.docs[0].id
+              }
+            }
+
+            if (!targetId) {
+              throw new Error('Không tìm thấy danh mục thay thế để chuyển giao dịch sang. Vui lòng tạo một danh mục khác cùng loại trước khi xóa.')
+            }
+
+            // 4. Chuyển toàn bộ giao dịch sang danh mục thay thế
+            const allTransactions = await req.payload.find({
+              collection: 'transactions',
+              where: {
+                category: { equals: id }
+              },
+              limit: 5000,
+            })
+
+            console.log(`Đang chuyển ${allTransactions.totalDocs} giao dịch sang danh mục thay thế...`)
+            for (const doc of allTransactions.docs) {
+              await req.payload.update({
+                collection: 'transactions',
+                id: doc.id,
+                data: {
+                  category: targetId
+                }
+              })
+            }
           }
         } catch (error: any) {
-          console.error('Lỗi khi xóa danh mục:', error.message)
+          console.error('Lỗi khi xử lý xóa danh mục:', error.message)
           throw error
         }
       }

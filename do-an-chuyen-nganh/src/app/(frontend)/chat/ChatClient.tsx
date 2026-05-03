@@ -40,6 +40,18 @@ export default function ChatClient({ user, initialCategories }: ChatClientProps)
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  // Hàm bổ trợ định dạng ngày an toàn để tránh RangeError: Invalid time value
+  const safeFormatDate = (dateStr: string) => {
+    if (!dateStr) return format(new Date(), 'dd/MM/yyyy')
+    try {
+      const d = new Date(dateStr)
+      if (isNaN(d.getTime())) return format(new Date(), 'dd/MM/yyyy')
+      return format(d, 'dd/MM/yyyy')
+    } catch {
+      return format(new Date(), 'dd/MM/yyyy')
+    }
+  }
+
   useEffect(() => {
     scrollToBottom()
   }, [messages])
@@ -80,18 +92,21 @@ export default function ChatClient({ user, initialCategories }: ChatClientProps)
           if (!nlpData.category) {
             setMessages(prev => [...prev, {
               role: 'bot',
-              text: `Tôi đã nhận được số tiền **${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(nlpData.amount)}**. Vui lòng chọn danh mục phù hợp cho khoản **${nlpData.type === 'income' ? 'Thu nhập' : 'Chi tiêu'}** này:`,
-              data: { ...nlpData, isPicking: true }
+              text: `Bạn muốn ghi nhận khoản **${nlpData.type === 'income' ? 'Thu nhập' : 'Chi tiêu'}** số tiền **${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(nlpData.amount)}** vào ngày **${safeFormatDate(nlpData.date)}**. Bạn muốn lưu khoản này vào danh mục nào?`,
+              data: { ...nlpData, isPicking: true, originalText: userMsg }
             }])
           } else {
             setMessages(prev => [...prev, {
               role: 'bot',
-              text: `Tôi đã hiểu! Bạn muốn ghi nhận: **${nlpData.type === 'income' ? 'Thu nhập' : 'Chi tiêu'}** - **${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(nlpData.amount)}** vào mục "${nlpData.category}".`,
-              data: nlpData
+              text: `Bạn muốn ghi nhận: **${nlpData.type === 'income' ? 'Thu nhập' : 'Chi tiêu'}** - **${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(nlpData.amount)}** vào mục "${nlpData.category}" ngày **${safeFormatDate(nlpData.date)}**?`,
+              data: { ...nlpData, originalText: userMsg }
             }])
           }
         } else {
-          setMessages(prev => [...prev, { role: 'bot', text: 'Xin lỗi, tôi không tìm thấy thông tin số tiền trong câu của bạn.' }])
+          setMessages(prev => [...prev, { 
+            role: 'bot', 
+            text: 'Tôi đã nhận diện được nội dung nhưng thiếu **số tiền** cụ thể. Bạn vui lòng cho biết số tiền nhé! (Ví dụ: "chi 50k", "hết 200.000đ")' 
+          }])
         }
       }
     } catch (err) {
@@ -166,13 +181,28 @@ export default function ChatClient({ user, initialCategories }: ChatClientProps)
           type: data.type,
           amount: Number(data.amount),
           description: data.description || data.text || 'Giao dịch từ AI',
-          date: new Date(data.date).toISOString(),
+          date: (() => {
+            const d = new Date(data.date);
+            return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+          })(),
           category: Number(categoryId),
           user: Number(userData.id),
         }),
       })
 
       if (res.ok) {
+        // Tự động học câu này vào AI khi xác nhận thành công để "tăng cường trí nhớ"
+        if (data.originalText) {
+          fetch('/api/ai/learn', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: data.originalText,
+              category: matchedCatName
+            })
+          }).catch(err => console.error("Auto Learning Error:", err))
+        }
+
         // Xóa tin nhắn xác nhận cũ
         setMessages(prev => prev.filter((_, i) => i !== index))
         setMessages(prev => [...prev, { role: 'bot', text: `Lưu giao dịch thành công vào danh mục **${matchedCatName}**` }])
@@ -194,6 +224,20 @@ export default function ChatClient({ user, initialCategories }: ChatClientProps)
       const newMessages = [...prev]
       const msg = newMessages[msgIndex]
       if (msg && msg.data) {
+        // Gửi lệnh học cho AI
+        if (msg.data.originalText) {
+          fetch('/api/ai/learn', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: msg.data.originalText,
+              category: categoryName
+            })
+          }).then(r => r.json()).then(res => {
+            console.log("AI Learning:", res.message)
+          }).catch(err => console.error("AI Learning Error:", err))
+        }
+
         msg.data.category = categoryName
         msg.data.isPicking = false
         msg.text = `Tôi đã cập nhật danh mục: **${categoryName}**. Bạn có muốn lưu giao dịch này không?`
@@ -282,13 +326,30 @@ export default function ChatClient({ user, initialCategories }: ChatClientProps)
                   ) : m.text}
                   
                   {m.data && !m.data.isPicking && (
-                    <div className="chat-action">
+                    <div className="chat-action" style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                       <button 
                         className="btn btn-primary btn-sm" 
                         onClick={() => confirmTransaction(m.data, i)}
                         disabled={isSaving === i}
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
                       >
-                        {isSaving === i ? 'Đang lưu...' : 'Xác nhận & Lưu'}
+                        <MdCheck size={16} /> {isSaving === i ? 'Đang lưu...' : 'Xác nhận & Lưu'}
+                      </button>
+                      <button 
+                        className="btn btn-secondary btn-sm" 
+                        onClick={() => {
+                          setMessages(prev => {
+                            const newMsgs = [...prev]
+                            if (newMsgs[i] && newMsgs[i].data) {
+                              newMsgs[i].data.isPicking = true
+                            }
+                            return newMsgs
+                          })
+                        }}
+                        disabled={isSaving === i}
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <MdEditNote size={16} /> Đổi danh mục
                       </button>
                     </div>
                   )}

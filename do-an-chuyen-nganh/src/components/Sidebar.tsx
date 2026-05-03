@@ -11,6 +11,7 @@ import {
   MdSmartToy, 
   MdDocumentScanner,
   MdAccountBalanceWallet,
+  MdFlag,
   MdLogout
 } from 'react-icons/md'
 import { useRouter } from 'next/navigation'
@@ -27,6 +28,7 @@ const navItems = [
   { href: '/transactions', icon: <MdAttachMoney size={20} />, label: 'Giao dịch' },
   { href: '/categories', icon: <MdCategory size={20} />, label: 'Danh mục' },
   { href: '/reports', icon: <MdBarChart size={20} />, label: 'Báo cáo' },
+  { href: '/savings', icon: <MdFlag size={20} />, label: 'Tiết kiệm' },
   { href: '/chat', icon: <MdSmartToy size={20} />, label: 'Trợ lý AI' },
   { href: '/scan', icon: <MdDocumentScanner size={20} />, label: 'Quét hóa đơn' },
 ]

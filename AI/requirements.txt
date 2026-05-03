@@ -9,4 +9,19 @@ python-multipart
 httpx
 veryfi
 huggingface-hub
+
+# === AI / NLP ===
+torch
+transformers
+accelerate
+bitsandbytes
+underthesea
+sentence-transformers
+
+# === EVALUATION / PLOTTING ===
+matplotlib
+pandas
+tabulate
+
+# === EXPORT ===
 python-docx

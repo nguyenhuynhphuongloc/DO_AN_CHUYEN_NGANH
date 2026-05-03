@@ -1,0 +1,168 @@
+{
+  "Sức khỏe": [
+    "mua thuốc cảm sốt",
+    "đi khám bệnh ở bệnh viện",
+    "nhổ răng khôn nha khoa",
+    "mua vitamin thực phẩm chức năng",
+    "thanh toán bảo hiểm y tế",
+    "xét nghiệm máu định kỳ",
+    "tiêm vaccine phòng cúm",
+    "mua khẩu trang nước rửa tay",
+    "đi tập gym 70k"
+  ],
+  "Làm đẹp": [
+    "đi cắt tóc gội đầu",
+    "làm nail và nối mi",
+    "mua mỹ phẩm dưỡng da",
+    "đi spa chăm sóc da mặt",
+    "mua son môi đồ trang điểm",
+    "phí tập gym hàng tháng",
+    "đăng ký khóa học yoga",
+    "cắt tóc hết 100k"
+  ],
+  "Ăn uống": [
+    "ăn sáng bún bò huế",
+    "mua cafe sữa đá",
+    "đi ăn tối nhà hàng hải sản",
+    "mua trà sữa trân châu",
+    "ăn trưa văn phòng",
+    "đặt đồ ăn qua shopeefood",
+    "mua bánh mì kẹp thịt",
+    "ăn lẩu nướng cùng gia đình",
+    "mua bia và đồ nhắm",
+    "ăn vặt bánh tráng trộn",
+    "đi ăn sáng hết 800k",
+    "Mua bánh mì",
+    "mua bánh mì pate",
+    "tui đi ăn kfc"
+  ],
+  "Di chuyển": [
+    "đổ xăng xe máy",
+    "đặt grab car đi làm",
+    "thanh toán tiền gửi xe",
+    "mua vé xe khách về quê",
+    "nạp tiền thẻ xe buýt",
+    "sửa xe thay nhớt định kỳ",
+    "phí cầu đường cao tốc"
+  ],
+  "Giải trí": [
+    "mua vé xem phim rạp",
+    "nạp tiền chơi game online",
+    "đi hát karaoke với bạn bè",
+    "thanh toán gói netflix",
+    "đăng ký tinder gold premium",
+    "gia hạn gói icloud",
+    "mua vé nghe nhạc concert",
+    "thuê sân bóng đá 500k",
+    "Đăng ký 3G/4G tháng này",
+    "tui mua skin liên quân 10 củ"
+  ],
+  "Du lịch": [
+    "đi du lịch đà lạt 3 ngày 2 đêm",
+    "thuê lều đi camping dã ngoại",
+    "đặt vé máy bay du lịch",
+    "đặt phòng khách sạn homestay",
+    "mua tour du lịch thái lan",
+    "chi phí đi phượt hà giang",
+    "tui đi đà lạt hết 7 triệu",
+    "tui đi vũng tàu với người yêu hết 9 triệu",
+    "tui đi nha trang với hồ đăng khoa hết 9 triệu",
+    "tui tiết kiệm tiền đi phú quốc với bạn bè hết 5 triệu",
+    "đặt vé máy bay hết 8 triệu"
+  ],
+  "Hóa đơn": [
+    "thanh toán tiền điện",
+    "đóng tiền nước hàng tháng",
+    "nạp tiền điện thoại trả trước",
+    "thanh toán cước internet wifi",
+    "đóng phí dịch vụ chung cư",
+    "thanh toán cước 4g viettel",
+    "đóng tiền truyền hình cáp"
+  ],
+  "Nhà cửa": [
+    "trả tiền thuê nhà hàng tháng",
+    "mua đồ nội thất trang trí nhà",
+    "sửa chữa ống nước bị hỏng",
+    "mua tủ lạnh máy giặt mới",
+    "phí vệ sinh dọn dẹp nhà cửa",
+    "mua ga trải giường gối mới"
+  ],
+  "Giáo dục": [
+    "đóng học phí đại học",
+    "mua sách tham khảo tiếng anh",
+    "đăng ký khóa học lập trình",
+    "mua văn phòng phẩm bút thước",
+    "lệ phí thi ielts",
+    "đóng tiền học thêm cho con"
+  ],
+  "Lương": [
+    "nhận lương tháng này",
+    "công ty chuyển tiền lương",
+    "lương về tài khoản ngân hàng",
+    "thanh toán lương cho nhân viên",
+    "lãnh lương được 5 triệu"
+  ],
+  "Thưởng": [
+    "nhận tiền thưởng tết",
+    "thưởng kpi quý 1",
+    "tiền thưởng nhân viên xuất sắc",
+    "thưởng nóng dự án thành công"
+  ],
+  "Kinh doanh": [
+    "doanh thu bán hàng hôm nay",
+    "khách hàng thanh toán đơn hàng",
+    "nhận tiền chốt đơn shopee",
+    "lợi nhuận kinh doanh cửa hàng"
+  ],
+  "Đầu tư": [
+    "nhận lãi tiết kiệm ngân hàng",
+    "lãi cổ phiếu chia cổ tức",
+    "lợi nhuận đầu tư crypto",
+    "bán vàng chốt lời",
+    "Nhận tiền lãi ngân hàng gửi về khoảng 1 triệu"
+  ],
+  "Lì xì": [
+    "đi ăn cưới bạn thân",
+    "mừng cưới chị gái",
+    "tiền mừng đám cưới",
+    "lì xì tết cho các cháu",
+    "mua quà biếu bố mẹ",
+    "tặng quà sinh nhật người yêu",
+    "phong bì hỉ cho đồng nghiệp",
+    "tiền mừng thôi nôi",
+    "mua quà tân gia"
+  ],
+  "Đóng góp": [
+    "quyên góp từ thiện miền trung",
+    "đóng tiền quỹ tổ dân phố",
+    "tặng tiền cho người nghèo",
+    "ủng hộ quỹ vaccine"
+  ],
+  "Nợ nần": [
+    "trả nợ vay ngân hàng",
+    "cho bạn mượn tiền",
+    "nhận tiền bạn trả nợ",
+    "thanh toán thẻ tín dụng",
+    "trả tiền vay bạn 7 củ"
+  ],
+  "Mua sắm": [
+    "mua quần áo mới",
+    "đi chợ mua rau củ quả",
+    "mua giày thể thao nike",
+    "sắm đồ tết tại siêu thị",
+    "mua điện thoại iphone mới",
+    "mua túi xách thời trang",
+    "sắm phụ kiện máy tính",
+    "tui mua skin liên quân 10 củ"
+  ],
+  "Thú cưng": [
+    "mua đồ ăn cho mèo",
+    "mua hạt cho chó",
+    "đưa chó đi tiêm phòng thú y",
+    "mua cát vệ sinh cho mèo",
+    "tỉa lông chó mèo",
+    "mua pate cho mèo",
+    "sắm vòng cổ cho thú cưng",
+    "mua đồ ăn cho thú cưng"
+  ]
+}

@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       period: "3 tháng gần nhất"
     }
 
-    const response = await fetch(`${AI_SERVICE_URL}/api/ai/advisor`, {
+    const response = await fetch(`${AI_SERVICE_URL}/api/advisor`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
