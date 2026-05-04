@@ -16,6 +16,20 @@ def normalize_text(text: str) -> str:
 
   return text
 
+def clean_text_for_ai(text: str) -> str:
+  # 1. Xóa các số tiền có đơn vị (vd: 500k, 1 triệu, 100.000đ, 2 tr)
+  text = re.sub(r'\d+[\.,\d]*\s*(k|đ|vnđ|vnd|triệu|tr|tỷ|tỉ|củ|mâm|quả|xị|lít|lốp)', '', text, flags=re.IGNORECASE)
+  # 2. Xóa các con số thuần túy thường là số tiền (vd: ăn phở 50000 -> ăn phở)
+  text = re.sub(r'(?<![0-9a-zA-Z])\d{3,}(?![0-9a-zA-Z])', '', text) 
+  # 3. Xóa các ngày tháng (vd: ngày 15, tháng 4, 15/04/2024)
+  text = re.sub(r'\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?', '', text)
+  text = re.sub(r'\b(ngày|tháng|năm)\s+\d+', '', text, flags=re.IGNORECASE)
+  # 4. Xóa các từ khóa "hết", "giá", "tầm" thường đi kèm số tiền
+  text = re.sub(r'\b(hết|giá|tầm|khoảng|chi|tổng)\b', '', text, flags=re.IGNORECASE)
+  # 5. Chuẩn hóa khoảng trắng
+  text = re.sub(r'\s+', ' ', text).strip()
+  return text
+
 def parse_amount(text: str) -> float:
   text = text.replace("vnđ", "đ").replace("vnd", "đ")
 
@@ -90,10 +104,19 @@ def extract_transaction_info(text: str) -> Dict[str, Any]:
   # SỬ DỤNG AI ĐỂ PHÂN LOẠI (Dựa trên độ tương đồng ngữ nghĩa)
   try:
     embed_service = get_embedding_service()
-    ai_category, score = embed_service.classify(normalized_text)
-    if ai_category:
-        category = ai_category
-        print(f"AI Classify: '{normalized_text}' -> {category} (score: {score:.2f})")
+    # Làm sạch text trước khi gửi vào AI (loại bỏ số tiền, ngày tháng làm nhiễu)
+    ai_ready_text = clean_text_for_ai(normalized_text)
+    
+    if ai_ready_text:
+        ai_category, score = embed_service.classify(ai_ready_text)
+        if ai_category:
+            category = ai_category
+            print(f"AI Classify: '{ai_ready_text}' -> {category} (score: {score:.2f})")
+    else:
+        # Nếu sau khi làm sạch mà chuỗi trống (chỉ có số), thử dùng text gốc hoặc để fallback
+        ai_category, score = embed_service.classify(normalized_text)
+        if ai_category:
+            category = ai_category
   except Exception as e:
     print(f"Embedding error: {e}")
 

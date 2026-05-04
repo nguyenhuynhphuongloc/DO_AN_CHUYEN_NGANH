@@ -69,21 +69,11 @@ async def learn_new_category(req: LearnRequest):
     import json
     import re
     from services.embedding_service import get_embedding_service
+    from services.nlp_service import clean_text_for_ai
 
     seed_path = get_embedding_service().seed_file
     print(f"AI Learning Request: '{req.text}' -> Category: '{req.category}'")
 
-    def clean_text_for_learning(text: str):
-        # 1. Xóa các số tiền có đơn vị (vd: 500k, 1 triệu, 100.000đ, 2 tr)
-        text = re.sub(r'\d+[\.,\d]*\s*(k|đ|vnđ|vnd|triệu|tr|tỷ|tỉ)', '', text, flags=re.IGNORECASE)
-        # 2. Xóa các con số thuần túy thường là số tiền (vd: ăn phở 50000 -> ăn phở)
-        # Nhưng giữ lại các số nhỏ hoặc có chữ đi kèm như 3G, 4G, Q1, Q2
-        text = re.sub(r'(?<![0-9a-zA-Z])\d{4,}(?![0-9a-zA-Z])', '', text) 
-        # 3. Xóa các từ khóa "hết", "giá", "tầm" thường đi kèm số tiền
-        text = re.sub(r'\b(hết|giá|tầm|khoảng|chi)\b', '', text, flags=re.IGNORECASE)
-        # 4. Chuẩn hóa khoảng trắng
-        text = re.sub(r'\s+', ' ', text).strip()
-        return text
 
     try:
         with open(seed_path, 'r', encoding='utf-8') as f:
@@ -97,7 +87,7 @@ async def learn_new_category(req: LearnRequest):
 
         if target_category:
             # Làm sạch nội dung trước khi lưu
-            clean_text = clean_text_for_learning(req.text)
+            clean_text = clean_text_for_ai(req.text)
             
             if not clean_text:
                 return {"status": "skipped", "message": "Nội dung sau khi làm sạch trống, không thể lưu."}
