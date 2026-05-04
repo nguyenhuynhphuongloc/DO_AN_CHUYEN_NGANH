@@ -1,3 +1,6 @@
+export { normalizeCategoryName } from './category-normalization'
+import { normalizeCategoryName } from './category-normalization'
+
 export interface AllowedCategoryCandidate {
   id: string
   name: string
@@ -106,10 +109,6 @@ export interface RawCategoryCandidate {
   name?: string | null
   type?: 'income' | 'expense' | null
   user?: number | { id: number | string } | null
-}
-
-export function normalizeCategoryName(value: string): string {
-  return value.normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
 function selectPreferredCategory(

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { MdCheckCircle, MdCloudUpload, MdDocumentScanner, MdReceiptLong, MdWarning } from 'react-icons/md'
 
+import { normalizeCategoryName } from '@/lib/category-normalization'
 import type { ReceiptOcrResponse } from '@/lib/receipt-ocr'
 import { formatAmountDisplay, parseLocaleAmount } from '@/lib/receipt-ocr'
 
@@ -39,10 +40,19 @@ const emptyForm = (currency = 'VND'): ReviewFormState => ({
 })
 
 export default function ScanClient({ user, categories }: { user: UserSummary; categories: Category[] }) {
-  const expenseCategories = useMemo(
-    () => categories.filter((category) => category.type === 'expense'),
-    [categories],
-  )
+  const expenseCategories = useMemo(() => {
+    const deduped = new Map<string, Category>()
+
+    for (const category of categories) {
+      if (category.type !== 'expense') continue
+      const key = normalizeCategoryName(category.name)
+      if (!deduped.has(key)) {
+        deduped.set(key, category)
+      }
+    }
+
+    return Array.from(deduped.values()).sort((left, right) => left.name.localeCompare(right.name, 'vi'))
+  }, [categories])
 
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)

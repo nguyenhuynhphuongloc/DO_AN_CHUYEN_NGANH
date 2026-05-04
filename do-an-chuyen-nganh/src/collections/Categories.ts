@@ -1,5 +1,7 @@
 import type { CollectionConfig } from 'payload'
 
+import { cleanCategoryName, normalizeCategoryName } from '../lib/category-normalization'
+
 export const Categories: CollectionConfig = {
   slug: 'categories',
   admin: {
@@ -31,10 +33,38 @@ export const Categories: CollectionConfig = {
   },
   hooks: {
     beforeValidate: [
-      ({ req, operation, data }) => {
+      async ({ req, operation, data, originalDoc }) => {
         if (operation === 'create' && req.user && data) {
           data.user = req.user.id
         }
+
+        const name = data?.name ?? originalDoc?.name
+        const type = data?.type ?? originalDoc?.type
+        if (data && typeof data.name === 'string') {
+          data.name = cleanCategoryName(data.name)
+        }
+
+        if (name && type) {
+          const normalizedName = normalizeCategoryName(String(data?.name ?? name))
+          const existing = await req.payload.find({
+            collection: 'categories',
+            where: {
+              type: { equals: type },
+            },
+            limit: 1000,
+            depth: 0,
+            overrideAccess: true,
+          })
+
+          const duplicate = existing.docs.find((category: any) => {
+            return category.id !== originalDoc?.id && normalizeCategoryName(category.name || '') === normalizedName
+          })
+
+          if (duplicate) {
+            throw new Error('Danh mục đã tồn tại. Vui lòng dùng danh mục hiện có thay vì tạo bản trùng.')
+          }
+        }
+
         return data
       },
     ],
