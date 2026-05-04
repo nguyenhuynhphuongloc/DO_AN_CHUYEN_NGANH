@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import Sidebar from '@/components/Sidebar'
 import Link from 'next/link'
 import { format } from 'date-fns'
@@ -8,6 +8,7 @@ import remarkGfm from 'remark-gfm'
 import { MdSmartToy, MdSend, MdLightbulb, MdEditNote, MdCheck } from 'react-icons/md'
 import { useRouter } from 'next/navigation'
 import CategoryIcon from '@/components/CategoryIcon'
+import { normalizeCategoryName } from '@/lib/category-normalization'
 
 interface Message {
   role: 'user' | 'bot'
@@ -27,6 +28,19 @@ export default function ChatClient({ user, initialCategories }: ChatClientProps)
   // Sử dụng dữ liệu khởi tạo từ props (Server-side passed down)
   const [userData] = useState<any>(user)
   const [categories, setCategories] = useState<any[]>(initialCategories)
+  const visibleCategories = useMemo(() => {
+    const deduped = new Map<string, any>()
+
+    for (const category of categories) {
+      if (!category?.name || !category?.type) continue
+      const key = `${normalizeCategoryName(category.name)}|${category.type}`
+      if (!deduped.has(key)) {
+        deduped.set(key, category)
+      }
+    }
+
+    return Array.from(deduped.values()).sort((left, right) => left.name.localeCompare(right.name, 'vi'))
+  }, [categories])
   
   const [messages, setMessages] = useState<Message[]>([
     { role: 'bot', text: 'Xin chào! Tôi là trợ lý FinTrack. Bạn có thể nhập thu chi nhanh như "chi 50k ăn sáng" hoặc "hôm qua nhận lương 20tr".' }
@@ -139,9 +153,11 @@ export default function ChatClient({ user, initialCategories }: ChatClientProps)
     let categoryId = ''
     let matchedCatName = ''
     
-    const matched = categories.find(c => 
-      c.name.toLowerCase().includes(data.category.toLowerCase()) || 
-      data.category.toLowerCase().includes(c.name.toLowerCase())
+    const normalizedRequestedCategory = normalizeCategoryName(data.category || '')
+    const matched = visibleCategories.find(c => 
+      c.type === data.type &&
+      (normalizeCategoryName(c.name).includes(normalizedRequestedCategory) || 
+      normalizedRequestedCategory.includes(normalizeCategoryName(c.name)))
     )
 
     if (matched) {
@@ -163,7 +179,13 @@ export default function ChatClient({ user, initialCategories }: ChatClientProps)
         if (newCat.id) {
           categoryId = newCat.id
           matchedCatName = newCat.name
-          setCategories(prev => [...prev, newCat])
+          setCategories(prev => {
+            const newKey = `${normalizeCategoryName(newCat.name)}|${newCat.type}`
+            const exists = prev.some(category => {
+              return `${normalizeCategoryName(category.name || '')}|${category.type}` === newKey
+            })
+            return exists ? prev : [...prev, newCat]
+          })
         } else {
           throw new Error('Lỗi tạo danh mục')
         }
@@ -305,7 +327,7 @@ export default function ChatClient({ user, initialCategories }: ChatClientProps)
                       
                       {m.data?.isPicking && (
                         <div className="category-picker-grid">
-                          {categories
+                          {visibleCategories
                             .filter(c => c.type === m.data.type)
                             .map(cat => (
                               <button 
