@@ -235,23 +235,23 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
   const notificationTone =
     notification?.type === 'success'
       ? {
-          background: '#dcfce7',
-          border: 'var(--success)',
-          color: '#166534',
-          icon: <MdCheckCircle size={28} color="var(--success)" />,
+          accent: 'var(--success)',
+          badgeBackground: '#dcfce7',
+          color: '#14532d',
+          icon: <MdCheckCircle size={24} color="var(--success)" />,
         }
       : notification?.type === 'info'
         ? {
-            background: '#dbeafe',
-            border: '#60a5fa',
-            color: '#1d4ed8',
-            icon: <MdInfo size={28} color="#2563eb" />,
+            accent: '#2563eb',
+            badgeBackground: '#dbeafe',
+            color: '#1e3a8a',
+            icon: <MdInfo size={24} color="#2563eb" />,
           }
         : {
-            background: '#fee2e2',
-            border: 'var(--danger)',
+            accent: 'var(--danger)',
+            badgeBackground: '#fee2e2',
             color: '#991b1b',
-            icon: <MdWarning size={28} color="var(--danger)" />,
+            icon: <MdWarning size={24} color="var(--danger)" />,
           }
 
   return (
@@ -260,32 +260,60 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
         <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           Quét hóa đơn <MdDocumentScanner size={32} color="var(--primary)" />
         </h1>
-        <p className="page-subtitle">Veryfi trích xuất hóa đơn, Groq gợi ý danh mục, bạn xác nhận trước khi lưu.</p>
       </div>
 
       {notification && (
         <div className="modal-overlay" onClick={() => setNotification(null)}>
-          <div className="modal" onClick={(event) => event.stopPropagation()} style={{ maxWidth: '420px' }}>
+          <div
+            className="modal"
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              maxWidth: '420px',
+              overflow: 'hidden',
+              borderTop: `4px solid ${notificationTone.accent}`,
+            }}
+          >
             <div
               style={{
-                background: notificationTone.background,
-                borderLeft: `5px solid ${notificationTone.border}`,
-                color: notificationTone.color,
-                padding: '20px',
+                background: '#ffffff',
+                color: 'var(--text-primary)',
+                padding: '22px 22px 10px',
                 display: 'flex',
-                gap: '12px',
+                gap: '14px',
                 alignItems: 'flex-start',
               }}
             >
-              {notificationTone.icon}
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '12px',
+                  background: notificationTone.badgeBackground,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                {notificationTone.icon}
+              </div>
               <div>
-                <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px', color: notificationTone.color }}>
+                <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px', color: notificationTone.color }}>
                   {notification.title}
                 </h2>
-                <p style={{ lineHeight: 1.5 }}>{notification.message}</p>
+                <p style={{ lineHeight: 1.55, color: 'var(--text-secondary)', fontSize: '14px' }}>
+                  {notification.message}
+                </p>
               </div>
             </div>
-            <div className="modal-footer" style={{ justifyContent: 'flex-end' }}>
+            <div
+              className="modal-footer"
+              style={{
+                justifyContent: 'flex-end',
+                padding: '10px 22px 22px',
+                background: '#ffffff',
+              }}
+            >
               <button className="btn btn-primary" onClick={() => setNotification(null)}>
                 Quay lại
               </button>
@@ -339,7 +367,6 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
                 gap: '8px',
               }}
             >
-              <MdReceiptLong size={42} color="var(--text-muted)" />
               <p className="empty-state-desc">Chọn ảnh hóa đơn để bắt đầu phân tích.</p>
             </div>
           )}

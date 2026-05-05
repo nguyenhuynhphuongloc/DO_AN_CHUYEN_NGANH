@@ -6,16 +6,16 @@ import {
 } from 'recharts'
 import { format } from 'date-fns'
 import { vi } from 'date-fns/locale'
-import { 
-  MdTrendingUp, 
-  MdTrendingDown, 
-  MdAccountBalanceWallet,
-  MdPieChart,
-  MdReceipt,
-  MdArrowUpward,
-  MdArrowDownward,
-  MdArrowForward
-} from 'react-icons/md'
+import {
+  ArrowDown,
+  ArrowRight,
+  ArrowUp,
+  ChartPie,
+  ReceiptText,
+  TrendingDown,
+  TrendingUp,
+  WalletCards,
+} from 'lucide-react'
 import CategoryIcon from '@/components/CategoryIcon'
 
 interface CategoryBreakdown {
@@ -65,7 +65,7 @@ export default function DashboardClient({
           <div className="stat-card-header">
             <span className="stat-card-label">Tổng thu nhập</span>
             <div className="stat-card-icon income">
-              <MdTrendingUp size={24} />
+              <TrendingUp size={24} strokeWidth={2.1} />
             </div>
           </div>
           <div className="stat-card-value income">{formatCurrency(totalIncome)}</div>
@@ -74,7 +74,7 @@ export default function DashboardClient({
           <div className="stat-card-header">
             <span className="stat-card-label">Tổng chi tiêu</span>
             <div className="stat-card-icon expense">
-              <MdTrendingDown size={24} />
+              <TrendingDown size={24} strokeWidth={2.1} />
             </div>
           </div>
           <div className="stat-card-value expense">{formatCurrency(totalExpense)}</div>
@@ -83,7 +83,7 @@ export default function DashboardClient({
           <div className="stat-card-header">
             <span className="stat-card-label">Số dư</span>
             <div className="stat-card-icon balance">
-              <MdAccountBalanceWallet size={24} />
+              <WalletCards size={24} strokeWidth={2.1} />
             </div>
           </div>
           <div className="stat-card-value balance">{formatCurrency(balance)}</div>
@@ -150,7 +150,7 @@ export default function DashboardClient({
           ) : (
             <div className="empty-state" style={{ padding: '40px' }}>
               <div className="empty-state-icon">
-                <MdPieChart size={48} color="var(--bg-secondary)" />
+                <ChartPie size={48} color="var(--text-muted)" />
               </div>
               <p className="empty-state-desc">Chưa có dữ liệu chi tiêu</p>
             </div>
@@ -163,7 +163,7 @@ export default function DashboardClient({
         <div className="card-header">
           <h3 className="card-title">Giao dịch gần đây</h3>
           <a href="/transactions" className="btn btn-secondary" style={{ fontSize: '13px', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            Xem tất cả <MdArrowForward size={16} />
+            Xem tất cả <ArrowRight size={16} />
           </a>
         </div>
         {recentTransactions.length > 0 ? (
@@ -185,7 +185,7 @@ export default function DashboardClient({
                     <tr key={t.id}>
                       <td>
                         <span className={`type-badge ${t.type}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', width: 'fit-content' }}>
-                          {t.type === 'income' ? <MdArrowUpward size={14} /> : <MdArrowDownward size={14} />}
+                          {t.type === 'income' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
                           {t.type === 'income' ? 'Thu' : 'Chi'}
                         </span>
                       </td>
@@ -216,12 +216,12 @@ export default function DashboardClient({
         ) : (
           <div className="empty-state">
             <div className="empty-state-icon">
-              <MdReceipt size={48} color="var(--bg-secondary)" />
+              <ReceiptText size={48} color="var(--text-muted)" />
             </div>
             <h3 className="empty-state-title">Chưa có giao dịch nào</h3>
             <p className="empty-state-desc">Bắt đầu bằng cách thêm giao dịch đầu tiên</p>
             <a href="/transactions" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <MdReceipt size={18} /> Thêm giao dịch
+              <ReceiptText size={18} /> Thêm giao dịch
             </a>
           </div>
         )}

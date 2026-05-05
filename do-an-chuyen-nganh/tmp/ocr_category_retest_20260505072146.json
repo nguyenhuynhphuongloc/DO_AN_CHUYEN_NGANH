@@ -1,0 +1,108 @@
+{
+  "run_id": "20260505072146",
+  "started_at": "2026-05-05T07:21:46.257Z",
+  "finished_at": "2026-05-05T07:22:08.590Z",
+  "base_url": "http://localhost:3000",
+  "user": {
+    "email": "ocr_category_20260505072146@example.com"
+  },
+  "category_test_case": "OCR06",
+  "category_test_images": [
+    "IMG01.jpg",
+    "IMG02.jpg",
+    "IMG03.jpg",
+    "IMG07.jpg"
+  ],
+  "categories": [
+    {
+      "id": 82,
+      "name": "?n u?ng OCRCAT 20260505072146"
+    },
+    {
+      "id": 83,
+      "name": "Mua s?m OCRCAT 20260505072146"
+    },
+    {
+      "id": 84,
+      "name": "Di chuy?n OCRCAT 20260505072146"
+    },
+    {
+      "id": 85,
+      "name": "Kh?c OCRCAT 20260505072146"
+    }
+  ],
+  "parse_results": [
+    {
+      "image": "IMG01",
+      "file_name": "IMG01.jpg",
+      "size_bytes": 136292,
+      "http_status": 200,
+      "elapsed_seconds": 3.88,
+      "success": true,
+      "error_code": null,
+      "error_message": null,
+      "merchant_name": "Hej - Trần Kế Xương",
+      "transaction_date": "2026-04-04",
+      "total_amount": 90000,
+      "currency": "VND",
+      "category_id": "9",
+      "category_name": "ăn uống",
+      "category_reason": "Purchase of food and beverage (matcha cold whisk)",
+      "item_count": 1
+    },
+    {
+      "image": "IMG02",
+      "file_name": "IMG02.jpg",
+      "size_bytes": 138948,
+      "http_status": 200,
+      "elapsed_seconds": 3.37,
+      "success": true,
+      "error_code": null,
+      "error_message": null,
+      "merchant_name": "Family Mart",
+      "transaction_date": "2026-04-12",
+      "total_amount": 63000,
+      "currency": "VND",
+      "category_id": "9",
+      "category_name": "ăn uống",
+      "category_reason": "Receipt contains food items such as chocolate and other snacks, which are typical of the eating/drinking category.",
+      "item_count": 2
+    },
+    {
+      "image": "IMG03",
+      "file_name": "IMG03.jpg",
+      "size_bytes": 560003,
+      "http_status": 200,
+      "elapsed_seconds": 6.42,
+      "success": true,
+      "error_code": null,
+      "error_message": null,
+      "merchant_name": "DOOKKI Korean Topokki Buffet",
+      "transaction_date": "2026-04-13",
+      "total_amount": 600480,
+      "currency": "VND",
+      "category_id": "9",
+      "category_name": "ăn uống",
+      "category_reason": "Meal at a Korean buffet (food expense)",
+      "item_count": 1
+    },
+    {
+      "image": "IMG07",
+      "file_name": "IMG07.jpg",
+      "size_bytes": 239975,
+      "http_status": 200,
+      "elapsed_seconds": 5.27,
+      "success": true,
+      "error_code": null,
+      "error_message": null,
+      "merchant_name": "CONG TY CO PHAN KING FOOD MARKET",
+      "transaction_date": "2026-04-24",
+      "total_amount": 52730,
+      "currency": "VND",
+      "category_id": "9",
+      "category_name": "ăn uống",
+      "category_reason": "Receipt includes purchase of food items (beef) and a bag at a food market, fitting the 'ăn uống' (food & drinks) expense category.",
+      "item_count": 3
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+{
+  "run_id": "20260505071427",
+  "started_at": "2026-05-05T07:14:27.553Z",
+  "finished_at": "2026-05-05T07:14:39.683Z",
+  "base_url": "http://localhost:3000",
+  "image": "IMG06.jpg",
+  "size_bytes": 135005,
+  "http_status": 200,
+  "elapsed_seconds": 4.68,
+  "user": {
+    "email": "ocr_img06_retest_20260505071427@example.com"
+  },
+  "categories": [
+    {
+      "id": 78,
+      "name": "?n u?ng IMG06 20260505071427"
+    },
+    {
+      "id": 79,
+      "name": "Mua s?m IMG06 20260505071427"
+    },
+    {
+      "id": 80,
+      "name": "Di chuy?n IMG06 20260505071427"
+    },
+    {
+      "id": 81,
+      "name": "Kh?c IMG06 20260505071427"
+    }
+  ],
+  "result": {
+    "success": true,
+    "provider": "veryfi",
+    "transaction_type": "expense",
+    "source_type": "receipt_ai",
+    "raw_text": "157-160 Nguyễn Thái Học TP.\nĐiện thoại: 02871001968 (Ext\nPHUCLONG 20478)\nGiờ phục vụ 07:00 - 23:00\nPHIÊU THANH TOÁN\nThu 2047CHT\nThe\t05/05/2026 12:03\n4702260501288\nCÁ HÔ TRỢ VUI LÒNG LH\nape Tech\nM1-26-CERYH-05005901288\n\t6F43\n\n\t1\t60,000\n\t1 60,000\n\n\t129,000\n\t0\n\t-60,000\n\t69,000\n\t69.000\n\n\t204702280501268\n\n\t6/19\n\nA\tng\n94 m QR dé HOT\nHos\ty cap\ndon phuclong com.vn\n\nrestond in rong\t90\nphot ke tue Ket\tmus\nhang va\nnowy\nPASSWORD\nWIFI Luckytea\n66\tGia Phúc\nDIEM\tLong Roard\" trên zalo\nnhan ngan Voucher håp dan\nTing TRA\nHOON OD chão ban moit",
+    "review_fields": {
+      "merchant_name": "moit",
+      "transaction_date": "2026-05-05",
+      "total_amount": 60000,
+      "total_amount_display": "60.000",
+      "currency": "VND",
+      "category_id": "9",
+      "category_name": "ăn uống",
+      "category_reason": "Food expense",
+      "description": "Ngay 05/05/2026 chi tai moit so tien 60.000 VND thuoc nhom ăn uống",
+      "user_note": ""
+    },
+    "normalized_receipt": {
+      "fields": {
+        "merchant_name": "moit",
+        "transaction_date": "2026-05-05",
+        "transaction_datetime": "2026-05-05T12:03:00",
+        "total_amount": 60000,
+        "currency": "VND"
+      },
+      "items": [
+        {
+          "name": "CÁ HÔ TRỢ VUI LÒNG LH\nape Tech\nM1-26-CERYH-05005901288\n6F43",
+          "quantity": 1,
+          "unit_price": null,
+          "line_total": 60000,
+          "confidence": 0.8
+        }
+      ],
+      "receipt_summary": {
+        "merchant_name": "moit",
+        "transaction_date": "2026-05-05",
+        "transaction_datetime": "2026-05-05T12:03:00",
+        "total_amount": 60000,
+        "currency": "VND",
+        "provider_category": "Meals & Entertainment",
+        "line_items": [
+          {
+            "name": "CÁ HÔ TRỢ VUI LÒNG LH\nape Tech\nM1-26-CERYH-05005901288\n6F43",
+            "quantity": 1,
+            "unit_price": null,
+            "line_total": 60000,
+            "confidence": 0.8
+          }
+        ]
+      }
+    },
+    "debug": null,
+    "errors": []
+  },
+  "summary": {
+    "success": true,
+    "error_code": null,
+    "error_message": null,
+    "merchant_name": "moit",
+    "transaction_date": "2026-05-05",
+    "total_amount": 60000,
+    "currency": "VND",
+    "category_id": "9",
+    "category_name": "ăn uống",
+    "category_reason": "Food expense",
+    "item_count": 1
+  }
+}

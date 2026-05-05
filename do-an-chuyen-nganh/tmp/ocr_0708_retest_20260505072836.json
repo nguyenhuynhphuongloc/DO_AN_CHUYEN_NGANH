@@ -1,0 +1,76 @@
+{
+  "run_id": "20260505072836",
+  "started_at": "2026-05-05T07:28:36.826Z",
+  "finished_at": "2026-05-05T07:28:50.812Z",
+  "base_url": "http://localhost:3000",
+  "user": {
+    "email": "ocr_0708_20260505072836@example.com"
+  },
+  "test_cases": [
+    "OCR07",
+    "OCR08"
+  ],
+  "test_images": [
+    "IMG04.jpg",
+    "IMG05.jpg"
+  ],
+  "categories": [
+    {
+      "id": 86,
+      "name": "?n u?ng OCR0708 20260505072836"
+    },
+    {
+      "id": 87,
+      "name": "Mua s?m OCR0708 20260505072836"
+    },
+    {
+      "id": 88,
+      "name": "Di chuy?n OCR0708 20260505072836"
+    },
+    {
+      "id": 89,
+      "name": "Kh?c OCR0708 20260505072836"
+    }
+  ],
+  "transaction_count_before": 0,
+  "transaction_count_after_parse": 0,
+  "transaction_created_by_parse": 0,
+  "parse_results": [
+    {
+      "image": "IMG04",
+      "file_name": "IMG04.jpg",
+      "size_bytes": 148451,
+      "http_status": 200,
+      "elapsed_seconds": 3.71,
+      "success": true,
+      "error_code": null,
+      "error_message": null,
+      "merchant_name": "7-Eleven",
+      "transaction_date": "2026-05-05",
+      "total_amount": 14000,
+      "currency": "VND",
+      "category_id": "9",
+      "category_name": "ăn uống",
+      "category_reason": "Purchased bottled water for personal use.",
+      "item_count": 1
+    },
+    {
+      "image": "IMG05",
+      "file_name": "IMG05.jpg",
+      "size_bytes": 168436,
+      "http_status": 200,
+      "elapsed_seconds": 4.35,
+      "success": true,
+      "error_code": null,
+      "error_message": null,
+      "merchant_name": "WinMart",
+      "transaction_date": "2026-04-13",
+      "total_amount": 71550,
+      "currency": "VND",
+      "category_id": "9",
+      "category_name": "ăn uống",
+      "category_reason": "Purchase of food and beverages at WinMart, categorized as meals & entertainment.",
+      "item_count": 5
+    }
+  ]
+}

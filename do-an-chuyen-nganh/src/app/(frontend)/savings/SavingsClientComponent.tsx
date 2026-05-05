@@ -13,6 +13,7 @@ import {
   MdFlag,
   MdAttachMoney
 } from 'react-icons/md'
+import { Car, CircleDollarSign, House, Laptop, Plane, Target } from 'lucide-react'
 
 interface User {
   id: string
@@ -52,6 +53,26 @@ const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
 }
 
+const goalIconMap = {
+  Target,
+  Laptop,
+  House,
+  Car,
+  Plane,
+  CircleDollarSign,
+  '🎯': Target,
+  '💻': Laptop,
+  '🏠': House,
+  '🚗': Car,
+  '✈️': Plane,
+  '💰': CircleDollarSign,
+} as const
+
+const renderGoalIcon = (icon: string, size = 24) => {
+  const Icon = goalIconMap[icon as keyof typeof goalIconMap] || Target
+  return <Icon size={size} strokeWidth={2.1} />
+}
+
 export default function SavingsClient({ initialGoals, allUsers, initialNotifications, categories, currentUser }: Props) {
   const router = useRouter()
   const [goals, setGoals] = useState(initialGoals)
@@ -66,7 +87,7 @@ export default function SavingsClient({ initialGoals, allUsers, initialNotificat
   const [formData, setFormData] = useState({
     title: '',
     targetAmount: '',
-    icon: '🎯',
+    icon: 'Target',
     color: '#6366f1',
   })
 
@@ -204,7 +225,7 @@ export default function SavingsClient({ initialGoals, allUsers, initialNotificat
             <div key={goal.id} className="card" style={{ padding: '24px', position: 'relative', overflow: 'hidden' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                 <div style={{ padding: '12px', background: `${goal.color}15`, borderRadius: '12px', fontSize: '24px' }}>
-                  {goal.icon}
+                  {renderGoalIcon(goal.icon)}
                 </div>
                 <div style={{ display: 'flex', gap: '4px' }}>
                    {goal.participants && goal.participants.length > 0 && (
@@ -279,12 +300,12 @@ export default function SavingsClient({ initialGoals, allUsers, initialNotificat
                   <div className="form-group">
                     <label className="form-label">Biểu tượng</label>
                     <select className="form-select" value={formData.icon} onChange={e => setFormData({...formData, icon: e.target.value})}>
-                      <option value="🎯">🎯 Mục tiêu</option>
-                      <option value="💻">💻 Công nghệ</option>
-                      <option value="🏠">🏠 Nhà cửa</option>
-                      <option value="🚗">🚗 Xe cộ</option>
-                      <option value="✈️">✈️ Du lịch</option>
-                      <option value="💰">💰 Tích lũy</option>
+                      <option value="Target">Mục tiêu</option>
+                      <option value="Laptop">Công nghệ</option>
+                      <option value="House">Nhà cửa</option>
+                      <option value="Car">Xe cộ</option>
+                      <option value="Plane">Du lịch</option>
+                      <option value="CircleDollarSign">Tích lũy</option>
                     </select>
                   </div>
                 </div>

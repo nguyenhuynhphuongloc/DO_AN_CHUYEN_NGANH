@@ -1,20 +1,19 @@
 'use client'
+
 import React from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-
-import { 
-  MdDashboard, 
-  MdAttachMoney, 
-  MdCategory, 
-  MdBarChart, 
-  MdSmartToy, 
-  MdDocumentScanner,
-  MdAccountBalanceWallet,
-  MdFlag,
-  MdLogout
-} from 'react-icons/md'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import {
+  Bot,
+  ChartNoAxesCombined,
+  Flag,
+  FolderKanban,
+  LayoutDashboard,
+  LogOut,
+  ReceiptText,
+  ScanLine,
+  WalletCards,
+} from 'lucide-react'
 
 interface SidebarProps {
   user: {
@@ -24,13 +23,13 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { href: '/', icon: <MdDashboard size={20} />, label: 'Tổng quan' },
-  { href: '/transactions', icon: <MdAttachMoney size={20} />, label: 'Giao dịch' },
-  { href: '/categories', icon: <MdCategory size={20} />, label: 'Danh mục' },
-  { href: '/reports', icon: <MdBarChart size={20} />, label: 'Báo cáo' },
-  { href: '/savings', icon: <MdFlag size={20} />, label: 'Tiết kiệm' },
-  { href: '/chat', icon: <MdSmartToy size={20} />, label: 'Trợ lý AI' },
-  { href: '/scan', icon: <MdDocumentScanner size={20} />, label: 'Quét hóa đơn' },
+  { href: '/', icon: LayoutDashboard, label: 'Tổng quan' },
+  { href: '/transactions', icon: ReceiptText, label: 'Giao dịch' },
+  { href: '/categories', icon: FolderKanban, label: 'Danh mục' },
+  { href: '/reports', icon: ChartNoAxesCombined, label: 'Báo cáo' },
+  { href: '/savings', icon: Flag, label: 'Tiết kiệm' },
+  { href: '/chat', icon: Bot, label: 'Trợ lý AI' },
+  { href: '/scan', icon: ScanLine, label: 'Quét hóa đơn' },
 ]
 
 export default function Sidebar({ user }: SidebarProps) {
@@ -56,45 +55,49 @@ export default function Sidebar({ user }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <Link href="/" className="sidebar-logo">
+        <Link href="/" className="sidebar-logo" aria-label="FinTrack">
           <div className="sidebar-logo-icon">
-            <MdAccountBalanceWallet size={24} />
+            <WalletCards size={23} strokeWidth={2.2} />
           </div>
-          <span className="sidebar-logo-text">FinTrack</span>
+          <span className="sidebar-logo-text">
+            FinTrack
+            <small>Personal finance</small>
+          </span>
         </Link>
       </div>
 
-      <nav className="sidebar-nav">
-        <div className="sidebar-section-title">Menu chính</div>
-        {navItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`sidebar-link ${pathname === item.href ? 'active' : ''}`}
-          >
-            <span className="sidebar-link-icon">{item.icon}</span>
-            {item.label}
-          </Link>
-        ))}
+      <nav className="sidebar-nav" aria-label="Điều hướng chính">
+        <div className="sidebar-section-title">Không gian làm việc</div>
+        {navItems.map((item) => {
+          const Icon = item.icon
+          const isActive = pathname === item.href
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`sidebar-link ${isActive ? 'active' : ''}`}
+              aria-current={isActive ? 'page' : undefined}
+            >
+              <span className="sidebar-link-icon">
+                <Icon size={19} strokeWidth={2.15} />
+              </span>
+              {item.label}
+            </Link>
+          )
+        })}
       </nav>
 
       <div className="sidebar-footer">
         {user ? (
           <div className="sidebar-user">
-            <div className="sidebar-avatar">
-              {getInitials(user.name, user.email)}
-            </div>
+            <div className="sidebar-avatar">{getInitials(user.name, user.email)}</div>
             <div className="sidebar-user-info">
               <div className="sidebar-user-name">{user.name || 'Người dùng'}</div>
               <div className="sidebar-user-email">{user.email}</div>
             </div>
-            <button 
-              onClick={handleLogout}
-              className="btn-icon" 
-              title="Đăng xuất"
-              style={{ border: 'none', background: 'transparent', color: 'var(--danger)', opacity: 0.7 }}
-            >
-              <MdLogout size={18} />
+            <button onClick={handleLogout} className="btn-icon sidebar-logout" title="Đăng xuất">
+              <LogOut size={18} strokeWidth={2.1} />
             </button>
           </div>
         ) : (
