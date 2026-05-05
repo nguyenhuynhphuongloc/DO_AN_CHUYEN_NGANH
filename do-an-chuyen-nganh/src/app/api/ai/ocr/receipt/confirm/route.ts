@@ -5,6 +5,10 @@ import config from '@payload-config'
 
 import type { ReceiptOcrConfirmPayload } from '@/lib/receipt-ocr'
 
+function errorResponse(code: string, message: string, status: number) {
+  return Response.json({ success: false, message, errors: [{ code, message }] }, { status })
+}
+
 function isConfirmPayload(value: unknown): value is ReceiptOcrConfirmPayload {
   if (!value || typeof value !== 'object') return false
   const payload = value as Partial<ReceiptOcrConfirmPayload>
@@ -31,6 +35,14 @@ function toIsoDate(value: string): string | null {
   return candidate.toISOString()
 }
 
+function parseConfirmPayload(rawPayload: string): unknown | null {
+  try {
+    return JSON.parse(rawPayload)
+  } catch {
+    return null
+  }
+}
+
 export async function POST(request: Request) {
   const headers = await getHeaders()
   const payloadConfig = await config
@@ -38,7 +50,7 @@ export async function POST(request: Request) {
   const { user } = await payload.auth({ headers })
 
   if (!user) {
-    return Response.json({ success: false, message: 'Unauthorized' }, { status: 401 })
+    return errorResponse('UNAUTHORIZED', 'Vui lòng đăng nhập để quét hóa đơn.', 401)
   }
 
   let mediaId: number | string | null = null
@@ -49,31 +61,31 @@ export async function POST(request: Request) {
     const rawPayload = formData.get('payload')
 
     if (!(file instanceof File) || file.size <= 0) {
-      return Response.json({ success: false, message: 'Co loi xay ra trong qua trinh luu giao dich' }, { status: 400 })
+      return errorResponse('INVALID_FILE', 'Vui lòng tải lên ảnh hóa đơn hợp lệ.', 400)
     }
 
     if (typeof rawPayload !== 'string') {
-      return Response.json({ success: false, message: 'Co loi xay ra trong qua trinh luu giao dich' }, { status: 400 })
+      return errorResponse('INVALID_CONFIRM_PAYLOAD', 'Dữ liệu xác nhận hóa đơn không hợp lệ.', 400)
     }
 
-    const parsedPayload = JSON.parse(rawPayload)
+    const parsedPayload = parseConfirmPayload(rawPayload)
     if (!isConfirmPayload(parsedPayload)) {
-      return Response.json({ success: false, message: 'Co loi xay ra trong qua trinh luu giao dich' }, { status: 400 })
+      return errorResponse('INVALID_CONFIRM_PAYLOAD', 'Dữ liệu xác nhận hóa đơn không hợp lệ.', 400)
     }
 
     const { review_fields: reviewFields } = parsedPayload
     if (reviewFields.total_amount <= 0) {
-      return Response.json({ success: false, message: 'Co loi xay ra trong qua trinh luu giao dich' }, { status: 400 })
+      return errorResponse('INVALID_TOTAL_AMOUNT', 'Vui lòng nhập tổng tiền hợp lệ.', 400)
     }
 
     const isoDate = toIsoDate(reviewFields.transaction_date)
     if (!isoDate) {
-      return Response.json({ success: false, message: 'Co loi xay ra trong qua trinh luu giao dich' }, { status: 400 })
+      return errorResponse('INVALID_TRANSACTION_DATE', 'Vui lòng kiểm tra ngày giao dịch trước khi lưu.', 400)
     }
 
     const categoryId = Number(reviewFields.category_id)
     if (!Number.isFinite(categoryId)) {
-      return Response.json({ success: false, message: 'Co loi xay ra trong qua trinh luu giao dich' }, { status: 400 })
+      return errorResponse('INVALID_CATEGORY', 'Vui lòng chọn danh mục chi tiêu hợp lệ.', 400)
     }
 
     const categoryLookup = await payload.find({
@@ -94,7 +106,7 @@ export async function POST(request: Request) {
 
     const category = categoryLookup.docs[0]
     if (!category) {
-      return Response.json({ success: false, message: 'Co loi xay ra trong qua trinh luu giao dich' }, { status: 404 })
+      return errorResponse('CATEGORY_NOT_FOUND', 'Danh mục chi tiêu không hợp lệ hoặc không thuộc người dùng.', 404)
     }
 
     const fileBuffer = Buffer.from(await file.arrayBuffer())
@@ -133,15 +145,19 @@ export async function POST(request: Request) {
 
     return Response.json({
       success: true,
-      message: 'Luu giao dich thanh cong',
+      message: 'Lưu giao dịch thành công.',
       transaction: {
         id: transaction.id,
         amount: transaction.amount,
         type: transaction.type,
         category: category.id,
+        date: (transaction as any).date,
+        description: (transaction as any).description,
+        note: (transaction as any).note,
         merchantName: (transaction as any).merchantName,
         currency: (transaction as any).currency,
         receipt: (transaction as any).receipt,
+        sourceType: (transaction as any).sourceType,
       },
     })
   } catch (error) {
@@ -159,6 +175,6 @@ export async function POST(request: Request) {
       }
     }
 
-    return Response.json({ success: false, message: 'Co loi xay ra trong qua trinh luu giao dich' }, { status: 500 })
+    return errorResponse('CONFIRM_FAILED', 'Có lỗi xảy ra trong quá trình lưu giao dịch.', 500)
   }
 }

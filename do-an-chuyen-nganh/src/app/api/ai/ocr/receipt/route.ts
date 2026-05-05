@@ -7,6 +7,34 @@ import { buildAllowedExpenseCategories, type RawCategoryCandidate, type ReceiptO
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000'
 
+const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp'])
+const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp'])
+
+function getExtension(fileName: string): string {
+  const dotIndex = fileName.lastIndexOf('.')
+  return dotIndex >= 0 ? fileName.slice(dotIndex).toLowerCase() : ''
+}
+
+function isAllowedReceiptImage(file: File): boolean {
+  const mimeType = (file.type || '').toLowerCase()
+  const extension = getExtension(file.name || '')
+  return ALLOWED_IMAGE_MIME_TYPES.has(mimeType) && ALLOWED_IMAGE_EXTENSIONS.has(extension)
+}
+
+function ocrFailure(code: string, message: string) {
+  return {
+    success: false,
+    provider: 'veryfi',
+    transaction_type: 'expense',
+    source_type: 'receipt_ai',
+    raw_text: null,
+    review_fields: null,
+    normalized_receipt: null,
+    debug: null,
+    errors: [{ code, message }],
+  }
+}
+
 export async function POST(request: Request) {
   const headers = await getHeaders()
   const payloadConfig = await config
@@ -14,7 +42,7 @@ export async function POST(request: Request) {
   const { user } = await payload.auth({ headers })
 
   if (!user) {
-    return Response.json({ success: false, message: 'Unauthorized' }, { status: 401 })
+    return Response.json(ocrFailure('UNAUTHORIZED', 'Vui lòng đăng nhập để quét hóa đơn.'), { status: 401 })
   }
 
   try {
@@ -23,7 +51,14 @@ export async function POST(request: Request) {
 
     if (!(file instanceof File) || file.size <= 0) {
       return Response.json(
-        { success: false, errors: [{ code: 'INVALID_FILE', message: 'Receipt image is required' }] },
+        ocrFailure('INVALID_FILE', 'Vui lòng tải lên ảnh hóa đơn hợp lệ.'),
+        { status: 400 },
+      )
+    }
+
+    if (!isAllowedReceiptImage(file)) {
+      return Response.json(
+        ocrFailure('INVALID_FILE_TYPE', 'File không hợp lệ. Vui lòng tải lên ảnh JPG, PNG hoặc WEBP.'),
         { status: 400 },
       )
     }
@@ -60,10 +95,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Receipt OCR parse route failed:', error)
     return Response.json(
-      {
-        success: false,
-        errors: [{ code: 'OCR_ROUTE_FAILED', message: 'Failed to process receipt OCR request' }],
-      },
+      ocrFailure('OCR_ROUTE_FAILED', 'Dịch vụ OCR đang gặp sự cố. Vui lòng thử lại sau.'),
       { status: 500 },
     )
   }

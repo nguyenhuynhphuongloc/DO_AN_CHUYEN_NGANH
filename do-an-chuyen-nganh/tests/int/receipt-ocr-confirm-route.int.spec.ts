@@ -70,7 +70,13 @@ describe('receipt OCR confirm route', () => {
     expect(response.status).toBe(500)
     await expect(response.json()).resolves.toEqual({
       success: false,
-      message: 'Co loi xay ra trong qua trinh luu giao dich',
+      message: 'Có lỗi xảy ra trong quá trình lưu giao dịch.',
+      errors: [
+        {
+          code: 'CONFIRM_FAILED',
+          message: 'Có lỗi xảy ra trong quá trình lưu giao dịch.',
+        },
+      ],
     })
     expect(mockPayload.create).toHaveBeenCalledTimes(2)
     expect(mockPayload.delete).toHaveBeenCalledWith({

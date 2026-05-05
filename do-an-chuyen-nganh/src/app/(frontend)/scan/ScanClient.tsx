@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { MdCheckCircle, MdCloudUpload, MdDocumentScanner, MdReceiptLong, MdWarning } from 'react-icons/md'
+import { MdCheckCircle, MdCloudUpload, MdDocumentScanner, MdInfo, MdReceiptLong, MdWarning } from 'react-icons/md'
 
 import { normalizeCategoryName } from '@/lib/category-normalization'
 import type { ReceiptOcrResponse } from '@/lib/receipt-ocr'
@@ -27,6 +27,12 @@ type ReviewFormState = {
   categoryId: string
   description: string
   userNote: string
+}
+
+type NotificationState = {
+  type: 'error' | 'info' | 'success'
+  title: string
+  message: string
 }
 
 const emptyForm = (currency = 'VND'): ReviewFormState => ({
@@ -63,6 +69,12 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
   const [parseError, setParseError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
+  const [notification, setNotification] = useState<NotificationState | null>(null)
+  const ocrLineItems = ocrResult?.success
+    ? ocrResult.normalized_receipt.items.length > 0
+      ? ocrResult.normalized_receipt.items
+      : ocrResult.normalized_receipt.receipt_summary.line_items
+    : []
 
   useEffect(() => {
     if (!file) {
@@ -86,20 +98,29 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
     setParseError(null)
     setSaveError(null)
     if (!options?.preserveSuccess) {
+      setNotification(null)
+    }
+    if (!options?.preserveSuccess) {
       setSaveSuccess(null)
     }
+  }
+
+  function showNotification(type: NotificationState['type'], title: string, message: string) {
+    setNotification({ type, title, message })
   }
 
   function applyOcrResult(data: ReceiptOcrResponse) {
     setOcrResult(data)
     if (!data.success) {
-      const firstError = data.errors[0]?.message || 'Không thể phân tích hóa đơn.'
+      const firstError = data.errors?.[0]?.message || 'Không thể phân tích hóa đơn.'
       setParseError(firstError)
+      showNotification('error', 'Không thể phân tích hóa đơn', firstError)
       setFormState(emptyForm(user.currency || 'VND'))
       return
     }
 
     setParseError(null)
+    showNotification('info', 'Đã phân tích hóa đơn', 'Vui lòng kiểm tra và chỉnh sửa thông tin trước khi lưu giao dịch.')
     setFormState({
       merchantName: data.review_fields.merchant_name || '',
       transactionDate: data.review_fields.transaction_date || new Date().toISOString().split('T')[0],
@@ -133,7 +154,9 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
       applyOcrResult(data)
     } catch (error) {
       console.error(error)
-      setParseError('Có lỗi xảy ra khi phân tích hóa đơn.')
+      const message = 'Có lỗi xảy ra khi phân tích hóa đơn.'
+      setParseError(message)
+      showNotification('error', 'Không thể phân tích hóa đơn', message)
       setOcrResult(null)
     } finally {
       setIsParsing(false)
@@ -145,12 +168,16 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
 
     const amount = parseLocaleAmount(formState.totalAmountInput)
     if (!amount || amount <= 0) {
-      setSaveError('Vui lòng nhập tổng tiền hợp lệ.')
+      const message = 'Vui lòng nhập tổng tiền hợp lệ.'
+      setSaveError(message)
+      showNotification('error', 'Dữ liệu chưa hợp lệ', message)
       return
     }
 
     if (!formState.transactionDate || !formState.categoryId) {
-      setSaveError('Vui lòng kiểm tra ngày giao dịch và danh mục trước khi lưu.')
+      const message = 'Vui lòng kiểm tra ngày giao dịch và danh mục trước khi lưu.'
+      setSaveError(message)
+      showNotification('error', 'Dữ liệu chưa hợp lệ', message)
       return
     }
 
@@ -185,19 +212,47 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
 
       const data = await response.json()
       if (!response.ok || !data.success) {
-        setSaveError(data.message || 'Có lỗi xảy ra trong quá trình lưu giao dịch.')
+        const message = data.message || data.errors?.[0]?.message || 'Có lỗi xảy ra trong quá trình lưu giao dịch.'
+        setSaveError(message)
+        showNotification('error', 'Không thể lưu giao dịch', message)
         return
       }
 
-      setSaveSuccess('Lưu giao dịch thành công.')
+      const message = data.message || 'Lưu giao dịch thành công.'
+      setSaveSuccess(message)
+      showNotification('success', 'Lưu giao dịch thành công', message)
       resetScanState({ preserveSuccess: true })
     } catch (error) {
       console.error(error)
-      setSaveError('Có lỗi xảy ra trong quá trình lưu giao dịch.')
+      const message = 'Có lỗi xảy ra trong quá trình lưu giao dịch.'
+      setSaveError(message)
+      showNotification('error', 'Không thể lưu giao dịch', message)
     } finally {
       setIsSaving(false)
     }
   }
+
+  const notificationTone =
+    notification?.type === 'success'
+      ? {
+          background: '#dcfce7',
+          border: 'var(--success)',
+          color: '#166534',
+          icon: <MdCheckCircle size={28} color="var(--success)" />,
+        }
+      : notification?.type === 'info'
+        ? {
+            background: '#dbeafe',
+            border: '#60a5fa',
+            color: '#1d4ed8',
+            icon: <MdInfo size={28} color="#2563eb" />,
+          }
+        : {
+            background: '#fee2e2',
+            border: 'var(--danger)',
+            color: '#991b1b',
+            icon: <MdWarning size={28} color="var(--danger)" />,
+          }
 
   return (
     <>
@@ -208,21 +263,33 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
         <p className="page-subtitle">Veryfi trích xuất hóa đơn, Groq gợi ý danh mục, bạn xác nhận trước khi lưu.</p>
       </div>
 
-      {(saveSuccess || parseError || saveError) && (
-        <div
-          className="card"
-          style={{
-            marginBottom: '16px',
-            borderColor: saveSuccess ? 'var(--income-color)' : 'var(--danger-color)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {saveSuccess ? (
-              <MdCheckCircle size={22} color="var(--income-color)" />
-            ) : (
-              <MdWarning size={22} color="var(--danger-color)" />
-            )}
-            <span>{saveSuccess || parseError || saveError}</span>
+      {notification && (
+        <div className="modal-overlay" onClick={() => setNotification(null)}>
+          <div className="modal" onClick={(event) => event.stopPropagation()} style={{ maxWidth: '420px' }}>
+            <div
+              style={{
+                background: notificationTone.background,
+                borderLeft: `5px solid ${notificationTone.border}`,
+                color: notificationTone.color,
+                padding: '20px',
+                display: 'flex',
+                gap: '12px',
+                alignItems: 'flex-start',
+              }}
+            >
+              {notificationTone.icon}
+              <div>
+                <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px', color: notificationTone.color }}>
+                  {notification.title}
+                </h2>
+                <p style={{ lineHeight: 1.5 }}>{notification.message}</p>
+              </div>
+            </div>
+            <div className="modal-footer" style={{ justifyContent: 'flex-end' }}>
+              <button className="btn btn-primary" onClick={() => setNotification(null)}>
+                Quay lại
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -242,6 +309,7 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
                 setParseError(null)
                 setSaveError(null)
                 setSaveSuccess(null)
+                setNotification(null)
                 setFormState(emptyForm(user.currency || 'VND'))
               }}
             />
@@ -385,6 +453,51 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
               >
                 {isSaving ? 'Đang lưu...' : 'Xác nhận và lưu giao dịch'}
               </button>
+
+              {ocrLineItems.length > 0 && (
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                  <h4 style={{ marginBottom: '10px' }}>Danh sách mặt hàng OCR</h4>
+                  <div style={{ display: 'grid', gap: '8px' }}>
+                    {ocrLineItems.map((item, index) => (
+                      <div
+                        key={`${item.name || 'item'}-${index}`}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1fr auto',
+                          gap: '12px',
+                          padding: '10px 0',
+                          borderBottom: '1px solid var(--border)',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{item.name || `Mặt hàng ${index + 1}`}</div>
+                          <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                            SL: {item.quantity ?? '-'} | Đơn giá: {formatAmountDisplay(item.unit_price)}
+                          </div>
+                        </div>
+                        <div style={{ fontWeight: 600 }}>{formatAmountDisplay(item.line_total)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {ocrResult.raw_text && (
+                <details style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                  <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Raw OCR text</summary>
+                  <pre
+                    style={{
+                      marginTop: '10px',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      fontSize: '0.85rem',
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
+                    {ocrResult.raw_text}
+                  </pre>
+                </details>
+              )}
             </div>
           )}
         </div>

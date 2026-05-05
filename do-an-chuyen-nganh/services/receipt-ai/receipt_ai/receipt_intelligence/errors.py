@@ -10,6 +10,10 @@ class ReceiptParserError(ReceiptIntelligenceError):
     """Raised when Veryfi parsing fails."""
 
 
+class ReceiptNotReceiptError(ReceiptIntelligenceError):
+    """Raised when OCR output does not look like a receipt."""
+
+
 class ReceiptAuthenticationError(ReceiptParserError):
     """Raised when Veryfi credentials are rejected."""
 

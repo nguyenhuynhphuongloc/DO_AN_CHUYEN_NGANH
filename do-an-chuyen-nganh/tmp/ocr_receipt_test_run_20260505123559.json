@@ -1,0 +1,351 @@
+{
+  "run_id": "20260505123559",
+  "base_url": "http://localhost:3000",
+  "ai_url": "http://localhost:8000",
+  "started_at": "2026-05-05T12:35:59",
+  "test_files": [
+    {
+      "name": "IMG01.jpg",
+      "size_bytes": 136292
+    },
+    {
+      "name": "IMG02.jpg",
+      "size_bytes": 138948
+    },
+    {
+      "name": "IMG03.jpg",
+      "size_bytes": 560003
+    },
+    {
+      "name": "IMG04.jpg",
+      "size_bytes": 148451
+    },
+    {
+      "name": "IMG05.jpg",
+      "size_bytes": 168436
+    },
+    {
+      "name": "IMG06.jpg",
+      "size_bytes": 107248
+    },
+    {
+      "name": "IMG07.jpg",
+      "size_bytes": 239975
+    },
+    {
+      "name": "IMG08.jpg",
+      "size_bytes": 17594
+    },
+    {
+      "name": "IMG09.jpg",
+      "size_bytes": 150471
+    },
+    {
+      "name": "IMG10.jpg",
+      "size_bytes": 22
+    }
+  ],
+  "parse_results": [
+    {
+      "image": "IMG01",
+      "file_name": "IMG01.jpg",
+      "size_bytes": 136292,
+      "http_status": 200,
+      "elapsed_seconds": 3.62,
+      "success": true,
+      "error_code": "CATEGORY_SUGGESTION_FAILED",
+      "error_message": "Groq category resolution failed with status 401: {\"error\":{\"message\":\"Invalid API Key\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\"}}\n",
+      "merchant_name": "Hej - Trần Kế Xương",
+      "transaction_date": "2026-04-04",
+      "total_amount": 90000,
+      "currency": "VND",
+      "category_id": null,
+      "category_name": null,
+      "item_count": 1,
+      "raw_text_length": 326
+    },
+    {
+      "image": "IMG02",
+      "file_name": "IMG02.jpg",
+      "size_bytes": 138948,
+      "http_status": 200,
+      "elapsed_seconds": 4.27,
+      "success": true,
+      "error_code": "CATEGORY_SUGGESTION_FAILED",
+      "error_message": "Groq category resolution failed with status 401: {\"error\":{\"message\":\"Invalid API Key\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\"}}\n",
+      "merchant_name": "Family Mart",
+      "transaction_date": "2026-04-12",
+      "total_amount": 63000,
+      "currency": "VND",
+      "category_id": null,
+      "category_name": null,
+      "item_count": 2,
+      "raw_text_length": 724
+    },
+    {
+      "image": "IMG03",
+      "file_name": "IMG03.jpg",
+      "size_bytes": 560003,
+      "http_status": 200,
+      "elapsed_seconds": 4.94,
+      "success": true,
+      "error_code": "CATEGORY_SUGGESTION_FAILED",
+      "error_message": "Groq category resolution failed with status 401: {\"error\":{\"message\":\"Invalid API Key\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\"}}\n",
+      "merchant_name": "DOOKKI Korean Topokki Buffet",
+      "transaction_date": "2026-04-13",
+      "total_amount": 600480,
+      "currency": "VND",
+      "category_id": null,
+      "category_name": null,
+      "item_count": 1,
+      "raw_text_length": 500
+    },
+    {
+      "image": "IMG04",
+      "file_name": "IMG04.jpg",
+      "size_bytes": 148451,
+      "http_status": 200,
+      "elapsed_seconds": 3.33,
+      "success": true,
+      "error_code": "CATEGORY_SUGGESTION_FAILED",
+      "error_message": "Groq category resolution failed with status 401: {\"error\":{\"message\":\"Invalid API Key\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\"}}\n",
+      "merchant_name": "7-Eleven",
+      "transaction_date": "2026-05-05",
+      "total_amount": 14000,
+      "currency": "VND",
+      "category_id": null,
+      "category_name": null,
+      "item_count": 1,
+      "raw_text_length": 454
+    },
+    {
+      "image": "IMG05",
+      "file_name": "IMG05.jpg",
+      "size_bytes": 168436,
+      "http_status": 200,
+      "elapsed_seconds": 6.69,
+      "success": true,
+      "error_code": "CATEGORY_SUGGESTION_FAILED",
+      "error_message": "Groq category resolution failed with status 401: {\"error\":{\"message\":\"Invalid API Key\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\"}}\n",
+      "merchant_name": "WinMart",
+      "transaction_date": "2026-04-13",
+      "total_amount": 71550,
+      "currency": "VND",
+      "category_id": null,
+      "category_name": null,
+      "item_count": 5,
+      "raw_text_length": 610
+    },
+    {
+      "image": "IMG06",
+      "file_name": "IMG06.jpg",
+      "size_bytes": 107248,
+      "http_status": 200,
+      "elapsed_seconds": 4.19,
+      "success": true,
+      "error_code": "CATEGORY_SUGGESTION_FAILED",
+      "error_message": "Groq category resolution failed with status 401: {\"error\":{\"message\":\"Invalid API Key\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\"}}\n",
+      "merchant_name": "trình",
+      "transaction_date": "2026-04-15",
+      "total_amount": 174000,
+      "currency": "VND",
+      "category_id": null,
+      "category_name": null,
+      "item_count": 4,
+      "raw_text_length": 450
+    },
+    {
+      "image": "IMG07",
+      "file_name": "IMG07.jpg",
+      "size_bytes": 239975,
+      "http_status": 200,
+      "elapsed_seconds": 3.86,
+      "success": true,
+      "error_code": "CATEGORY_SUGGESTION_FAILED",
+      "error_message": "Groq category resolution failed with status 401: {\"error\":{\"message\":\"Invalid API Key\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\"}}\n",
+      "merchant_name": "CONG TY CO PHAN KING FOOD MARKET",
+      "transaction_date": "2026-04-24",
+      "total_amount": 52730,
+      "currency": "VND",
+      "category_id": null,
+      "category_name": null,
+      "item_count": 3,
+      "raw_text_length": 1136
+    },
+    {
+      "image": "IMG08",
+      "file_name": "IMG08.jpg",
+      "size_bytes": 17594,
+      "http_status": 200,
+      "elapsed_seconds": 2.76,
+      "success": true,
+      "error_code": "CATEGORY_SUGGESTION_FAILED",
+      "error_message": "Groq category resolution failed with status 401: {\"error\":{\"message\":\"Invalid API Key\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\"}}\n",
+      "merchant_name": "Differin",
+      "transaction_date": null,
+      "total_amount": 309,
+      "currency": "USD",
+      "category_id": null,
+      "category_name": null,
+      "item_count": 0,
+      "raw_text_length": 33
+    },
+    {
+      "image": "IMG09",
+      "file_name": "IMG09.jpg",
+      "size_bytes": 150471,
+      "http_status": 200,
+      "elapsed_seconds": 3.36,
+      "success": false,
+      "error_code": "NOT_RECEIPT",
+      "error_message": "Đây không phải là ảnh hóa đơn hợp lệ.",
+      "merchant_name": null,
+      "transaction_date": null,
+      "total_amount": null,
+      "currency": null,
+      "category_id": null,
+      "category_name": null,
+      "item_count": 0,
+      "raw_text_length": 0
+    },
+    {
+      "image": "IMG10",
+      "file_name": "IMG10.jpg",
+      "size_bytes": 22,
+      "http_status": 200,
+      "elapsed_seconds": 0.64,
+      "success": false,
+      "error_code": "RECEIPT_PARSE_FAILED",
+      "error_message": "400, The file type is not enabled for your client.",
+      "merchant_name": null,
+      "transaction_date": null,
+      "total_amount": null,
+      "currency": null,
+      "category_id": null,
+      "category_name": null,
+      "item_count": 0,
+      "raw_text_length": 0
+    },
+    {
+      "image": "IMG10.txt",
+      "file_name": "IMG10.txt",
+      "size_bytes": 22,
+      "http_status": 400,
+      "elapsed_seconds": 0.04,
+      "success": false,
+      "error_code": "INVALID_FILE_TYPE",
+      "error_message": "File không hợp lệ. Vui lòng tải lên ảnh JPG, PNG hoặc WEBP.",
+      "merchant_name": null,
+      "transaction_date": null,
+      "total_amount": null,
+      "currency": null,
+      "category_id": null,
+      "category_name": null,
+      "item_count": 0,
+      "raw_text_length": 0
+    }
+  ],
+  "auth_result": {
+    "login_status": 200,
+    "email": "ocr_report_20260505123559@example.com",
+    "unauth_scan_status": 401,
+    "unauth_scan_success": false,
+    "unauth_scan_error": {
+      "code": "UNAUTHORIZED",
+      "message": "Vui lòng đăng nhập để quét hóa đơn."
+    },
+    "elapsed_seconds": 0.01
+  },
+  "no_confirm_result": {
+    "before_count": 0,
+    "after_parse_count": 0,
+    "created_without_confirm": 0
+  },
+  "confirm_result": {
+    "image": "IMG01",
+    "http_status": 200,
+    "elapsed_seconds": 0.55,
+    "success": true,
+    "message": "Lưu giao dịch thành công.",
+    "transaction": {
+      "id": 169,
+      "amount": 90000,
+      "type": "expense",
+      "category": 70,
+      "date": "2026-04-04T00:00:00.000Z",
+      "description": "Ki?m th? OCR t? IMG01",
+      "note": "Giao d?ch t?o trong qu? tr?nh ki?m th? OCR",
+      "merchantName": "Hej - Trần Kế Xương",
+      "currency": "VND",
+      "receipt": {
+        "id": 6,
+        "alt": "Hej - Trần Kế Xương",
+        "updatedAt": "2026-05-05T05:36:40.439Z",
+        "createdAt": "2026-05-05T05:36:40.439Z",
+        "url": "/api/media/file/IMG01.jpg",
+        "thumbnailURL": null,
+        "filename": "IMG01.jpg",
+        "mimeType": "image/jpeg",
+        "filesize": 136292,
+        "width": 1536,
+        "height": 2048,
+        "focalX": 50,
+        "focalY": 50
+      },
+      "sourceType": "receipt_ai"
+    },
+    "before_count": 0,
+    "after_count": 1,
+    "created_count": 1,
+    "payload_review_fields": {
+      "merchant_name": "Hej - Trần Kế Xương",
+      "transaction_date": "2026-04-04",
+      "total_amount": 90000.0,
+      "currency": "VND",
+      "category_id": "70",
+      "description": "Ki?m th? OCR t? IMG01",
+      "user_note": "Giao d?ch t?o trong qu? tr?nh ki?m th? OCR"
+    }
+  },
+  "service_down_result": {
+    "http_status": 500,
+    "elapsed_seconds": 5.15,
+    "success": false,
+    "error": {
+      "code": "OCR_ROUTE_FAILED",
+      "message": "Dịch vụ OCR đang gặp sự cố. Vui lòng thử lại sau."
+    }
+  },
+  "categories": [
+    {
+      "id": 70,
+      "name": "An uong OCR 20260505123559",
+      "type": "expense"
+    },
+    {
+      "id": 71,
+      "name": "Mua sam OCR 20260505123559",
+      "type": "expense"
+    },
+    {
+      "id": 72,
+      "name": "Di chuyen OCR 20260505123559",
+      "type": "expense"
+    },
+    {
+      "id": 73,
+      "name": "Khac OCR 20260505123559",
+      "type": "expense"
+    }
+  ],
+  "notes": [
+    "Health http://localhost:3000: HTTP 200",
+    "Health http://localhost:8000/health: HTTP 200",
+    "Create test user: HTTP 201",
+    "Create category An uong OCR 20260505123559: HTTP 200",
+    "Create category Mua sam OCR 20260505123559: HTTP 200",
+    "Create category Di chuyen OCR 20260505123559: HTTP 200",
+    "Create category Khac OCR 20260505123559: HTTP 200"
+  ],
+  "finished_at": "2026-05-05T12:36:47"
+}

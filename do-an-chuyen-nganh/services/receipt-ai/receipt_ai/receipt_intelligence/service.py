@@ -13,7 +13,7 @@ from .contracts import (
     ReceiptOcrSuccessResponse,
 )
 from .description_builder import build_receipt_description
-from .errors import ReceiptCategoryResolutionError, ReceiptIntelligenceError
+from .errors import ReceiptCategoryResolutionError, ReceiptIntelligenceError, ReceiptNotReceiptError
 from .normalizer import normalize_veryfi_document
 from .preprocess import preprocess_receipt_image
 from .veryfi_parser import VeryfiReceiptParser
@@ -28,6 +28,30 @@ def _safe_suffix(file_name: str, mime_type: str) -> str:
     if mime_type == "image/webp":
         return ".webp"
     return ".jpg"
+
+
+def _looks_like_receipt(normalized: dict, raw_text: str) -> bool:
+    receipt = normalized.get("normalized_receipt") or {}
+    fields = receipt.get("fields") or {}
+    summary = receipt.get("receipt_summary") or {}
+    items = receipt.get("items") or []
+
+    document_type = ((normalized.get("debug") or {}).get("provider_payload_summary") or {}).get("document_type")
+    if isinstance(document_type, str):
+        normalized_type = document_type.strip().lower()
+        if normalized_type and normalized_type not in {"receipt", "invoice", "bill", "order"}:
+            return False
+
+    has_money = fields.get("total_amount") is not None or summary.get("total_amount") is not None
+    has_merchant = bool(fields.get("merchant_name") or summary.get("merchant_name"))
+    has_date = bool(fields.get("transaction_date") or summary.get("transaction_date"))
+    has_items = bool(items)
+    has_receipt_words = any(
+        keyword in (raw_text or "").lower()
+        for keyword in ("total", "subtotal", "receipt", "invoice", "cash", "change", "vat", "tong", "thanh tien")
+    )
+
+    return has_money and (has_merchant or has_date or has_items or has_receipt_words)
 
 
 def parse_receipt_and_suggest_category(
@@ -59,6 +83,9 @@ def parse_receipt_and_suggest_category(
             raw_text=parser_result.raw_text,
             runtime=parser_result.runtime,
         )
+
+        if not _looks_like_receipt(normalized, parser_result.raw_text):
+            raise ReceiptNotReceiptError("Đây không phải là ảnh hóa đơn hợp lệ.")
 
         category_suggestion = None
         category_errors: list[ReceiptOcrError] = []
@@ -99,6 +126,11 @@ def parse_receipt_and_suggest_category(
             errors=category_errors,
         )
         return success.model_dump()
+    except ReceiptNotReceiptError as exc:
+        failure = ReceiptOcrFailureResponse(
+            errors=[ReceiptOcrError(code="NOT_RECEIPT", message=str(exc))]
+        )
+        return failure.model_dump()
     except ReceiptIntelligenceError as exc:
         failure = ReceiptOcrFailureResponse(
             errors=[ReceiptOcrError(code="RECEIPT_PARSE_FAILED", message=str(exc))]

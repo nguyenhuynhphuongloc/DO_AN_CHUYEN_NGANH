@@ -331,7 +331,7 @@ export default function CategoriesClient({ initialCategories }: Props) {
                   Xác nhận xóa?
                 </p>
                 <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: '1.5' }}>
-                  Bạn có chắc chắn muốn xóa danh mục <strong>"{deleteConfirmData.name}"</strong>? Hành động này không thể hoàn tác.
+                  Bạn có chắc chắn muốn xóa danh mục <strong>&quot;{deleteConfirmData.name}&quot;</strong>? Hành động này không thể hoàn tác.
                 </p>
               </div>
             </div>

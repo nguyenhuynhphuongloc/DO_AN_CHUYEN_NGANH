@@ -1,4 +1,4 @@
-import type { CollectionConfig } from 'payload'
+import type { CollectionConfig, Where } from 'payload'
 
 export const SavingsGoals: CollectionConfig = {
   slug: 'savings-goals',
@@ -10,12 +10,13 @@ export const SavingsGoals: CollectionConfig = {
     read: ({ req: { user } }) => {
       if (!user) return false
       if (user.role === 'admin') return true
-      return {
+      const where: Where = {
         or: [
           { owner: { equals: user.id } },
           { participants: { contains: user.id } },
         ],
       }
+      return where
     },
     create: ({ req: { user } }) => Boolean(user),
     update: ({ req: { user } }) => {
@@ -32,7 +33,7 @@ export const SavingsGoals: CollectionConfig = {
   hooks: {
     beforeValidate: [
       ({ req, operation, data }) => {
-        if (operation === 'create' && req.user) {
+        if (operation === 'create' && req.user && data) {
           data.owner = req.user.id
         }
         return data
