@@ -69,9 +69,12 @@ export interface Config {
   collections: {
     users: User;
     media: Media;
+    wallets: Wallet;
     categories: Category;
     transactions: Transaction;
     budgets: Budget;
+    'savings-goals': SavingsGoal;
+    notifications: Notification;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -81,9 +84,12 @@ export interface Config {
   collectionsSelect: {
     users: UsersSelect<false> | UsersSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
+    wallets: WalletsSelect<false> | WalletsSelect<true>;
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     transactions: TransactionsSelect<false> | TransactionsSelect<true>;
     budgets: BudgetsSelect<false> | BudgetsSelect<true>;
+    'savings-goals': SavingsGoalsSelect<false> | SavingsGoalsSelect<true>;
+    notifications: NotificationsSelect<false> | NotificationsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -159,6 +165,7 @@ export interface User {
 export interface Media {
   id: number;
   alt: string;
+  ownerId?: number | null;
   updatedAt: string;
   createdAt: string;
   url?: string | null;
@@ -173,6 +180,26 @@ export interface Media {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "wallets".
+ */
+export interface Wallet {
+  id: number;
+  user: number | User;
+  name: string;
+  walletType: 'main' | 'cash' | 'bank' | 'savings';
+  currency: string;
+  balance: number;
+  /**
+   * Ap dung cho vi chi tieu chinh cua nguoi dung.
+   */
+  monthlySpendingLimit?: number | null;
+  isDefault?: boolean | null;
+  isActive?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "categories".
  */
 export interface Category {
@@ -180,6 +207,7 @@ export interface Category {
   name: string;
   type: 'income' | 'expense';
   icon?: string | null;
+  note?: string | null;
   color?: string | null;
   user?: (number | null) | User;
   isDefault?: boolean | null;
@@ -196,13 +224,33 @@ export interface Transaction {
   amount: number;
   merchantName?: string | null;
   currency?: string | null;
+  wallet: number | Wallet;
   category: number | Category;
   description?: string | null;
   date: string;
   note?: string | null;
   receipt?: (number | null) | Media;
-  sourceType?: ('manual' | 'receipt_ai') | null;
+  sourceType?: ('manual' | 'chatbot' | 'receipt_ai' | 'transfer' | 'adjustment') | null;
+  sourceRefId?: string | null;
+  savingsGoal?: (number | null) | SavingsGoal;
   user: number | User;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "savings-goals".
+ */
+export interface SavingsGoal {
+  id: number;
+  title: string;
+  targetAmount: number;
+  currentAmount?: number | null;
+  status?: ('active' | 'completed') | null;
+  icon?: string | null;
+  color?: string | null;
+  owner?: (number | null) | User;
+  participants?: (number | User)[] | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -212,10 +260,38 @@ export interface Transaction {
  */
 export interface Budget {
   id: number;
+  wallet?: (number | null) | Wallet;
   category: number | Category;
   amount: number;
   period: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  month?: number | null;
+  year?: number | null;
+  note?: string | null;
+  alertThresholds?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  isActive?: boolean | null;
   user: number | User;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "notifications".
+ */
+export interface Notification {
+  id: number;
+  recipient: number | User;
+  message: string;
+  type: 'invitation' | 'contribution' | 'completion' | 'system';
+  read?: boolean | null;
+  link?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -252,6 +328,10 @@ export interface PayloadLockedDocument {
         value: number | Media;
       } | null)
     | ({
+        relationTo: 'wallets';
+        value: number | Wallet;
+      } | null)
+    | ({
         relationTo: 'categories';
         value: number | Category;
       } | null)
@@ -262,6 +342,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'budgets';
         value: number | Budget;
+      } | null)
+    | ({
+        relationTo: 'savings-goals';
+        value: number | SavingsGoal;
+      } | null)
+    | ({
+        relationTo: 'notifications';
+        value: number | Notification;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -337,6 +425,7 @@ export interface UsersSelect<T extends boolean = true> {
  */
 export interface MediaSelect<T extends boolean = true> {
   alt?: T;
+  ownerId?: T;
   updatedAt?: T;
   createdAt?: T;
   url?: T;
@@ -351,12 +440,29 @@ export interface MediaSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "wallets_select".
+ */
+export interface WalletsSelect<T extends boolean = true> {
+  user?: T;
+  name?: T;
+  walletType?: T;
+  currency?: T;
+  balance?: T;
+  monthlySpendingLimit?: T;
+  isDefault?: T;
+  isActive?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "categories_select".
  */
 export interface CategoriesSelect<T extends boolean = true> {
   name?: T;
   type?: T;
   icon?: T;
+  note?: T;
   color?: T;
   user?: T;
   isDefault?: T;
@@ -372,12 +478,15 @@ export interface TransactionsSelect<T extends boolean = true> {
   amount?: T;
   merchantName?: T;
   currency?: T;
+  wallet?: T;
   category?: T;
   description?: T;
   date?: T;
   note?: T;
   receipt?: T;
   sourceType?: T;
+  sourceRefId?: T;
+  savingsGoal?: T;
   user?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -387,10 +496,45 @@ export interface TransactionsSelect<T extends boolean = true> {
  * via the `definition` "budgets_select".
  */
 export interface BudgetsSelect<T extends boolean = true> {
+  wallet?: T;
   category?: T;
   amount?: T;
   period?: T;
+  month?: T;
+  year?: T;
+  note?: T;
+  alertThresholds?: T;
+  isActive?: T;
   user?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "savings-goals_select".
+ */
+export interface SavingsGoalsSelect<T extends boolean = true> {
+  title?: T;
+  targetAmount?: T;
+  currentAmount?: T;
+  status?: T;
+  icon?: T;
+  color?: T;
+  owner?: T;
+  participants?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "notifications_select".
+ */
+export interface NotificationsSelect<T extends boolean = true> {
+  recipient?: T;
+  message?: T;
+  type?: T;
+  read?: T;
+  link?: T;
   updatedAt?: T;
   createdAt?: T;
 }

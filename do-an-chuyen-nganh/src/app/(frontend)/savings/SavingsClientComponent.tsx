@@ -1,19 +1,25 @@
 'use client'
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { 
-  MdAdd, 
-  MdGroups, 
-  MdPerson, 
-  MdTrendingUp, 
-  MdCheck, 
-  MdClose, 
-  MdSearch,
-  MdNotifications,
-  MdFlag,
-  MdAttachMoney
-} from 'react-icons/md'
-import { Car, CircleDollarSign, House, Laptop, Plane, Target } from 'lucide-react'
+import {
+  Banknote as MdAttachMoney,
+  Bell as MdNotifications,
+  Car,
+  Check as MdCheck,
+  CircleDollarSign,
+  Flag as MdFlag,
+  House,
+  Laptop,
+  Plane,
+  Plus as MdAdd,
+  Search as MdSearch,
+  Target,
+  TrendingUp as MdTrendingUp,
+  User as MdPerson,
+  Users as MdGroups,
+  X as MdClose,
+} from 'lucide-react'
+import { formatMoneyInput, parseMoneyInput } from '@/lib/money-input'
 
 interface User {
   id: string
@@ -100,7 +106,7 @@ export default function SavingsClient({ initialGoals, allUsers, initialNotificat
 
     const payload = {
       title: formData.title,
-      targetAmount: parseFloat(formData.targetAmount),
+      targetAmount: parseMoneyInput(formData.targetAmount),
       icon: formData.icon,
       color: formData.color,
       participants: selectedParticipants,
@@ -141,7 +147,7 @@ export default function SavingsClient({ initialGoals, allUsers, initialNotificat
       // 1. Tạo giao dịch chi tiêu liên kết với mục tiêu tiết kiệm
       const transactionPayload = {
         type: 'expense',
-        amount: parseFloat(contributeAmount),
+        amount: parseMoneyInput(contributeAmount),
         category: selectedCategoryId,
         description: `Đóng góp tích lũy: ${showContributeModal.title}`,
         savingsGoal: showContributeModal.id,
@@ -180,8 +186,7 @@ export default function SavingsClient({ initialGoals, allUsers, initialNotificat
     <>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 className="page-title">Mục tiêu tiết kiệm</h1>
-          <p className="page-subtitle">Quản lý các khoản tích lũy cá nhân và nhóm</p>
+          <h1 className="page-title">Mục tiêu tiết kiệm</h1>
         </div>
         <button className="btn btn-primary" onClick={() => setShowAddModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <MdAdd size={20} /> Tạo mục tiêu mới
@@ -295,7 +300,7 @@ export default function SavingsClient({ initialGoals, allUsers, initialNotificat
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Số tiền cần tiết kiệm (VND)</label>
-                    <input type="number" className="form-input" placeholder="0" value={formData.targetAmount} onChange={e => setFormData({...formData, targetAmount: e.target.value})} required />
+                    <input inputMode="numeric" className="form-input" placeholder="1.000.000" value={formData.targetAmount} onChange={e => setFormData({...formData, targetAmount: formatMoneyInput(e.target.value)})} required />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Biểu tượng</label>
@@ -352,7 +357,7 @@ export default function SavingsClient({ initialGoals, allUsers, initialNotificat
                 <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '16px' }}>Bạn đang đóng góp vào mục tiêu: <strong>{showContributeModal.title}</strong></p>
                 <div className="form-group">
                   <label className="form-label">Số tiền đóng góp (VND)</label>
-                  <input type="number" className="form-input" placeholder="0" value={contributeAmount} onChange={e => setContributeAmount(e.target.value)} required autoFocus />
+                  <input inputMode="numeric" className="form-input" placeholder="1.000.000" value={contributeAmount} onChange={e => setContributeAmount(formatMoneyInput(e.target.value))} required autoFocus />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Chi tiêu từ danh mục</label>

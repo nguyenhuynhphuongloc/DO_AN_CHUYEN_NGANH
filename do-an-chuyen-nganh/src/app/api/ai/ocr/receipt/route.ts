@@ -71,6 +71,7 @@ export async function POST(request: Request) {
       limit: 200,
       depth: 0,
       user,
+      overrideAccess: false,
     })
 
     const allowedCategories = buildAllowedExpenseCategories(categories.docs as RawCategoryCandidate[], user.id)

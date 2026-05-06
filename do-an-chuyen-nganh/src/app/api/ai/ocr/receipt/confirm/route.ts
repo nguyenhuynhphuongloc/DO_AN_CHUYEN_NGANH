@@ -3,6 +3,8 @@ import { getPayload } from 'payload'
 
 import config from '@payload-config'
 
+import { applyTransactionCreateBalance } from '@/lib/transaction-balance'
+import { getDefaultWallet } from '@/lib/wallets'
 import type { ReceiptOcrConfirmPayload } from '@/lib/receipt-ocr'
 
 function errorResponse(code: string, message: string, status: number) {
@@ -102,6 +104,7 @@ export async function POST(request: Request) {
       limit: 1,
       depth: 0,
       user,
+      overrideAccess: false,
     })
 
     const category = categoryLookup.docs[0]
@@ -109,11 +112,17 @@ export async function POST(request: Request) {
       return errorResponse('CATEGORY_NOT_FOUND', 'Danh mục chi tiêu không hợp lệ hoặc không thuộc người dùng.', 404)
     }
 
+    const defaultWallet = await getDefaultWallet(payload, user.id)
+    if (!defaultWallet) {
+      return errorResponse('WALLET_NOT_FOUND', 'Vui long thiet lap vi mac dinh truoc khi luu hoa don.', 400)
+    }
+
     const fileBuffer = Buffer.from(await file.arrayBuffer())
     const media = await payload.create({
       collection: 'media' as any,
       data: {
         alt: reviewFields.merchant_name || file.name || 'Receipt image',
+        ownerId: user.id,
       },
       file: {
         data: fileBuffer,
@@ -131,6 +140,7 @@ export async function POST(request: Request) {
         type: 'expense',
         amount: reviewFields.total_amount,
         category: category.id,
+        wallet: defaultWallet.id,
         description: reviewFields.description,
         date: isoDate,
         note: reviewFields.user_note,
@@ -138,10 +148,14 @@ export async function POST(request: Request) {
         merchantName: reviewFields.merchant_name,
         currency: reviewFields.currency,
         sourceType: 'receipt_ai',
+        sourceRefId: String(media.id),
         user: user.id,
       },
       user,
+      overrideAccess: false,
     })
+
+    await applyTransactionCreateBalance(payload, transaction as any)
 
     return Response.json({
       success: true,
@@ -158,6 +172,8 @@ export async function POST(request: Request) {
         currency: (transaction as any).currency,
         receipt: (transaction as any).receipt,
         sourceType: (transaction as any).sourceType,
+        sourceRefId: (transaction as any).sourceRefId,
+        wallet: (transaction as any).wallet,
       },
     })
   } catch (error) {

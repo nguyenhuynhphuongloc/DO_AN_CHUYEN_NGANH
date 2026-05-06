@@ -3,7 +3,8 @@
 import React, { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, LockKeyhole, Mail, ShieldCheck, UserRound, WalletCards } from 'lucide-react'
+import { ArrowRight, LockKeyhole, Mail, UserRound } from 'lucide-react'
+import AppLogo from '@/components/AppLogo'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -50,7 +51,7 @@ export default function RegisterPage() {
         body: JSON.stringify({ email, password }),
       })
 
-      router.push('/')
+      router.push('/dashboard')
       router.refresh()
     } catch {
       setError('Có lỗi xảy ra, vui lòng thử lại')
@@ -59,43 +60,11 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="auth-page auth-shell">
-      <section className="auth-visual" aria-label="FinTrack overview">
-        <Link href="/" className="auth-brand" aria-label="FinTrack">
-          <span className="auth-brand-mark">
-            <WalletCards size={24} strokeWidth={2.2} />
-          </span>
-          <span>
-            FinTrack
-            <small>Personal finance workspace</small>
-          </span>
-        </Link>
-
-        <div className="auth-hero-copy">
-          <span className="auth-kicker">
-            <ShieldCheck size={16} /> Bắt đầu kiểm soát dòng tiền
-          </span>
-          <h1>Tạo tài khoản để xây dựng thói quen tài chính bền vững.</h1>
-          <p>
-            Theo dõi khoản chi, lập mục tiêu tiết kiệm và đọc báo cáo tài chính cá nhân bằng trải nghiệm hiện đại.
-          </p>
-        </div>
-
-        <div className="auth-insight-card">
-          <div>
-            <span>Mục tiêu tiết kiệm</span>
-            <strong>68%</strong>
-          </div>
-          <div className="auth-ring" aria-hidden="true">
-            <span />
-          </div>
-        </div>
-      </section>
-
+    <main className="auth-page auth-shell auth-single">
       <section className="auth-card auth-form-panel" aria-label="Đăng ký">
         <div className="auth-logo">
           <div className="auth-logo-icon">
-            <UserRound size={28} strokeWidth={2.1} />
+            <AppLogo className="app-logo-image" size={52} priority />
           </div>
           <h2 className="auth-title">Tạo tài khoản</h2>
           <p className="auth-subtitle">Thiết lập không gian tài chính cá nhân của bạn.</p>

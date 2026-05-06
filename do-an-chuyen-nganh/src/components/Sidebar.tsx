@@ -12,8 +12,8 @@ import {
   LogOut,
   ReceiptText,
   ScanLine,
-  WalletCards,
 } from 'lucide-react'
+import AppLogo from './AppLogo'
 
 interface SidebarProps {
   user: {
@@ -23,7 +23,7 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { href: '/', icon: LayoutDashboard, label: 'Tổng quan' },
+  { href: '/dashboard', icon: LayoutDashboard, label: 'Tổng quan' },
   { href: '/transactions', icon: ReceiptText, label: 'Giao dịch' },
   { href: '/categories', icon: FolderKanban, label: 'Danh mục' },
   { href: '/reports', icon: ChartNoAxesCombined, label: 'Báo cáo' },
@@ -55,9 +55,9 @@ export default function Sidebar({ user }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <Link href="/" className="sidebar-logo" aria-label="FinTrack">
+        <Link href="/dashboard" className="sidebar-logo" aria-label="FinTrack">
           <div className="sidebar-logo-icon">
-            <WalletCards size={23} strokeWidth={2.2} />
+            <AppLogo className="app-logo-image" size={40} priority />
           </div>
           <span className="sidebar-logo-text">
             FinTrack

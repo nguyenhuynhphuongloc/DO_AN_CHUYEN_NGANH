@@ -1,91 +1,166 @@
 'use client'
-import React, { useState } from 'react'
+
+import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { vi } from 'date-fns/locale'
-import { 
-  MdEdit, 
-  MdDelete, 
-  MdSearch, 
-  MdAdd, 
-  MdClose, 
-  MdWarning,
-  MdArrowUpward,
-  MdArrowDownward,
-  MdReceipt,
-  MdFilterList,
-  MdCheck
-} from 'react-icons/md'
-import CategoryIcon from '@/components/CategoryIcon'
+import {
+  ArrowDown,
+  ArrowUp,
+  CalendarDays,
+  Edit3,
+  Eye,
+  Filter,
+  Plus,
+  ReceiptText,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react'
+import { formatMoneyInput, parseMoneyInput } from '@/lib/money-input'
 
-interface Category {
-  id: string
+type Category = {
+  id: string | number
   name: string
-  icon: string
-  color: string
+  icon?: string | null
+  color?: string | null
   type: 'income' | 'expense'
 }
 
-interface Transaction {
-  id: string
+type Wallet = {
+  id: string | number
+  name: string
+  walletType: string
+}
+
+type Transaction = {
+  id: string | number
   type: 'income' | 'expense'
   amount: number
-  description?: string
+  description?: string | null
   date: string
-  note?: string
-  category?: Category | string
+  note?: string | null
+  category?: Category | string | number | null
+  wallet?: Wallet | string | number | null
+  sourceType?: 'manual' | 'chatbot' | 'receipt_ai' | 'transfer' | 'adjustment' | null
+  receipt?: { id: string | number; url?: string | null; filename?: string | null } | string | number | null
 }
 
-interface Props {
+type Props = {
   initialTransactions: Transaction[]
   totalDocs: number
   categories: Category[]
+  wallets: Wallet[]
   currentMonth: number
   currentYear: number
+  filters: {
+    wallet: string
+    type: string
+    category: string
+    source: string
+    search: string
+  }
+}
+
+const sourceLabels: Record<string, string> = {
+  manual: 'Nhập tay',
+  chatbot: 'Chatbot',
+  receipt_ai: 'OCR',
+  receipt_AI: 'OCR',
+  transfer: 'Chuyển ví',
+  adjustment: 'Điều chỉnh',
 }
 
 const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    maximumFractionDigits: 0,
+  }).format(value || 0)
 }
 
-export default function TransactionsClient({ initialTransactions, totalDocs, categories, currentMonth, currentYear }: Props) {
+const getRelationId = (value: unknown) => {
+  if (typeof value === 'object' && value && 'id' in value) return String((value as { id: string | number }).id)
+  if (typeof value === 'string' || typeof value === 'number') return String(value)
+  return ''
+}
+
+export default function TransactionsClient({
+  initialTransactions,
+  totalDocs,
+  categories,
+  wallets,
+  currentMonth,
+  currentYear,
+  filters,
+}: Props) {
   const router = useRouter()
   const [transactions, setTransactions] = useState(initialTransactions)
-  
-  // Đồng bộ hóa state khi initialTransactions từ server thay đổi (do điều hướng tháng/năm)
-  React.useEffect(() => {
-    setTransactions(initialTransactions)
-  }, [initialTransactions])
-
   const [showModal, setShowModal] = useState(false)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [filterType, setFilterType] = useState<string>('all')
-  const [filterCategory, setFilterCategory] = useState<string>('all')
-  const [searchQuery, setSearchQuery] = useState('')
   const [error, setError] = useState('')
-
+  const [filterType, setFilterType] = useState(filters.type)
+  const [filterCategory, setFilterCategory] = useState(filters.category)
+  const [filterWallet, setFilterWallet] = useState(filters.wallet)
+  const [filterSource, setFilterSource] = useState(filters.source)
+  const [searchQuery, setSearchQuery] = useState(filters.search)
   const [formData, setFormData] = useState({
     type: 'expense' as 'income' | 'expense',
     amount: '',
+    wallet: wallets[0]?.id ? String(wallets[0].id) : '',
     category: '',
+    sourceType: 'manual',
     description: '',
     date: new Date().toISOString().split('T')[0],
     note: '',
   })
 
+  useEffect(() => {
+    setTransactions(initialTransactions)
+  }, [initialTransactions])
+
+  const filteredCategories = useMemo(() => {
+    return categories.filter((category) => category.type === formData.type)
+  }, [categories, formData.type])
+
+  const months = Array.from({ length: 12 }, (_, index) => index + 1)
+  const years = Array.from({ length: 5 }, (_, index) => new Date().getFullYear() - index)
+
   const resetForm = () => {
+    setEditingId(null)
+    setError('')
     setFormData({
       type: 'expense',
       amount: '',
+      wallet: wallets[0]?.id ? String(wallets[0].id) : '',
       category: '',
+      sourceType: 'manual',
       description: '',
       date: new Date().toISOString().split('T')[0],
       note: '',
     })
-    setEditingId(null)
-    setError('')
+  }
+
+  const pushFilters = (next: Partial<Props['filters']> & { month?: number; year?: number }) => {
+    const merged = {
+      wallet: filterWallet,
+      type: filterType,
+      category: filterCategory,
+      source: filterSource,
+      search: searchQuery,
+      ...next,
+    }
+    const params = new URLSearchParams()
+    params.set('month', String(next.month ?? currentMonth))
+    params.set('year', String(next.year ?? currentYear))
+    params.set('wallet', merged.wallet)
+    params.set('type', merged.type)
+    params.set('category', merged.category)
+    params.set('source', merged.source)
+    if (merged.search.trim()) params.set('search', merged.search.trim())
+    router.push(`/transactions?${params.toString()}`)
   }
 
   const openAddModal = () => {
@@ -93,247 +168,258 @@ export default function TransactionsClient({ initialTransactions, totalDocs, cat
     setShowModal(true)
   }
 
-  const openEditModal = (t: Transaction) => {
-    const catId = typeof t.category === 'object' ? t.category?.id : t.category
+  const openEditModal = (transaction: Transaction) => {
+    const categoryId = getRelationId(transaction.category)
+    const walletId = getRelationId(transaction.wallet)
+    setEditingId(String(transaction.id))
+    setError('')
     setFormData({
-      type: t.type,
-      amount: String(t.amount),
-      category: catId || '',
-      description: t.description || '',
-      date: t.date ? t.date.split('T')[0] : '',
-      note: t.note || '',
+      type: transaction.type,
+      amount: formatMoneyInput(transaction.amount),
+      wallet: walletId || (wallets[0]?.id ? String(wallets[0].id) : ''),
+      category: categoryId,
+      sourceType: transaction.sourceType || 'manual',
+      description: transaction.description || '',
+      date: transaction.date ? transaction.date.split('T')[0] : new Date().toISOString().split('T')[0],
+      note: transaction.note || '',
     })
-    setEditingId(t.id)
     setShowModal(true)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
     setError('')
-    const amount = parseFloat(formData.amount)
-    if (isNaN(amount) || amount <= 0) {
-      setError('Vui lòng nhập số tiền hợp lệ lớn hơn 0')
+    setLoading(true)
+
+    const amount = parseMoneyInput(formData.amount)
+    if (!amount || amount <= 0) {
+      setError('Số tiền phải lớn hơn 0.')
       setLoading(false)
       return
     }
 
-    if (!formData.category) {
-      setError('Vui lòng chọn danh mục')
+    if (!formData.wallet || !formData.category) {
+      setError('Vui lòng chọn ví và danh mục.')
       setLoading(false)
       return
     }
 
-    const payload = {
-      type: formData.type,
-      amount,
-      category: Number(formData.category),
-      description: formData.description,
-      date: new Date(formData.date).toISOString(),
-      note: formData.note,
-    }
+    const response = await fetch(editingId ? `/api/transactions/${editingId}` : '/api/transactions', {
+      method: editingId ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: formData.type,
+        amount,
+        wallet: Number(formData.wallet),
+        category: Number(formData.category),
+        sourceType: formData.sourceType,
+        description: formData.description,
+        date: new Date(formData.date).toISOString(),
+        note: formData.note,
+      }),
+    })
 
-    try {
-      let res: Response
-      if (editingId) {
-        res = await fetch(`/api/transactions/${editingId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-      } else {
-        res = await fetch('/api/transactions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-      }
-
-      if (!res.ok) {
-        const data = await res.json()
-        const errorMsg = data.errors?.[0]?.message || 'Không thể lưu giao dịch. Vui lòng kiểm tra lại.'
-        setError(errorMsg)
-        return
-      }
-
-      setShowModal(false)
-      resetForm()
-      router.refresh()
-    } catch (err) {
-      console.error(err)
-      setError('Có lỗi xảy ra khi kết nối đến máy chủ')
-    } finally {
+    const data = await response.json()
+    if (!response.ok) {
+      setError(data.error || data.errors?.[0]?.message || 'Không thể lưu giao dịch.')
       setLoading(false)
+      return
     }
+
+    setShowModal(false)
+    setLoading(false)
+    resetForm()
+    router.refresh()
   }
 
-  const handleDelete = async (id: string) => {
-    try {
-      await fetch(`/api/transactions/${id}`, { method: 'DELETE' })
-      setShowDeleteConfirm(null)
-      router.refresh()
-    } catch (err) {
-      console.error(err)
-    }
+  const handleDelete = async () => {
+    if (!deleteId) return
+    setLoading(true)
+    await fetch(`/api/transactions/${deleteId}`, { method: 'DELETE' })
+    setDeleteId(null)
+    setLoading(false)
+    router.refresh()
   }
-
-  const filteredCategories = formData.type
-    ? categories.filter((c) => c.type === formData.type)
-    : categories
-
-  const updateDateFilter = (month: number, year: number) => {
-    const params = new URLSearchParams()
-    params.set('month', month.toString())
-    params.set('year', year.toString())
-    router.push(`/transactions?${params.toString()}`)
-  }
-
-  const months = Array.from({ length: 12 }, (_, i) => i + 1)
-  const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
-
-  const filteredTransactions = transactions.filter((t) => {
-    if (filterType !== 'all' && t.type !== filterType) return false
-    if (filterCategory !== 'all') {
-      const catId = typeof t.category === 'object' ? t.category?.id : t.category
-      if (String(catId) !== filterCategory) return false
-    }
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase()
-      const desc = (t.description || '').toLowerCase()
-      const catName = typeof t.category === 'object' ? (t.category?.name || '').toLowerCase() : ''
-      if (!desc.includes(q) && !catName.includes(q)) return false
-    }
-    return true
-  })
 
   return (
     <>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="page-header">
         <div>
           <h1 className="page-title">Giao dịch</h1>
-          <p className="page-subtitle">Quản lý giao dịch tháng {currentMonth}/{currentYear} ({totalDocs} giao dịch)</p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <div className="month-selector" style={{ display: 'flex', gap: '8px', background: 'var(--bg-secondary)', padding: '4px', borderRadius: '10px', border: '1px solid var(--border)' }}>
-            <select 
-              className="form-select" 
+        <div className="transaction-header-actions">
+          <div className="month-selector">
+            <CalendarDays size={17} />
+            <select
+              className="form-select"
               value={currentMonth}
-              onChange={(e) => updateDateFilter(parseInt(e.target.value), currentYear)}
-              style={{ border: 'none', background: 'transparent', height: '32px', padding: '0 8px', fontSize: '13px', width: 'auto' }}
+              onChange={(event) => pushFilters({ month: Number(event.target.value) })}
             >
-              {months.map(m => <option key={m} value={m}>Tháng {m}</option>)}
+              {months.map((month) => (
+                <option key={month} value={month}>
+                  Tháng {month}
+                </option>
+              ))}
             </select>
-            <select 
-              className="form-select" 
+            <select
+              className="form-select"
               value={currentYear}
-              onChange={(e) => updateDateFilter(currentMonth, parseInt(e.target.value))}
-              style={{ border: 'none', background: 'transparent', height: '32px', padding: '0 8px', fontSize: '13px', width: 'auto' }}
+              onChange={(event) => pushFilters({ year: Number(event.target.value) })}
             >
-              {years.map(y => <option key={y} value={y}>Năm {y}</option>)}
+              {years.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
             </select>
           </div>
-          <button className="btn btn-primary" onClick={openAddModal} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <MdAdd size={20} /> Thêm
+          <button className="btn btn-primary" onClick={openAddModal}>
+            <Plus size={18} /> Thêm giao dịch
           </button>
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="filter-bar" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-        <div className="search-input-wrapper" style={{ flex: 1, position: 'relative' }}>
-          <MdSearch size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+      <div className="filter-bar transaction-filter-bar">
+        <div className="transaction-search">
+          <Search size={18} />
           <input
             type="text"
             className="form-input"
-            placeholder="Tìm kiếm giao dịch..."
-            style={{ paddingLeft: '40px' }}
+            placeholder="Tìm mô tả, cửa hàng, ghi chú..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') pushFilters({ search: searchQuery })
+            }}
           />
         </div>
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <MdFilterList size={18} style={{ position: 'absolute', left: '12px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-          <select
-            className="form-select"
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            style={{ width: 'auto', minWidth: '150px', paddingLeft: '36px' }}
-          >
-            <option value="all">Tất cả loại</option>
-            <option value="income">Thu nhập</option>
-            <option value="expense">Chi tiêu</option>
-          </select>
-        </div>
-
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <select
-            className="form-select"
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            style={{ width: 'auto', minWidth: '180px' }}
-          >
-            <option value="all">Tất cả danh mục</option>
-            {categories
-              .filter(c => filterType === 'all' || c.type === filterType)
-              .map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))
-            }
-          </select>
-        </div>
+        <select
+          className="form-select"
+          value={filterWallet}
+          onChange={(event) => {
+            setFilterWallet(event.target.value)
+            pushFilters({ wallet: event.target.value })
+          }}
+        >
+          <option value="all">Tất cả ví</option>
+          {wallets.map((wallet) => (
+            <option key={wallet.id} value={wallet.id}>
+              {wallet.name}
+            </option>
+          ))}
+        </select>
+        <select
+          className="form-select"
+          value={filterType}
+          onChange={(event) => {
+            setFilterType(event.target.value)
+            setFilterCategory('all')
+            pushFilters({ type: event.target.value, category: 'all' })
+          }}
+        >
+          <option value="all">Tất cả loại</option>
+          <option value="income">Thu nhập</option>
+          <option value="expense">Chi tiêu</option>
+        </select>
+        <select
+          className="form-select"
+          value={filterCategory}
+          onChange={(event) => {
+            setFilterCategory(event.target.value)
+            pushFilters({ category: event.target.value })
+          }}
+        >
+          <option value="all">Tất cả danh mục</option>
+          {categories
+            .filter((category) => filterType === 'all' || category.type === filterType)
+            .map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+        </select>
+        <select
+          className="form-select"
+          value={filterSource}
+          onChange={(event) => {
+            setFilterSource(event.target.value)
+            pushFilters({ source: event.target.value })
+          }}
+        >
+          <option value="all">Tất cả nguồn</option>
+          {Object.entries(sourceLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <button className="btn btn-secondary" onClick={() => pushFilters({ search: searchQuery })}>
+          <Filter size={17} /> Lọc
+        </button>
       </div>
 
-      {/* Table */}
       <div className="card">
-        {filteredTransactions.length > 0 ? (
+        {transactions.length > 0 ? (
           <div className="table-container">
             <table className="table">
               <thead>
                 <tr>
                   <th>Loại</th>
                   <th>Mô tả</th>
+                  <th>Ví</th>
                   <th>Danh mục</th>
+                  <th>Nguồn</th>
                   <th>Ngày</th>
                   <th style={{ textAlign: 'right' }}>Số tiền</th>
                   <th style={{ textAlign: 'center' }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredTransactions.map((t) => {
-                  const cat = typeof t.category === 'object' ? t.category : null
+                {transactions.map((transaction) => {
+                  const category = typeof transaction.category === 'object' ? transaction.category : null
+                  const wallet = typeof transaction.wallet === 'object' ? transaction.wallet : null
+                  const receipt = typeof transaction.receipt === 'object' ? transaction.receipt : null
+                  const receiptUrl = receipt?.url ? `/receipts/${transaction.id}` : null
+
                   return (
-                    <tr key={t.id}>
+                    <tr key={transaction.id}>
                       <td>
-                        <span className={`type-badge ${t.type}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', width: 'fit-content' }}>
-                          {t.type === 'income' ? <MdArrowUpward size={14} /> : <MdArrowDownward size={14} />}
-                          {t.type === 'income' ? 'Thu' : 'Chi'}
+                        <span className={`type-badge ${transaction.type}`}>
+                          {transaction.type === 'income' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
+                          {transaction.type === 'income' ? 'Thu' : 'Chi'}
                         </span>
                       </td>
-                      <td>{t.description || '—'}</td>
+                      <td>{transaction.description || '—'}</td>
+                      <td>{wallet?.name || '—'}</td>
+                      <td>{category ? <span className="category-tag">{category.name}</span> : '—'}</td>
                       <td>
-                        {cat ? (
-                          <span className="category-tag">
-                            {cat.name}
-                          </span>
-                        ) : '—'}
+                        <span className="category-tag">{sourceLabels[transaction.sourceType || 'manual'] || 'Nhập tay'}</span>
+                        {receiptUrl && (
+                          <a className="receipt-link" href={receiptUrl} target="_blank" rel="noreferrer">
+                            <Eye size={14} /> Xem hóa đơn
+                          </a>
+                        )}
                       </td>
                       <td style={{ color: 'var(--text-muted)' }}>
-                        {format(new Date(t.date), 'dd/MM/yyyy', { locale: vi })}
+                        {format(new Date(transaction.date), 'dd/MM/yyyy', { locale: vi })}
                       </td>
-                      <td style={{
-                        textAlign: 'right',
-                        fontWeight: 700,
-                        color: t.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)',
-                      }}>
-                        {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
+                      <td
+                        style={{
+                          textAlign: 'right',
+                          fontWeight: 700,
+                          color: transaction.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)',
+                        }}
+                      >
+                        {transaction.type === 'income' ? '+' : '-'}
+                        {formatCurrency(transaction.amount)}
                       </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                          <button className="btn-icon" onClick={() => openEditModal(t)} title="Sửa">
-                            <MdEdit size={18} color="#eab308" />
+                      <td>
+                        <div className="table-actions">
+                          <button className="btn-icon" onClick={() => openEditModal(transaction)} title="Sửa giao dịch">
+                            <Edit3 size={17} />
                           </button>
-                          <button className="btn-icon" onClick={() => setShowDeleteConfirm(t.id)} title="Xóa" style={{ borderColor: 'rgba(239,68,68,0.2)', color: 'var(--danger)' }}>
-                            <MdClose size={18} />
+                          <button className="btn-icon" onClick={() => setDeleteId(String(transaction.id))} title="Xóa giao dịch">
+                            <Trash2 size={17} />
                           </button>
                         </div>
                       </td>
@@ -346,125 +432,166 @@ export default function TransactionsClient({ initialTransactions, totalDocs, cat
         ) : (
           <div className="empty-state">
             <div className="empty-state-icon">
-              <MdReceipt size={48} color="var(--bg-secondary)" />
+              <ReceiptText size={48} />
             </div>
-            <h3 className="empty-state-title">Chưa có giao dịch nào</h3>
-            <p className="empty-state-desc">Bắt đầu bằng cách thêm giao dịch đầu tiên</p>
-            <button className="btn btn-primary" onClick={openAddModal} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <MdAdd size={18} /> Thêm giao dịch
+            <h3 className="empty-state-title">Chưa có giao dịch</h3>
+            <p className="empty-state-desc">Thêm giao dịch thủ công hoặc lưu từ chatbot/OCR.</p>
+            <button className="btn btn-primary" onClick={openAddModal}>
+              <Plus size={18} /> Thêm giao dịch
             </button>
           </div>
         )}
       </div>
 
-      {/* Add/Edit Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="modal-title">{editingId ? 'Sửa giao dịch' : 'Thêm giao dịch mới'}</h2>
-              <button className="modal-close" onClick={() => setShowModal(false)}>
-                <MdClose size={24} />
+              <h2 className="modal-title">{editingId ? 'Sửa giao dịch' : 'Thêm giao dịch'}</h2>
+              <button className="modal-close" onClick={() => setShowModal(false)} aria-label="Đóng">
+                <X size={22} />
               </button>
             </div>
             <form onSubmit={handleSubmit}>
               <div className="modal-body">
-                {error && (
-                  <div style={{
-                    padding: '12px',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    color: 'var(--danger)',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    marginBottom: '20px',
-                    border: '1px solid rgba(239, 68, 68, 0.2)'
-                  }}>
-                    {error}
+                {error && <div className="auth-error">{error}</div>}
+                <div className="segmented-control">
+                  <button
+                    type="button"
+                    className={formData.type === 'expense' ? 'active danger' : ''}
+                    onClick={() => setFormData({ ...formData, type: 'expense', category: '' })}
+                  >
+                    Chi tiêu
+                  </button>
+                  <button
+                    type="button"
+                    className={formData.type === 'income' ? 'active' : ''}
+                    onClick={() => setFormData({ ...formData, type: 'income', category: '' })}
+                  >
+                    Thu nhập
+                  </button>
+                </div>
+
+                <div className="form-row" style={{ marginTop: 18 }}>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="transaction-amount">
+                      Số tiền
+                    </label>
+                    <input
+                      id="transaction-amount"
+                      className="form-input"
+                      inputMode="numeric"
+                      value={formData.amount}
+                      onChange={(event) => setFormData({ ...formData, amount: formatMoneyInput(event.target.value) })}
+                      placeholder="1.000.000"
+                      required
+                    />
                   </div>
-                )}
-                <div className="form-group">
-                  <label className="form-label">Loại giao dịch</label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      type="button"
-                      className={`btn ${formData.type === 'expense' ? 'btn-danger' : 'btn-secondary'}`}
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                      onClick={() => setFormData({ ...formData, type: 'expense', category: '' })}
-                    >
-                      <MdArrowDownward size={18} /> Chi tiêu
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn ${formData.type === 'income' ? 'btn-primary' : 'btn-secondary'}`}
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                      onClick={() => setFormData({ ...formData, type: 'income', category: '' })}
-                    >
-                      <MdArrowUpward size={18} /> Thu nhập
-                    </button>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="transaction-date">
+                      Ngày
+                    </label>
+                    <input
+                      id="transaction-date"
+                      className="form-input"
+                      type="date"
+                      value={formData.date}
+                      onChange={(event) => setFormData({ ...formData, date: event.target.value })}
+                      required
+                    />
                   </div>
                 </div>
+
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Số tiền (VND)</label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      placeholder="0"
-                      value={formData.amount}
-                      onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                    <label className="form-label" htmlFor="transaction-wallet">
+                      Ví
+                    </label>
+                    <select
+                      id="transaction-wallet"
+                      className="form-select"
+                      value={formData.wallet}
+                      onChange={(event) => setFormData({ ...formData, wallet: event.target.value })}
                       required
-                      min="0"
-                    />
+                    >
+                      <option value="">Chọn ví</option>
+                      {wallets.map((wallet) => (
+                        <option key={wallet.id} value={wallet.id}>
+                          {wallet.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Ngày</label>
-                    <input
-                      type="date"
-                      className="form-input"
-                      value={formData.date}
-                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    <label className="form-label" htmlFor="transaction-category">
+                      Danh mục
+                    </label>
+                    <select
+                      id="transaction-category"
+                      className="form-select"
+                      value={formData.category}
+                      onChange={(event) => setFormData({ ...formData, category: event.target.value })}
                       required
-                    />
+                    >
+                      <option value="">Chọn danh mục</option>
+                      {filteredCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
+
                 <div className="form-group">
-                  <label className="form-label">Danh mục</label>
+                  <label className="form-label" htmlFor="transaction-source">
+                    Nguồn
+                  </label>
                   <select
+                    id="transaction-source"
                     className="form-select"
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    required
+                    value={formData.sourceType}
+                    onChange={(event) => setFormData({ ...formData, sourceType: event.target.value })}
+                    disabled={Boolean(editingId)}
                   >
-                    <option value="">Chọn danh mục</option>
-                    {filteredCategories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
+                    <option value="manual">Nhập tay</option>
+                    <option value="chatbot">Chatbot</option>
+                    <option value="receipt_ai">OCR</option>
+                    <option value="transfer">Chuyển ví</option>
+                    <option value="adjustment">Điều chỉnh</option>
                   </select>
                 </div>
+
                 <div className="form-group">
-                  <label className="form-label">Mô tả</label>
+                  <label className="form-label" htmlFor="transaction-description">
+                    Mô tả
+                  </label>
                   <input
-                    type="text"
+                    id="transaction-description"
                     className="form-input"
-                    placeholder="Ví dụ: Cà phê sáng"
                     value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    onChange={(event) => setFormData({ ...formData, description: event.target.value })}
                   />
                 </div>
+
                 <div className="form-group">
-                  <label className="form-label">Ghi chú</label>
+                  <label className="form-label" htmlFor="transaction-note">
+                    Ghi chú
+                  </label>
                   <textarea
+                    id="transaction-note"
                     className="form-textarea"
-                    placeholder="Ghi chú thêm (tùy chọn)"
                     value={formData.note}
-                    onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+                    onChange={(event) => setFormData({ ...formData, note: event.target.value })}
                   />
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Hủy</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
+                  Hủy
+                </button>
                 <button type="submit" className="btn btn-primary" disabled={loading}>
-                  {loading ? 'Đang lưu...' : editingId ? 'Cập nhật' : 'Thêm mới'}
+                  {loading ? 'Đang lưu...' : 'Lưu giao dịch'}
                 </button>
               </div>
             </form>
@@ -472,22 +599,25 @@ export default function TransactionsClient({ initialTransactions, totalDocs, cat
         </div>
       )}
 
-      {/* Delete Confirm Dialog */}
-      {showDeleteConfirm && (
-        <div className="modal-overlay" onClick={() => setShowDeleteConfirm(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+      {deleteId && (
+        <div className="modal-overlay" onClick={() => setDeleteId(null)}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">Xóa giao dịch</h2>
+              <button className="modal-close" onClick={() => setDeleteId(null)} aria-label="Đóng">
+                <X size={22} />
+              </button>
+            </div>
             <div className="modal-body">
-              <div className="confirm-dialog" style={{ textAlign: 'center', padding: '20px' }}>
-                <div className="confirm-dialog-icon" style={{ marginBottom: '16px' }}>
-                  <MdWarning size={48} color="var(--danger)" />
-                </div>
-                <h3 className="confirm-dialog-title">Xác nhận xóa</h3>
-                <p className="confirm-dialog-message">Bạn có chắc chắn muốn xóa giao dịch này? Hành động này không thể hoàn tác.</p>
-                <div className="confirm-dialog-actions" style={{ marginTop: '24px', display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                  <button className="btn btn-secondary" onClick={() => setShowDeleteConfirm(null)}>Hủy</button>
-                  <button className="btn btn-danger" onClick={() => handleDelete(showDeleteConfirm)}>Xóa</button>
-                </div>
-              </div>
+              <p>Giao dịch sẽ bị xóa và số dư ví sẽ được hoàn lại theo loại giao dịch.</p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setDeleteId(null)}>
+                Hủy
+              </button>
+              <button className="btn btn-danger" onClick={handleDelete} disabled={loading}>
+                Xóa
+              </button>
             </div>
           </div>
         </div>

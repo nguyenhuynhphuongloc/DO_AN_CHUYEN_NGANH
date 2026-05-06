@@ -4,6 +4,7 @@ import { getPayload } from 'payload'
 
 import config from '@payload-config'
 import Sidebar from '@/components/Sidebar'
+import { getWalletSetupState } from '@/lib/wallets'
 
 import ScanClient from './ScanClient'
 
@@ -17,6 +18,11 @@ export default async function ScanPage() {
     redirect('/auth/login')
   }
 
+  const setupState = await getWalletSetupState(payload, user.id)
+  if (setupState.needsSetup) {
+    redirect('/setup')
+  }
+
   const categories = await payload.find({
     collection: 'categories' as any,
     where: {
@@ -24,7 +30,15 @@ export default async function ScanPage() {
     },
     limit: 200,
     depth: 0,
+    select: {
+      id: true,
+      name: true,
+      icon: true,
+      color: true,
+      type: true,
+    },
     user,
+    overrideAccess: false,
   })
 
   return (

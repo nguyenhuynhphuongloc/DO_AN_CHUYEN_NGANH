@@ -24,17 +24,36 @@ import {
 import { sql, relations } from '@payloadcms/db-postgres/drizzle'
 export const enum_users_role = pgEnum('enum_users_role', ['admin', 'user'])
 export const enum_users_currency = pgEnum('enum_users_currency', ['VND', 'USD'])
+export const enum_wallets_wallet_type = pgEnum('enum_wallets_wallet_type', [
+  'main',
+  'cash',
+  'bank',
+  'savings',
+])
 export const enum_categories_type = pgEnum('enum_categories_type', ['income', 'expense'])
 export const enum_transactions_type = pgEnum('enum_transactions_type', ['income', 'expense'])
 export const enum_transactions_source_type = pgEnum('enum_transactions_source_type', [
   'manual',
+  'chatbot',
   'receipt_ai',
+  'transfer',
+  'adjustment',
 ])
 export const enum_budgets_period = pgEnum('enum_budgets_period', [
   'daily',
   'weekly',
   'monthly',
   'yearly',
+])
+export const enum_savings_goals_status = pgEnum('enum_savings_goals_status', [
+  'active',
+  'completed',
+])
+export const enum_notifications_type = pgEnum('enum_notifications_type', [
+  'invitation',
+  'contribution',
+  'completion',
+  'system',
 ])
 
 export const users_sessions = pgTable(
@@ -102,6 +121,7 @@ export const media = pgTable(
   {
     id: serial('id').primaryKey(),
     alt: varchar('alt').notNull(),
+    ownerId: numeric('owner_id', { mode: 'number' }),
     updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
       .defaultNow()
       .notNull(),
@@ -125,13 +145,44 @@ export const media = pgTable(
   ],
 )
 
+export const wallets = pgTable(
+  'wallets',
+  {
+    id: serial('id').primaryKey(),
+    user: integer('user_id')
+      .notNull()
+      .references(() => users.id, {
+        onDelete: 'set null',
+      }),
+    name: varchar('name').notNull(),
+    walletType: enum_wallets_wallet_type('wallet_type').notNull().default('cash'),
+    currency: varchar('currency').notNull().default('VND'),
+    balance: numeric('balance', { mode: 'number' }).notNull().default(0),
+    monthlySpendingLimit: numeric('monthly_spending_limit', { mode: 'number' }),
+    isDefault: boolean('is_default').default(false),
+    isActive: boolean('is_active').default(true),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => [
+    index('wallets_user_idx').on(columns.user),
+    index('wallets_updated_at_idx').on(columns.updatedAt),
+    index('wallets_created_at_idx').on(columns.createdAt),
+  ],
+)
+
 export const categories = pgTable(
   'categories',
   {
     id: serial('id').primaryKey(),
     name: varchar('name').notNull(),
     type: enum_categories_type('type').notNull(),
-    icon: varchar('icon').default('📦'),
+    icon: varchar('icon').default('Package'),
+    note: varchar('note'),
     color: varchar('color').default('#6366f1'),
     user: integer('user_id').references(() => users.id, {
       onDelete: 'set null',
@@ -159,6 +210,11 @@ export const transactions = pgTable(
     amount: numeric('amount', { mode: 'number' }).notNull(),
     merchantName: varchar('merchant_name'),
     currency: varchar('currency').default('VND'),
+    wallet: integer('wallet_id')
+      .notNull()
+      .references(() => wallets.id, {
+        onDelete: 'set null',
+      }),
     category: integer('category_id')
       .notNull()
       .references(() => categories.id, {
@@ -171,6 +227,10 @@ export const transactions = pgTable(
       onDelete: 'set null',
     }),
     sourceType: enum_transactions_source_type('source_type').default('manual'),
+    sourceRefId: varchar('source_ref_id'),
+    savingsGoal: integer('savings_goal_id').references(() => savings_goals.id, {
+      onDelete: 'set null',
+    }),
     user: integer('user_id')
       .notNull()
       .references(() => users.id, {
@@ -184,8 +244,13 @@ export const transactions = pgTable(
       .notNull(),
   },
   (columns) => [
+    index('transactions_type_idx').on(columns.type),
+    index('transactions_wallet_idx').on(columns.wallet),
     index('transactions_category_idx').on(columns.category),
+    index('transactions_date_idx').on(columns.date),
     index('transactions_receipt_idx').on(columns.receipt),
+    index('transactions_source_type_idx').on(columns.sourceType),
+    index('transactions_savings_goal_idx').on(columns.savingsGoal),
     index('transactions_user_idx').on(columns.user),
     index('transactions_updated_at_idx').on(columns.updatedAt),
     index('transactions_created_at_idx').on(columns.createdAt),
@@ -196,6 +261,9 @@ export const budgets = pgTable(
   'budgets',
   {
     id: serial('id').primaryKey(),
+    wallet: integer('wallet_id').references(() => wallets.id, {
+      onDelete: 'set null',
+    }),
     category: integer('category_id')
       .notNull()
       .references(() => categories.id, {
@@ -203,6 +271,11 @@ export const budgets = pgTable(
       }),
     amount: numeric('amount', { mode: 'number' }).notNull(),
     period: enum_budgets_period('period').notNull().default('monthly'),
+    month: numeric('month', { mode: 'number' }),
+    year: numeric('year', { mode: 'number' }),
+    note: varchar('note'),
+    alertThresholds: jsonb('alert_thresholds').default(sql`'[80,100]'::jsonb`),
+    isActive: boolean('is_active').default(true),
     user: integer('user_id')
       .notNull()
       .references(() => users.id, {
@@ -216,10 +289,96 @@ export const budgets = pgTable(
       .notNull(),
   },
   (columns) => [
+    index('budgets_wallet_idx').on(columns.wallet),
     index('budgets_category_idx').on(columns.category),
+    index('budgets_period_idx').on(columns.period),
+    index('budgets_month_idx').on(columns.month),
+    index('budgets_year_idx').on(columns.year),
+    index('budgets_is_active_idx').on(columns.isActive),
     index('budgets_user_idx').on(columns.user),
     index('budgets_updated_at_idx').on(columns.updatedAt),
     index('budgets_created_at_idx').on(columns.createdAt),
+  ],
+)
+
+export const savings_goals = pgTable(
+  'savings_goals',
+  {
+    id: serial('id').primaryKey(),
+    title: varchar('title').notNull(),
+    targetAmount: numeric('target_amount', { mode: 'number' }).notNull(),
+    currentAmount: numeric('current_amount', { mode: 'number' }).default(0),
+    status: enum_savings_goals_status('status').default('active'),
+    icon: varchar('icon').default('Target'),
+    color: varchar('color').default('#6366f1'),
+    owner: integer('owner_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => [
+    index('savings_goals_owner_idx').on(columns.owner),
+    index('savings_goals_updated_at_idx').on(columns.updatedAt),
+    index('savings_goals_created_at_idx').on(columns.createdAt),
+  ],
+)
+
+export const savings_goals_rels = pgTable(
+  'savings_goals_rels',
+  {
+    id: serial('id').primaryKey(),
+    order: integer('order'),
+    parent: integer('parent_id').notNull(),
+    path: varchar('path').notNull(),
+    usersID: integer('users_id'),
+  },
+  (columns) => [
+    index('savings_goals_rels_order_idx').on(columns.order),
+    index('savings_goals_rels_parent_idx').on(columns.parent),
+    index('savings_goals_rels_path_idx').on(columns.path),
+    index('savings_goals_rels_users_id_idx').on(columns.usersID),
+    foreignKey({
+      columns: [columns['parent']],
+      foreignColumns: [savings_goals.id],
+      name: 'savings_goals_rels_parent_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [columns['usersID']],
+      foreignColumns: [users.id],
+      name: 'savings_goals_rels_users_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: serial('id').primaryKey(),
+    recipient: integer('recipient_id')
+      .notNull()
+      .references(() => users.id, {
+        onDelete: 'set null',
+      }),
+    message: varchar('message').notNull(),
+    type: enum_notifications_type('type').notNull(),
+    read: boolean('read').default(false),
+    link: varchar('link'),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => [
+    index('notifications_recipient_idx').on(columns.recipient),
+    index('notifications_updated_at_idx').on(columns.updatedAt),
+    index('notifications_created_at_idx').on(columns.createdAt),
   ],
 )
 
@@ -261,9 +420,12 @@ export const payload_locked_documents_rels = pgTable(
     path: varchar('path').notNull(),
     usersID: integer('users_id'),
     mediaID: integer('media_id'),
+    walletsID: integer('wallets_id'),
     categoriesID: integer('categories_id'),
     transactionsID: integer('transactions_id'),
     budgetsID: integer('budgets_id'),
+    'savings-goalsID': integer('savings_goals_id'),
+    notificationsID: integer('notifications_id'),
   },
   (columns) => [
     index('payload_locked_documents_rels_order_idx').on(columns.order),
@@ -271,9 +433,12 @@ export const payload_locked_documents_rels = pgTable(
     index('payload_locked_documents_rels_path_idx').on(columns.path),
     index('payload_locked_documents_rels_users_id_idx').on(columns.usersID),
     index('payload_locked_documents_rels_media_id_idx').on(columns.mediaID),
+    index('payload_locked_documents_rels_wallets_id_idx').on(columns.walletsID),
     index('payload_locked_documents_rels_categories_id_idx').on(columns.categoriesID),
     index('payload_locked_documents_rels_transactions_id_idx').on(columns.transactionsID),
     index('payload_locked_documents_rels_budgets_id_idx').on(columns.budgetsID),
+    index('payload_locked_documents_rels_savings_goals_id_idx').on(columns['savings-goalsID']),
+    index('payload_locked_documents_rels_notifications_id_idx').on(columns.notificationsID),
     foreignKey({
       columns: [columns['parent']],
       foreignColumns: [payload_locked_documents.id],
@@ -290,6 +455,11 @@ export const payload_locked_documents_rels = pgTable(
       name: 'payload_locked_documents_rels_media_fk',
     }).onDelete('cascade'),
     foreignKey({
+      columns: [columns['walletsID']],
+      foreignColumns: [wallets.id],
+      name: 'payload_locked_documents_rels_wallets_fk',
+    }).onDelete('cascade'),
+    foreignKey({
       columns: [columns['categoriesID']],
       foreignColumns: [categories.id],
       name: 'payload_locked_documents_rels_categories_fk',
@@ -303,6 +473,16 @@ export const payload_locked_documents_rels = pgTable(
       columns: [columns['budgetsID']],
       foreignColumns: [budgets.id],
       name: 'payload_locked_documents_rels_budgets_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [columns['savings-goalsID']],
+      foreignColumns: [savings_goals.id],
+      name: 'payload_locked_documents_rels_savings_goals_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [columns['notificationsID']],
+      foreignColumns: [notifications.id],
+      name: 'payload_locked_documents_rels_notifications_fk',
     }).onDelete('cascade'),
   ],
 )
@@ -391,6 +571,13 @@ export const relations_users = relations(users, ({ one, many }) => ({
   }),
 }))
 export const relations_media = relations(media, () => ({}))
+export const relations_wallets = relations(wallets, ({ one }) => ({
+  user: one(users, {
+    fields: [wallets.user],
+    references: [users.id],
+    relationName: 'user',
+  }),
+}))
 export const relations_categories = relations(categories, ({ one }) => ({
   user: one(users, {
     fields: [categories.user],
@@ -399,6 +586,11 @@ export const relations_categories = relations(categories, ({ one }) => ({
   }),
 }))
 export const relations_transactions = relations(transactions, ({ one }) => ({
+  wallet: one(wallets, {
+    fields: [transactions.wallet],
+    references: [wallets.id],
+    relationName: 'wallet',
+  }),
   category: one(categories, {
     fields: [transactions.category],
     references: [categories.id],
@@ -409,6 +601,11 @@ export const relations_transactions = relations(transactions, ({ one }) => ({
     references: [media.id],
     relationName: 'receipt',
   }),
+  savingsGoal: one(savings_goals, {
+    fields: [transactions.savingsGoal],
+    references: [savings_goals.id],
+    relationName: 'savingsGoal',
+  }),
   user: one(users, {
     fields: [transactions.user],
     references: [users.id],
@@ -416,6 +613,11 @@ export const relations_transactions = relations(transactions, ({ one }) => ({
   }),
 }))
 export const relations_budgets = relations(budgets, ({ one }) => ({
+  wallet: one(wallets, {
+    fields: [budgets.wallet],
+    references: [wallets.id],
+    relationName: 'wallet',
+  }),
   category: one(categories, {
     fields: [budgets.category],
     references: [categories.id],
@@ -425,6 +627,35 @@ export const relations_budgets = relations(budgets, ({ one }) => ({
     fields: [budgets.user],
     references: [users.id],
     relationName: 'user',
+  }),
+}))
+export const relations_savings_goals_rels = relations(savings_goals_rels, ({ one }) => ({
+  parent: one(savings_goals, {
+    fields: [savings_goals_rels.parent],
+    references: [savings_goals.id],
+    relationName: '_rels',
+  }),
+  usersID: one(users, {
+    fields: [savings_goals_rels.usersID],
+    references: [users.id],
+    relationName: 'users',
+  }),
+}))
+export const relations_savings_goals = relations(savings_goals, ({ one, many }) => ({
+  owner: one(users, {
+    fields: [savings_goals.owner],
+    references: [users.id],
+    relationName: 'owner',
+  }),
+  _rels: many(savings_goals_rels, {
+    relationName: '_rels',
+  }),
+}))
+export const relations_notifications = relations(notifications, ({ one }) => ({
+  recipient: one(users, {
+    fields: [notifications.recipient],
+    references: [users.id],
+    relationName: 'recipient',
   }),
 }))
 export const relations_payload_kv = relations(payload_kv, () => ({}))
@@ -446,6 +677,11 @@ export const relations_payload_locked_documents_rels = relations(
       references: [media.id],
       relationName: 'media',
     }),
+    walletsID: one(wallets, {
+      fields: [payload_locked_documents_rels.walletsID],
+      references: [wallets.id],
+      relationName: 'wallets',
+    }),
     categoriesID: one(categories, {
       fields: [payload_locked_documents_rels.categoriesID],
       references: [categories.id],
@@ -460,6 +696,16 @@ export const relations_payload_locked_documents_rels = relations(
       fields: [payload_locked_documents_rels.budgetsID],
       references: [budgets.id],
       relationName: 'budgets',
+    }),
+    'savings-goalsID': one(savings_goals, {
+      fields: [payload_locked_documents_rels['savings-goalsID']],
+      references: [savings_goals.id],
+      relationName: 'savings-goals',
+    }),
+    notificationsID: one(notifications, {
+      fields: [payload_locked_documents_rels.notificationsID],
+      references: [notifications.id],
+      relationName: 'notifications',
     }),
   }),
 )
@@ -496,16 +742,23 @@ export const relations_payload_migrations = relations(payload_migrations, () => 
 type DatabaseSchema = {
   enum_users_role: typeof enum_users_role
   enum_users_currency: typeof enum_users_currency
+  enum_wallets_wallet_type: typeof enum_wallets_wallet_type
   enum_categories_type: typeof enum_categories_type
   enum_transactions_type: typeof enum_transactions_type
   enum_transactions_source_type: typeof enum_transactions_source_type
   enum_budgets_period: typeof enum_budgets_period
+  enum_savings_goals_status: typeof enum_savings_goals_status
+  enum_notifications_type: typeof enum_notifications_type
   users_sessions: typeof users_sessions
   users: typeof users
   media: typeof media
+  wallets: typeof wallets
   categories: typeof categories
   transactions: typeof transactions
   budgets: typeof budgets
+  savings_goals: typeof savings_goals
+  savings_goals_rels: typeof savings_goals_rels
+  notifications: typeof notifications
   payload_kv: typeof payload_kv
   payload_locked_documents: typeof payload_locked_documents
   payload_locked_documents_rels: typeof payload_locked_documents_rels
@@ -515,9 +768,13 @@ type DatabaseSchema = {
   relations_users_sessions: typeof relations_users_sessions
   relations_users: typeof relations_users
   relations_media: typeof relations_media
+  relations_wallets: typeof relations_wallets
   relations_categories: typeof relations_categories
   relations_transactions: typeof relations_transactions
   relations_budgets: typeof relations_budgets
+  relations_savings_goals_rels: typeof relations_savings_goals_rels
+  relations_savings_goals: typeof relations_savings_goals
+  relations_notifications: typeof relations_notifications
   relations_payload_kv: typeof relations_payload_kv
   relations_payload_locked_documents_rels: typeof relations_payload_locked_documents_rels
   relations_payload_locked_documents: typeof relations_payload_locked_documents

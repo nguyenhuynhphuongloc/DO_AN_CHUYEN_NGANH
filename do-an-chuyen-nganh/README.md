@@ -55,6 +55,39 @@ After startup:
 - website: `http://localhost:3000`
 - embedded AI service: `http://localhost:8000`
 
+The default `web` service runs `next dev`. In this mode, the first visit to a page after container startup can be slow because Next.js compiles that route on demand. Warm visits should be much faster after the route has compiled.
+
+Docker health checks use `GET /api/health`, a lightweight endpoint that does not query Payload, the external database, OCR, AI, `/`, `/dashboard`, `/categories`, or other authenticated frontend pages.
+
+For UI performance checks without development route compilation, run the production-like profile:
+
+```bash
+docker compose --profile prod up --build web-prod
+```
+
+Then open:
+
+- production-like website: `http://localhost:3001`
+- embedded AI service: `http://localhost:8000`
+
+The `web-prod` service builds the Next.js app and runs `next start`. Keep using the default `web` service for normal development and hot reload.
+
+## Route warmup
+
+After the development server is healthy, you can pre-hit the main authenticated routes so Next.js compiles them before manual testing:
+
+```bash
+npm run warm:routes
+```
+
+By default this calls `/dashboard,/categories,/transactions,/reports,/savings,/chat,/scan` on `http://localhost:3000`.
+
+Override the target when needed:
+
+```bash
+WARM_BASE_URL=http://localhost:3001 WARM_ROUTES=/dashboard,/reports npm run warm:routes
+```
+
 ## Local run without Docker
 
 Website:
@@ -97,6 +130,8 @@ Check:
 - `docker compose logs web`
 - `DATABASE_URL`
 - `PAYLOAD_SECRET`
+
+For Neon/Postgres URLs, keep the SSL mode explicit, for example `sslmode=verify-full`, so the container does not emit PostgreSQL SSL mode warnings.
 
 ### OCR route fails
 

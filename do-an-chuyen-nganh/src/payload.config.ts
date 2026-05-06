@@ -10,6 +10,9 @@ import { Media } from './collections/Media'
 import { Categories } from './collections/Categories'
 import { Transactions } from './collections/Transactions'
 import { Budgets } from './collections/Budgets'
+import { Wallets } from './collections/Wallets'
+import { SavingsGoals } from './collections/SavingsGoals'
+import { Notifications } from './collections/Notifications'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -21,7 +24,7 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Users, Media, Categories, Transactions, Budgets],
+  collections: [Users, Media, Wallets, Categories, Transactions, Budgets, SavingsGoals, Notifications],
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: {

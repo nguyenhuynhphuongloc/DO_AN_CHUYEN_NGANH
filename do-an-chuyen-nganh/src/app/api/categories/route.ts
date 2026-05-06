@@ -26,7 +26,15 @@ export async function POST(request: Request) {
     const existing = await payload.find({
       collection: 'categories' as any,
       where: {
-        type: { equals: type },
+        and: [
+          { type: { equals: type } },
+          {
+            or: [
+              { isDefault: { equals: true } },
+              { user: { equals: user.id } },
+            ],
+          },
+        ],
       },
       limit: 1000,
       depth: 0,
@@ -38,27 +46,7 @@ export async function POST(request: Request) {
     })
 
     if (matchedCategory) {
-      const isAccessible =
-        matchedCategory.isDefault ||
-        !matchedCategory.user ||
-        matchedCategory.user === user.id ||
-        matchedCategory.user?.id === user.id
-
-      if (isAccessible) {
-        return Response.json(matchedCategory)
-      }
-
-      const sharedCategory = await payload.update({
-        collection: 'categories' as any,
-        id: matchedCategory.id,
-        data: {
-          user: null,
-          isDefault: true,
-        },
-        overrideAccess: true,
-      })
-
-      return Response.json(sharedCategory)
+      return Response.json(matchedCategory)
     }
 
     const category = await payload.create({
@@ -66,11 +54,14 @@ export async function POST(request: Request) {
       data: {
         name: cleanedName,
         type,
-        icon: icon || 'MdInventory2',
+        icon: icon || 'Package',
         color: color || '#6366f1',
+        note: typeof data.note === 'string' ? data.note : '',
         user: user.id,
         isDefault: false,
       },
+      user,
+      overrideAccess: false,
     })
 
     return Response.json(category)

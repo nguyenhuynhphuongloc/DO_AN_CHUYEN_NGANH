@@ -1,7 +1,8 @@
 'use client'
+
 import React from 'react'
-import { useRouter } from 'next/navigation'
-import { MdCalendarMonth } from 'react-icons/md'
+import { usePathname, useRouter } from 'next/navigation'
+import { CalendarDays } from 'lucide-react'
 
 interface MonthFilterProps {
   currentMonth: number
@@ -10,38 +11,47 @@ interface MonthFilterProps {
 
 export default function MonthFilter({ currentMonth, currentYear }: MonthFilterProps) {
   const router = useRouter()
-  
-  const months = Array.from({ length: 12 }, (_, i) => i + 1)
-  const years = Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - i)
+  const pathname = usePathname()
+
+  const months = Array.from({ length: 12 }, (_, index) => index + 1)
+  const years = Array.from({ length: 3 }, (_, index) => new Date().getFullYear() - index)
 
   const updateFilter = (month: number, year: number) => {
     const params = new URLSearchParams()
     params.set('month', month.toString())
     params.set('year', year.toString())
-    router.push(`/?${params.toString()}`)
+    router.push(`${pathname}?${params.toString()}`)
   }
 
   return (
     <div className="filter-bar" style={{ display: 'flex', gap: '8px', padding: '0', background: 'transparent', marginBottom: '8px' }}>
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-        <MdCalendarMonth size={18} style={{ position: 'absolute', left: '12px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-        <select 
+        <CalendarDays size={18} style={{ position: 'absolute', left: '12px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+        <select
           className="form-select"
           value={currentMonth}
-          onChange={(e) => updateFilter(parseInt(e.target.value), currentYear)}
+          onChange={(event) => updateFilter(parseInt(event.target.value, 10), currentYear)}
           style={{ paddingLeft: '38px', width: 'auto', minWidth: '140px', height: '40px', fontSize: '14px' }}
         >
-          {months.map(m => <option key={m} value={m}>Tháng {m}</option>)}
+          {months.map((month) => (
+            <option key={month} value={month}>
+              Tháng {month}
+            </option>
+          ))}
         </select>
       </div>
-      
-      <select 
+
+      <select
         className="form-select"
         value={currentYear}
-        onChange={(e) => updateFilter(currentMonth, parseInt(e.target.value))}
+        onChange={(event) => updateFilter(currentMonth, parseInt(event.target.value, 10))}
         style={{ width: 'auto', minWidth: '100px', height: '40px', fontSize: '14px' }}
       >
-        {years.map(y => <option key={y} value={y}>Năm {y}</option>)}
+        {years.map((year) => (
+          <option key={year} value={year}>
+            Năm {year}
+          </option>
+        ))}
       </select>
     </div>
   )

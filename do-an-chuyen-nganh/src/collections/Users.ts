@@ -1,5 +1,7 @@
 import type { CollectionConfig } from 'payload'
 
+import { adminFieldOnly, adminOnly, adminOnlyBoolean, adminOrSelf, isAdmin } from '../access/roles'
+
 export const Users: CollectionConfig = {
   slug: 'users',
   admin: {
@@ -7,15 +9,30 @@ export const Users: CollectionConfig = {
   },
   auth: true,
   access: {
+    admin: adminOnlyBoolean,
     create: () => true,
-    read: ({ req: { user } }) => {
-      if (user) return true
-      return false
-    },
-    update: ({ req: { user } }) => {
-      if (user) return { id: { equals: user.id } }
-      return false
-    },
+    read: adminOrSelf,
+    update: adminOrSelf,
+    delete: adminOnly,
+  },
+  hooks: {
+    beforeValidate: [
+      ({ data, req, operation, context }) => {
+        if (!data) return data
+
+        if (!isAdmin(req.user) && !context.allowRoleOverride) {
+          if (operation === 'create') {
+            data.role = 'user'
+          }
+
+          if (operation === 'update' && 'role' in data) {
+            delete data.role
+          }
+        }
+
+        return data
+      },
+    ],
   },
   fields: [
     {
@@ -29,6 +46,10 @@ export const Users: CollectionConfig = {
       ],
       admin: {
         position: 'sidebar',
+      },
+      access: {
+        create: adminFieldOnly,
+        update: adminFieldOnly,
       },
     },
     {

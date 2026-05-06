@@ -1,6 +1,7 @@
 'use client'
+
 import React from 'react'
-import * as MdIcons from 'react-icons/md'
+import * as LucideIcons from 'lucide-react'
 
 interface Props {
   icon: string
@@ -8,41 +9,60 @@ interface Props {
   className?: string
 }
 
-// Map common emojis to React Icons for backward compatibility
-const emojiMap: Record<string, string> = {
-  '🍔': 'MdRestaurant',
-  '🏠': 'MdHome',
-  '🚗': 'MdDirectionsCar',
-  '🎮': 'MdGames',
-  '💰': 'MdAttachMoney',
-  '📚': 'MdMenuBook',
-  '💊': 'MdMedicalServices',
-  '🎁': 'MdCardGiftcard',
-  '✈️': 'MdFlight',
-  '👕': 'MdCheckroom',
-  '💼': 'MdWork',
-  '📱': 'MdPhoneAndroid',
-  '🎬': 'MdMovie',
-  '☕': 'MdLocalCafe',
-  '🛒': 'MdShoppingCart',
-  '💡': 'MdLightbulb',
-  '🏋️': 'MdFitnessCenter',
-  '🎵': 'MdMusicNote',
-  '💳': 'MdCreditCard',
-  '📦': 'MdInventory2',
+const legacyIconMap: Record<string, string> = {
+  '🍔': 'Utensils',
+  '🏠': 'House',
+  '🚗': 'Car',
+  '🎮': 'Gamepad2',
+  '💰': 'CircleDollarSign',
+  '📚': 'BookOpen',
+  '💊': 'HeartPulse',
+  '🎁': 'Gift',
+  '✈️': 'Plane',
+  '👕': 'Shirt',
+  '💼': 'BriefcaseBusiness',
+  '📱': 'Smartphone',
+  '🎬': 'Clapperboard',
+  '☕': 'Coffee',
+  '🛒': 'ShoppingCart',
+  '💡': 'Lightbulb',
+  '🏋️': 'Dumbbell',
+  '🎵': 'Music',
+  '💳': 'CreditCard',
+  '📦': 'Package',
+  MdRestaurant: 'Utensils',
+  MdHome: 'House',
+  MdDirectionsCar: 'Car',
+  MdGames: 'Gamepad2',
+  MdAttachMoney: 'CircleDollarSign',
+  MdMenuBook: 'BookOpen',
+  MdMedicalServices: 'HeartPulse',
+  MdCardGiftcard: 'Gift',
+  MdFlight: 'Plane',
+  MdCheckroom: 'Shirt',
+  MdWork: 'BriefcaseBusiness',
+  MdPhoneAndroid: 'Smartphone',
+  MdMovie: 'Clapperboard',
+  MdLocalCafe: 'Coffee',
+  MdShoppingCart: 'ShoppingCart',
+  MdLightbulb: 'Lightbulb',
+  MdFitnessCenter: 'Dumbbell',
+  MdMusicNote: 'Music',
+  MdCreditCard: 'CreditCard',
+  MdInventory2: 'Package',
+  MdSchool: 'GraduationCap',
+  MdPaid: 'Banknote',
+  MdPets: 'PawPrint',
 }
 
 export default function CategoryIcon({ icon, size = 20, className }: Props) {
-  // 1. Check if icon is an emoji in our map
-  const mappedIconName = emojiMap[icon] || icon
-  
-  // 2. Try to get the component from MdIcons
-  const IconComponent = (MdIcons as any)[mappedIconName]
-  
-  if (IconComponent) {
-    return <IconComponent size={size} className={className} />
-  }
-  
-  // 3. Fallback to original string (emoji or text)
-  return <span className={className} style={{ fontSize: `${size}px`, lineHeight: 1 }}>{icon}</span>
+  const iconName = legacyIconMap[icon] || icon || 'Package'
+  const IconComponent = (LucideIcons as unknown as Record<string, React.ComponentType<any>>)[iconName]
+  const FallbackIcon = LucideIcons.Package
+
+  return IconComponent ? (
+    <IconComponent size={size} className={className} strokeWidth={2.1} />
+  ) : (
+    <FallbackIcon size={size} className={className} strokeWidth={2.1} />
+  )
 }

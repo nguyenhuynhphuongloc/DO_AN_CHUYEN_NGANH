@@ -46,10 +46,19 @@ export const Categories: CollectionConfig = {
 
         if (name && type) {
           const normalizedName = normalizeCategoryName(String(data?.name ?? name))
+          const ownerId = data?.user ?? originalDoc?.user ?? req.user?.id
+          const categoryScopeConditions: any[] = [{ isDefault: { equals: true } }]
+          if (ownerId != null) {
+            categoryScopeConditions.push({ user: { equals: ownerId } })
+          }
+
           const existing = await req.payload.find({
             collection: 'categories',
             where: {
-              type: { equals: type },
+              and: [
+                { type: { equals: type } },
+                { or: categoryScopeConditions },
+              ],
             },
             limit: 1000,
             depth: 0,
@@ -177,7 +186,12 @@ export const Categories: CollectionConfig = {
       name: 'icon',
       type: 'text',
       label: 'Icon',
-      defaultValue: '📦',
+      defaultValue: 'Package',
+    },
+    {
+      name: 'note',
+      type: 'textarea',
+      label: 'Ghi chu',
     },
     {
       name: 'color',

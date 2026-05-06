@@ -1,9 +1,10 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { MdCheckCircle, MdCloudUpload, MdDocumentScanner, MdInfo, MdReceiptLong, MdWarning } from 'react-icons/md'
+import { CheckCircle2, CloudUpload, Info, ScanLine, TriangleAlert } from 'lucide-react'
 
 import { normalizeCategoryName } from '@/lib/category-normalization'
+import { formatMoneyInput } from '@/lib/money-input'
 import type { ReceiptOcrResponse } from '@/lib/receipt-ocr'
 import { formatAmountDisplay, parseLocaleAmount } from '@/lib/receipt-ocr'
 
@@ -125,7 +126,7 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
       merchantName: data.review_fields.merchant_name || '',
       transactionDate: data.review_fields.transaction_date || new Date().toISOString().split('T')[0],
       totalAmountInput:
-        data.review_fields.total_amount_display || formatAmountDisplay(data.review_fields.total_amount) || '',
+        formatMoneyInput(data.review_fields.total_amount_display || formatAmountDisplay(data.review_fields.total_amount) || ''),
       currency: data.review_fields.currency || user.currency || 'VND',
       categoryId: data.review_fields.category_id || '',
       description: data.review_fields.description || '',
@@ -238,27 +239,27 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
           accent: 'var(--success)',
           badgeBackground: '#dcfce7',
           color: '#14532d',
-          icon: <MdCheckCircle size={24} color="var(--success)" />,
+          icon: <CheckCircle2 size={24} color="var(--success)" />,
         }
       : notification?.type === 'info'
         ? {
             accent: '#2563eb',
             badgeBackground: '#dbeafe',
             color: '#1e3a8a',
-            icon: <MdInfo size={24} color="#2563eb" />,
+            icon: <Info size={24} color="#2563eb" />,
           }
         : {
             accent: 'var(--danger)',
             badgeBackground: '#fee2e2',
             color: '#991b1b',
-            icon: <MdWarning size={24} color="var(--danger)" />,
+            icon: <TriangleAlert size={24} color="var(--danger)" />,
           }
 
   return (
     <>
       <div className="page-header">
         <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          Quét hóa đơn <MdDocumentScanner size={32} color="var(--primary)" />
+          Quét hóa đơn <ScanLine size={32} color="var(--primary)" />
         </h1>
       </div>
 
@@ -378,7 +379,7 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
               disabled={!file || isParsing}
               onClick={handleParse}
             >
-              {isParsing ? 'Đang phân tích...' : <><MdCloudUpload size={20} /> Bắt đầu quét</>}
+              {isParsing ? 'Đang phân tích...' : <><CloudUpload size={20} /> Bắt đầu quét</>}
             </button>
             <button
               className="btn btn-secondary"
@@ -425,7 +426,7 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
                   <input
                     className="form-input"
                     value={formState.totalAmountInput}
-                    onChange={(event) => setFormState((current) => ({ ...current, totalAmountInput: event.target.value }))}
+                    onChange={(event) => setFormState((current) => ({ ...current, totalAmountInput: formatMoneyInput(event.target.value) }))}
                     placeholder="100.000"
                   />
                   <input

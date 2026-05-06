@@ -3,7 +3,8 @@
 import React, { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, LockKeyhole, Mail, ShieldCheck, Sparkles, WalletCards } from 'lucide-react'
+import { ArrowRight, LockKeyhole, Mail } from 'lucide-react'
+import AppLogo from '@/components/AppLogo'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -31,7 +32,7 @@ export default function LoginPage() {
         return
       }
 
-      router.push('/')
+      router.push('/dashboard')
       router.refresh()
     } catch {
       setError('Có lỗi xảy ra, vui lòng thử lại')
@@ -40,48 +41,11 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="auth-page auth-shell">
-      <section className="auth-visual" aria-label="FinTrack overview">
-        <Link href="/" className="auth-brand" aria-label="FinTrack">
-          <span className="auth-brand-mark">
-            <WalletCards size={24} strokeWidth={2.2} />
-          </span>
-          <span>
-            FinTrack
-            <small>Personal finance workspace</small>
-          </span>
-        </Link>
-
-        <div className="auth-hero-copy">
-          <span className="auth-kicker">
-            <Sparkles size={16} /> Tài chính cá nhân rõ ràng hơn
-          </span>
-          <h1>Theo dõi thu chi, mục tiêu và hóa đơn trong một không gian gọn gàng.</h1>
-          <p>
-            FinTrack giúp bạn kiểm soát dòng tiền hằng tháng, xem báo cáo trực quan và nhập liệu nhanh bằng AI.
-          </p>
-        </div>
-
-        <div className="auth-insight-card">
-          <div>
-            <span>Số dư tháng này</span>
-            <strong>+12.450.000đ</strong>
-          </div>
-          <div className="auth-mini-chart" aria-hidden="true">
-            <i style={{ height: '42%' }} />
-            <i style={{ height: '64%' }} />
-            <i style={{ height: '52%' }} />
-            <i style={{ height: '78%' }} />
-            <i style={{ height: '60%' }} />
-            <i style={{ height: '86%' }} />
-          </div>
-        </div>
-      </section>
-
+    <main className="auth-page auth-shell auth-single">
       <section className="auth-card auth-form-panel" aria-label="Đăng nhập">
         <div className="auth-logo">
           <div className="auth-logo-icon">
-            <ShieldCheck size={28} strokeWidth={2.1} />
+            <AppLogo className="app-logo-image" size={52} priority />
           </div>
           <h2 className="auth-title">Đăng nhập</h2>
           <p className="auth-subtitle">Tiếp tục quản lý tài chính cá nhân của bạn.</p>

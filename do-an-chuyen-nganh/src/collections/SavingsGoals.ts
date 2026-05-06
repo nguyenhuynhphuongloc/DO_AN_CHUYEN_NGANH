@@ -5,6 +5,7 @@ export const SavingsGoals: CollectionConfig = {
   admin: {
     useAsTitle: 'title',
     defaultColumns: ['title', 'targetAmount', 'currentAmount', 'status'],
+    hidden: true,
   },
   access: {
     read: ({ req: { user } }) => {
@@ -79,7 +80,7 @@ export const SavingsGoals: CollectionConfig = {
       name: 'icon',
       type: 'text',
       label: 'Icon',
-      defaultValue: '🎯',
+      defaultValue: 'Target',
     },
     {
       name: 'color',

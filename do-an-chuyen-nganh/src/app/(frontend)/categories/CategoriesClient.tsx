@@ -1,239 +1,376 @@
 'use client'
-import React, { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { 
-  MdAdd, 
-  MdEdit, 
-  MdDelete, 
-  MdClose, 
-  MdTrendingUp, 
-  MdTrendingDown,
-  MdFilterList
-} from 'react-icons/md'
-import CategoryIcon from '@/components/CategoryIcon'
 
-interface Category {
-  id: string
+import React, { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import {
+  CircleAlert,
+  CirclePlus,
+  Edit3,
+  Filter,
+  Save,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+  X,
+} from 'lucide-react'
+
+import CategoryIcon from '@/components/CategoryIcon'
+import { formatMoneyInput, parseMoneyInput } from '@/lib/money-input'
+
+type Category = {
+  id: number
   name: string
   type: 'income' | 'expense'
-  icon: string
-  color: string
-  isDefault: boolean
-  user?: string | { id: string }
+  icon?: string | null
+  note?: string | null
+  color?: string | null
+  isDefault?: boolean | null
+  user?: number | { id: number } | null
 }
 
-interface Props {
+type Budget = {
+  id: number
+  category: number | Category
+  wallet?: number | null
+  amount: number
+  month?: number | null
+  year?: number | null
+  isActive?: boolean | null
+}
+
+type Wallet = {
+  id: number
+  name: string
+  walletType: string
+  monthlySpendingLimit?: number | null
+}
+
+type Props = {
   initialCategories: Category[]
+  initialBudgets: Budget[]
+  wallets: Wallet[]
+  defaultWalletId: number | null
+  monthlySpendingLimit: number
+  spentByCategory: Record<string, number>
+  currentMonth: number
+  currentYear: number
 }
 
 const ICON_OPTIONS = [
-  'MdRestaurant', 'MdDirectionsCar', 'MdGames', 'MdAttachMoney', 'MdHome', 
-  'MdMenuBook', 'MdMedicalServices', 'MdCardGiftcard', 'MdFlight', 'MdCheckroom', 
-  'MdWork', 'MdPhoneAndroid', 'MdMovie', 'MdLocalCafe', 'MdShoppingCart', 
-  'MdLightbulb', 'MdFitnessCenter', 'MdMusicNote', 'MdCreditCard', 'MdInventory2',
-  'MdSchool', 'MdPets', 'MdPhonelink', 'MdSelfImprovement', 'MdVolunteerActivism', 'MdPaid'
+  'Utensils',
+  'Car',
+  'ShoppingCart',
+  'House',
+  'HeartPulse',
+  'GraduationCap',
+  'Clapperboard',
+  'Plane',
+  'Gift',
+  'Shirt',
+  'Coffee',
+  'PawPrint',
+  'Banknote',
+  'Package',
 ]
 
-const COLOR_OPTIONS = ['#6366f1', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16']
+const COLOR_OPTIONS = ['#2563eb', '#ef4444', '#059669', '#d97706', '#7c3aed', '#db2777', '#0f766e', '#ea580c']
 
-export default function CategoriesClient({ initialCategories }: Props) {
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    maximumFractionDigits: 0,
+  }).format(value || 0)
+
+const getCategoryId = (budget: Budget) => {
+  return typeof budget.category === 'object' ? budget.category.id : budget.category
+}
+
+export default function CategoriesClient({
+  initialCategories,
+  initialBudgets,
+  wallets,
+  defaultWalletId,
+  monthlySpendingLimit,
+  spentByCategory,
+  currentMonth,
+  currentYear,
+}: Props) {
   const router = useRouter()
   const [showModal, setShowModal] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [deleteConfirmData, setDeleteConfirmData] = useState<Category | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
+  const [filterType, setFilterType] = useState<'all' | 'expense' | 'income'>('expense')
+  const [savingCategoryId, setSavingCategoryId] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
-  const [filterType, setFilterType] = useState<string>('all')
-
+  const [error, setError] = useState('')
+  const [jarInputs, setJarInputs] = useState<Record<string, string>>(() => {
+    return initialBudgets.reduce<Record<string, string>>((result, budget) => {
+      result[String(getCategoryId(budget))] = formatMoneyInput(budget.amount || 0)
+      return result
+    }, {})
+  })
   const [formData, setFormData] = useState({
     name: '',
-    type: 'expense' as 'income' | 'expense',
-    icon: 'MdInventory2',
-    color: '#6366f1',
+    type: 'expense' as 'expense' | 'income',
+    icon: 'Package',
+    note: '',
+    color: '#2563eb',
   })
 
+  const budgetByCategory = useMemo(() => {
+    return initialBudgets.reduce<Record<string, Budget>>((result, budget) => {
+      result[String(getCategoryId(budget))] = budget
+      return result
+    }, {})
+  }, [initialBudgets])
+
+  const allocatedAmount = useMemo(() => {
+    return Object.values(jarInputs).reduce((sum, value) => sum + parseMoneyInput(value), 0)
+  }, [jarInputs])
+
   const resetForm = () => {
-    setFormData({ name: '', type: 'expense', icon: 'MdInventory2', color: '#6366f1' })
+    setFormData({ name: '', type: 'expense', icon: 'Package', note: '', color: '#2563eb' })
     setEditingId(null)
+    setError('')
   }
 
-  const openEditModal = (c: Category) => {
-    setFormData({ name: c.name, type: c.type, icon: c.icon, color: c.color })
-    setEditingId(c.id)
+  const openEditModal = (category: Category) => {
+    setFormData({
+      name: category.name,
+      type: category.type,
+      icon: category.icon || 'Package',
+      note: category.note || '',
+      color: category.color || '#2563eb',
+    })
+    setEditingId(category.id)
+    setError('')
     setShowModal(true)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleCategorySubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
     setLoading(true)
+    setError('')
 
-    try {
-      if (editingId) {
-        await fetch(`/api/categories/${editingId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
-        })
-      } else {
-        await fetch('/api/categories', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
-        })
-      }
-      setShowModal(false)
-      resetForm()
-      router.refresh()
-    } catch (err) {
-      console.error(err)
-    } finally {
+    const response = await fetch(editingId ? `/api/categories/${editingId}` : '/api/categories', {
+      method: editingId ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData),
+    })
+
+    const data = await response.json()
+    if (!response.ok) {
+      setError(data.error || 'Không thể lưu danh mục.')
       setLoading(false)
+      return
     }
+
+    setShowModal(false)
+    resetForm()
+    setLoading(false)
+    router.refresh()
+  }
+
+  const saveJarLimit = async (category: Category) => {
+    if (!defaultWalletId) return
+    const amount = parseMoneyInput(jarInputs[String(category.id)])
+    setSavingCategoryId(category.id)
+    setError('')
+
+    const response = await fetch('/api/budgets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletId: defaultWalletId,
+        categoryId: category.id,
+        amount,
+        month: currentMonth,
+        year: currentYear,
+      }),
+    })
+
+    const data = await response.json()
+    if (!response.ok) {
+      setError(data.error || 'Không thể lưu hũ chi tiêu.')
+      setSavingCategoryId(null)
+      return
+    }
+
+    setSavingCategoryId(null)
+    router.refresh()
   }
 
   const confirmDelete = async () => {
     if (!deleteConfirmData) return
     setLoading(true)
-    try {
-      const res = await fetch(`/api/categories/${deleteConfirmData.id}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const errData = await res.json()
-        const message = errData.errors?.[0]?.message || errData.message || 'Không thể xóa danh mục'
-        alert(`Lỗi: ${message}`)
-      }
-      setDeleteConfirmData(null)
-      router.refresh()
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
+    const response = await fetch(`/api/categories/${deleteConfirmData.id}`, { method: 'DELETE' })
+    if (!response.ok) {
+      const data = await response.json()
+      setError(data.error || 'Không thể xóa danh mục.')
     }
+    setDeleteConfirmData(null)
+    setLoading(false)
+    router.refresh()
   }
 
-  const filteredCategories = initialCategories.filter((c) => {
-    if (filterType !== 'all' && c.type !== filterType) return false
-    return true
-  })
+  const categories = initialCategories.filter((category) => filterType === 'all' || category.type === filterType)
+  const expenseCategories = categories.filter((category) => category.type === 'expense')
+  const incomeCategories = categories.filter((category) => category.type === 'income')
+  const defaultWallet = wallets.find((wallet) => wallet.id === defaultWalletId)
+  const allocationPercent = monthlySpendingLimit > 0 ? Math.round((allocatedAmount / monthlySpendingLimit) * 100) : 0
 
-  const expenseCategories = filteredCategories.filter((c) => c.type === 'expense')
-  const incomeCategories = filteredCategories.filter((c) => c.type === 'income')
+  const renderCategoryCard = (category: Category) => {
+    const limit = parseMoneyInput(jarInputs[String(category.id)] ?? String(budgetByCategory[String(category.id)]?.amount || 0))
+    const spent = Number(spentByCategory[String(category.id)] || 0)
+    const percent = limit > 0 ? Math.min(Math.round((spent / limit) * 100), 999) : 0
+    const remaining = Math.max(limit - spent, 0)
+    const isWarning = limit > 0 && percent >= 80
+    const isExceeded = limit > 0 && percent >= 100
+
+    return (
+      <article className={`jar-card ${isExceeded ? 'exceeded' : isWarning ? 'warning' : ''}`} key={category.id}>
+        <div className="jar-card-main">
+          <div className="category-card-icon" style={{ background: `${category.color || '#2563eb'}20`, color: category.color || '#2563eb' }}>
+            <CategoryIcon icon={category.icon || 'Package'} size={23} />
+          </div>
+          <div className="jar-card-title">
+            <strong>{category.name}</strong>
+            <span>{category.isDefault ? 'Danh mục hệ thống' : 'Danh mục riêng'}</span>
+          </div>
+          {!category.isDefault && (
+            <div className="category-card-actions">
+              <button className="btn-icon" onClick={() => openEditModal(category)} title="Sửa danh mục">
+                <Edit3 size={17} />
+              </button>
+              <button className="btn-icon" onClick={() => setDeleteConfirmData(category)} title="Xóa danh mục">
+                <Trash2 size={17} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {category.type === 'expense' && (
+          <div className="jar-budget">
+            <div className="jar-budget-row">
+              <span>Đã chi</span>
+              <strong>{formatCurrency(spent)}</strong>
+            </div>
+            <div className="jar-progress" aria-label={`Đã dùng ${percent}% hạn mức ${category.name}`}>
+              <span style={{ width: `${Math.min(percent, 100)}%` }} />
+            </div>
+            <div className="jar-budget-meta">
+              <span>Còn lại {formatCurrency(remaining)}</span>
+              <span>{percent}%</span>
+            </div>
+            <div className="jar-limit-editor">
+              <input
+                className="form-input"
+                inputMode="numeric"
+                value={jarInputs[String(category.id)] ?? ''}
+                onChange={(event) => setJarInputs({ ...jarInputs, [String(category.id)]: formatMoneyInput(event.target.value) })}
+                aria-label={`Hạn mức tháng cho ${category.name}`}
+                placeholder="Hạn mức tháng"
+              />
+              <button className="btn btn-secondary" onClick={() => saveJarLimit(category)} disabled={savingCategoryId === category.id}>
+                <Save size={16} />
+                {savingCategoryId === category.id ? 'Đang lưu' : 'Lưu'}
+              </button>
+            </div>
+            {isWarning && (
+              <div className={`jar-alert ${isExceeded ? 'danger' : ''}`}>
+                <CircleAlert size={16} />
+                {isExceeded ? 'Đã vượt hạn mức danh mục' : 'Đã dùng trên 80% hạn mức'}
+              </div>
+            )}
+          </div>
+        )}
+      </article>
+    )
+  }
 
   return (
     <>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="page-header">
         <div>
-          <h1 className="page-title">Danh mục</h1>
-          <p className="page-subtitle">Quản lý danh mục thu chi của bạn</p>
+          <h1 className="page-title">Danh mục & hũ chi tiêu</h1>
         </div>
-        <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true) }} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <MdAdd size={20} /> Thêm danh mục
+        <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true) }}>
+          <CirclePlus size={18} /> Thêm danh mục
         </button>
       </div>
 
-      <div className="filter-bar" style={{ display: 'flex', alignItems: 'center' }}>
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <MdFilterList size={18} style={{ position: 'absolute', left: '12px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-          <select
-            className="form-select"
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            style={{ width: 'auto', minWidth: '150px', paddingLeft: '36px' }}
-          >
-            <option value="all">Tất cả</option>
-            <option value="income">Thu nhập</option>
-            <option value="expense">Chi tiêu</option>
-          </select>
+      <section className="jar-summary">
+        <div>
+          <span>Ví đang phân bổ</span>
+          <strong>{defaultWallet?.name || 'Ví chính'}</strong>
         </div>
+        <div>
+          <span>Hạn mức ví tháng</span>
+          <strong>{formatCurrency(monthlySpendingLimit)}</strong>
+        </div>
+        <div>
+          <span>Đã phân bổ vào hũ</span>
+          <strong className={allocatedAmount > monthlySpendingLimit ? 'danger-text' : ''}>
+            {formatCurrency(allocatedAmount)} ({allocationPercent}%)
+          </strong>
+        </div>
+      </section>
+
+      {error && <div className="auth-error">{error}</div>}
+
+      <div className="filter-bar">
+        <Filter size={18} />
+        <select className="form-select" value={filterType} onChange={(event) => setFilterType(event.target.value as any)}>
+          <option value="expense">Chi tiêu</option>
+          <option value="income">Thu nhập</option>
+          <option value="all">Tất cả</option>
+        </select>
       </div>
 
-      {filterType === 'all' || filterType === 'expense' ? (
-        <>
-          <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--expense-color)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <MdTrendingDown size={20} /> Chi tiêu ({expenseCategories.length})
-          </h3>
-          <div className="category-grid" style={{ marginBottom: '32px' }}>
-            {expenseCategories.map((c) => (
-              <div className="category-card" key={c.id}>
-                <div className="category-card-icon" style={{ background: `${c.color}20`, color: c.color }}>
-                  <CategoryIcon icon={c.icon} size={24} />
-                </div>
-                <div>
-                  <div className="category-card-name">{c.name}</div>
-                  <div className="category-card-type">{c.isDefault ? 'Mặc định' : 'Tùy chỉnh'}</div>
-                </div>
-                {!c.isDefault && (
-                  <div className="category-card-actions">
-                    <button className="btn-icon" onClick={() => openEditModal(c)} style={{ color: '#f59e0b' }} title="Sửa">
-                      <MdEdit size={18} />
-                    </button>
-                    <button className="btn-icon" onClick={() => setDeleteConfirmData(c)} style={{ color: 'var(--danger)' }} title="Xóa">
-                      <MdClose size={18} />
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </>
-      ) : null}
+      {(filterType === 'all' || filterType === 'expense') && (
+        <section className="jar-section">
+          <h2>
+            <TrendingDown size={20} /> Chi tiêu ({expenseCategories.length})
+          </h2>
+          <div className="jar-grid">{expenseCategories.map(renderCategoryCard)}</div>
+        </section>
+      )}
 
-      {filterType === 'all' || filterType === 'income' ? (
-        <>
-          <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--income-color)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <MdTrendingUp size={20} /> Thu nhập ({incomeCategories.length})
-          </h3>
-          <div className="category-grid">
-            {incomeCategories.map((c) => (
-              <div className="category-card" key={c.id}>
-                <div className="category-card-icon" style={{ background: `${c.color}20`, color: c.color }}>
-                  <CategoryIcon icon={c.icon} size={24} />
-                </div>
-                <div>
-                  <div className="category-card-name">{c.name}</div>
-                  <div className="category-card-type">{c.isDefault ? 'Mặc định' : 'Tùy chỉnh'}</div>
-                </div>
-                {!c.isDefault && (
-                  <div className="category-card-actions">
-                    <button className="btn-icon" onClick={() => openEditModal(c)} style={{ color: '#f59e0b' }} title="Sửa">
-                      <MdEdit size={18} />
-                    </button>
-                    <button className="btn-icon" onClick={() => setDeleteConfirmData(c)} style={{ color: 'var(--danger)' }} title="Xóa">
-                      <MdClose size={18} />
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </>
-      ) : null}
+      {(filterType === 'all' || filterType === 'income') && (
+        <section className="jar-section">
+          <h2>
+            <TrendingUp size={20} /> Thu nhập ({incomeCategories.length})
+          </h2>
+          <div className="jar-grid">{incomeCategories.map(renderCategoryCard)}</div>
+        </section>
+      )}
 
-      {/* Add/Edit Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="modal-title">{editingId ? 'Sửa danh mục' : 'Thêm danh mục mới'}</h2>
-              <button className="modal-close" onClick={() => setShowModal(false)}>
-                <MdClose size={24} />
+              <h2 className="modal-title">{editingId ? 'Sửa danh mục' : 'Thêm danh mục riêng'}</h2>
+              <button className="modal-close" onClick={() => setShowModal(false)} aria-label="Đóng">
+                <X size={22} />
               </button>
             </div>
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleCategorySubmit}>
               <div className="modal-body">
+                {error && <div className="auth-error">{error}</div>}
                 <div className="form-group">
-                  <label className="form-label">Loại</label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <label className="form-label">Loại danh mục</label>
+                  <div className="segmented-control">
                     <button
                       type="button"
-                      className={`btn ${formData.type === 'expense' ? 'btn-danger' : 'btn-secondary'}`}
-                      style={{ flex: 1 }}
+                      className={formData.type === 'expense' ? 'active danger' : ''}
                       onClick={() => setFormData({ ...formData, type: 'expense' })}
                     >
                       Chi tiêu
                     </button>
                     <button
                       type="button"
-                      className={`btn ${formData.type === 'income' ? 'btn-primary' : 'btn-secondary'}`}
-                      style={{ flex: 1 }}
+                      className={formData.type === 'income' ? 'active' : ''}
                       onClick={() => setFormData({ ...formData, type: 'income' })}
                     >
                       Thu nhập
@@ -241,66 +378,63 @@ export default function CategoriesClient({ initialCategories }: Props) {
                   </div>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Tên danh mục</label>
+                  <label className="form-label" htmlFor="category-name">Tên danh mục</label>
                   <input
-                    type="text"
+                    id="category-name"
                     className="form-input"
-                    placeholder="Ví dụ: Cà phê"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(event) => setFormData({ ...formData, name: event.target.value })}
                     required
                   />
                 </div>
                 <div className="form-group">
+                  <label className="form-label" htmlFor="category-note">Ghi chú</label>
+                  <textarea
+                    id="category-note"
+                    className="form-textarea"
+                    value={formData.note}
+                    onChange={(event) => setFormData({ ...formData, note: event.target.value })}
+                    placeholder="Mục đích hoặc quy tắc dùng danh mục này"
+                  />
+                </div>
+                <div className="form-group">
                   <label className="form-label">Icon</label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  <div className="icon-picker">
                     {ICON_OPTIONS.map((icon) => (
                       <button
                         key={icon}
                         type="button"
+                        className={formData.icon === icon ? 'active' : ''}
                         onClick={() => setFormData({ ...formData, icon })}
-                        style={{
-                          width: '44px', height: '44px',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          borderRadius: '8px',
-                          border: formData.icon === icon ? '2px solid var(--primary)' : '1px solid var(--border)',
-                          background: formData.icon === icon ? 'rgba(99,102,241,0.1)' : 'var(--bg-card)',
-                          color: formData.icon === icon ? 'var(--primary)' : 'var(--text-primary)',
-                          cursor: 'pointer', transition: 'all 0.2s',
-                        }}
                         title={icon}
                       >
-                        <CategoryIcon icon={icon} size={24} />
+                        <CategoryIcon icon={icon} size={22} />
                       </button>
                     ))}
                   </div>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Màu sắc</label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div className="color-picker">
                     {COLOR_OPTIONS.map((color) => (
                       <button
                         key={color}
                         type="button"
+                        className={formData.color === color ? 'active' : ''}
+                        style={{ background: color }}
                         onClick={() => setFormData({ ...formData, color })}
-                        style={{
-                          width: '32px', height: '32px',
-                          borderRadius: '50%',
-                          background: color,
-                          border: formData.color === color ? '3px solid white' : '2px solid transparent',
-                          cursor: 'pointer',
-                          boxShadow: formData.color === color ? `0 0 0 2px ${color}` : 'none',
-                          transition: 'all 0.2s',
-                        }}
+                        aria-label={`Chọn màu ${color}`}
                       />
                     ))}
                   </div>
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Hủy</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
+                  Hủy
+                </button>
                 <button type="submit" className="btn btn-primary" disabled={loading}>
-                  {loading ? 'Đang lưu...' : editingId ? 'Cập nhật' : 'Thêm mới'}
+                  {loading ? 'Đang lưu...' : 'Lưu danh mục'}
                 </button>
               </div>
             </form>
@@ -308,45 +442,24 @@ export default function CategoriesClient({ initialCategories }: Props) {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
       {deleteConfirmData && (
         <div className="modal-overlay" onClick={() => setDeleteConfirmData(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="modal-title">Xác nhận xóa</h2>
-              <button className="modal-close" onClick={() => setDeleteConfirmData(null)}>
-                <MdClose size={24} />
+              <h2 className="modal-title">Xóa danh mục</h2>
+              <button className="modal-close" onClick={() => setDeleteConfirmData(null)} aria-label="Đóng">
+                <X size={22} />
               </button>
             </div>
-            <div className="modal-body" style={{ padding: '24px' }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ 
-                  width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(239,68,68,0.1)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
-                  color: '#ef4444'
-                }}>
-                  <MdDelete size={32} />
-                </div>
-                <p style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '8px' }}>
-                  Xác nhận xóa?
-                </p>
-                <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: '1.5' }}>
-                  Bạn có chắc chắn muốn xóa danh mục <strong>&quot;{deleteConfirmData.name}&quot;</strong>? Hành động này không thể hoàn tác.
-                </p>
-              </div>
+            <div className="modal-body">
+              <p>Bạn muốn xóa danh mục “{deleteConfirmData.name}”?</p>
             </div>
-            <div className="modal-footer" style={{ borderTop: 'none', display: 'flex', gap: '12px' }}>
-              <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setDeleteConfirmData(null)}>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setDeleteConfirmData(null)}>
                 Hủy
               </button>
-              <button 
-                type="button" 
-                className="btn btn-danger" 
-                style={{ flex: 1, background: '#ef4444', color: 'white', border: 'none' }} 
-                onClick={confirmDelete}
-                disabled={loading}
-              >
-                {loading ? 'Đang xóa...' : 'Xác nhận xóa'}
+              <button className="btn btn-danger" onClick={confirmDelete} disabled={loading}>
+                Xóa
               </button>
             </div>
           </div>
