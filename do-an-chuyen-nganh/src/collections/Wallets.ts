@@ -21,7 +21,37 @@ export const Wallets: CollectionConfig = {
           data.user = req.user.id
         }
 
+        if (data?.isDefault) {
+          data.walletType = data.walletType === 'savings' ? 'main' : data.walletType
+        }
+
         return data
+      },
+    ],
+    afterChange: [
+      async ({ doc, req, context }) => {
+        if (!doc.isDefault || context?.skipPrimaryWalletNormalization) return doc
+
+        await req.payload.update({
+          collection: 'wallets' as any,
+          where: {
+            and: [
+              { user: { equals: typeof doc.user === 'object' ? doc.user.id : doc.user } },
+              { id: { not_equals: doc.id } },
+              { isDefault: { equals: true } },
+            ],
+          },
+          data: {
+            isDefault: false,
+          },
+          context: {
+            skipPrimaryWalletNormalization: true,
+          },
+          req,
+          overrideAccess: true,
+        })
+
+        return doc
       },
     ],
   },
@@ -69,7 +99,6 @@ export const Wallets: CollectionConfig = {
       required: true,
       label: 'So du',
       defaultValue: 0,
-      min: 0,
     },
     {
       name: 'monthlySpendingLimit',

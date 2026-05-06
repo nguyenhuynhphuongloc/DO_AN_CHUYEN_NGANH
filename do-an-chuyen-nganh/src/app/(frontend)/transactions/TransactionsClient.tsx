@@ -31,6 +31,8 @@ type Wallet = {
   id: string | number
   name: string
   walletType: string
+  isDefault?: boolean | null
+  balance?: number | null
 }
 
 type Transaction = {
@@ -63,7 +65,7 @@ type Props = {
 }
 
 const sourceLabels: Record<string, string> = {
-  manual: 'Nhập tay',
+  manual: 'Thủ công',
   chatbot: 'Chatbot',
   receipt_ai: 'OCR',
   receipt_AI: 'OCR',
@@ -95,12 +97,26 @@ export default function TransactionsClient({
   filters,
 }: Props) {
   const router = useRouter()
+  const primaryWallet = useMemo(() => {
+    return wallets.find((wallet) => wallet.isDefault) ?? wallets.find((wallet) => wallet.walletType !== 'savings') ?? null
+  }, [wallets])
+  const spendableWallets = useMemo(() => wallets.filter((wallet) => wallet.walletType !== 'savings'), [wallets])
+  const defaultSpendableWalletId = primaryWallet?.id
+    ? String(primaryWallet.id)
+    : spendableWallets[0]?.id
+      ? String(spendableWallets[0].id)
+      : ''
   const [transactions, setTransactions] = useState(initialTransactions)
   const [showModal, setShowModal] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [shortfall, setShortfall] = useState<{
+    missingAmount: number
+    eligibleSavingsWallets: Wallet[]
+  } | null>(null)
+  const [selectedShortfallWalletId, setSelectedShortfallWalletId] = useState('')
   const [filterType, setFilterType] = useState(filters.type)
   const [filterCategory, setFilterCategory] = useState(filters.category)
   const [filterWallet, setFilterWallet] = useState(filters.wallet)
@@ -109,7 +125,7 @@ export default function TransactionsClient({
   const [formData, setFormData] = useState({
     type: 'expense' as 'income' | 'expense',
     amount: '',
-    wallet: wallets[0]?.id ? String(wallets[0].id) : '',
+    wallet: defaultSpendableWalletId,
     category: '',
     sourceType: 'manual',
     description: '',
@@ -124,6 +140,9 @@ export default function TransactionsClient({
   const filteredCategories = useMemo(() => {
     return categories.filter((category) => category.type === formData.type)
   }, [categories, formData.type])
+  const transactionWallets = useMemo(() => {
+    return formData.type === 'income' ? wallets : spendableWallets
+  }, [formData.type, spendableWallets, wallets])
 
   const months = Array.from({ length: 12 }, (_, index) => index + 1)
   const years = Array.from({ length: 5 }, (_, index) => new Date().getFullYear() - index)
@@ -134,7 +153,7 @@ export default function TransactionsClient({
     setFormData({
       type: 'expense',
       amount: '',
-      wallet: wallets[0]?.id ? String(wallets[0].id) : '',
+      wallet: defaultSpendableWalletId,
       category: '',
       sourceType: 'manual',
       description: '',
@@ -176,7 +195,7 @@ export default function TransactionsClient({
     setFormData({
       type: transaction.type,
       amount: formatMoneyInput(transaction.amount),
-      wallet: walletId || (wallets[0]?.id ? String(wallets[0].id) : ''),
+      wallet: walletId || (primaryWallet?.id ? String(primaryWallet.id) : ''),
       category: categoryId,
       sourceType: transaction.sourceType || 'manual',
       description: transaction.description || '',
@@ -189,6 +208,7 @@ export default function TransactionsClient({
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     setError('')
+    setShortfall(null)
     setLoading(true)
 
     const amount = parseMoneyInput(formData.amount)
@@ -198,8 +218,8 @@ export default function TransactionsClient({
       return
     }
 
-    if (!formData.wallet || !formData.category) {
-      setError('Vui lòng chọn ví và danh mục.')
+    if (!formData.category) {
+      setError('Vui lòng chọn danh mục.')
       setLoading(false)
       return
     }
@@ -210,9 +230,9 @@ export default function TransactionsClient({
       body: JSON.stringify({
         type: formData.type,
         amount,
-        wallet: Number(formData.wallet),
+        wallet: formData.wallet ? Number(formData.wallet) : undefined,
         category: Number(formData.category),
-        sourceType: formData.sourceType,
+        sourceType: 'manual',
         description: formData.description,
         date: new Date(formData.date).toISOString(),
         note: formData.note,
@@ -220,12 +240,60 @@ export default function TransactionsClient({
     })
 
     const data = await response.json()
+    if (response.status === 409 && data.code === 'PRIMARY_WALLET_SHORTFALL') {
+      setShortfall({
+        missingAmount: data.missingAmount,
+        eligibleSavingsWallets: data.eligibleSavingsWallets || [],
+      })
+      setSelectedShortfallWalletId(data.eligibleSavingsWallets?.[0]?.id ? String(data.eligibleSavingsWallets[0].id) : '')
+      setLoading(false)
+      return
+    }
+
     if (!response.ok) {
       setError(data.error || data.errors?.[0]?.message || 'Không thể lưu giao dịch.')
       setLoading(false)
       return
     }
 
+    setShowModal(false)
+    setLoading(false)
+    resetForm()
+    router.refresh()
+  }
+
+  const handleCompleteShortfall = async (useSavings: boolean) => {
+    if (!shortfall) return
+    setError('')
+    setLoading(true)
+
+    const amount = parseMoneyInput(formData.amount)
+    const response = await fetch('/api/transactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: formData.type,
+        amount,
+        wallet: formData.wallet ? Number(formData.wallet) : undefined,
+        category: Number(formData.category),
+        sourceType: 'manual',
+        description: formData.description,
+        date: new Date(formData.date).toISOString(),
+        note: formData.note,
+        confirmSavingsTransfer: useSavings,
+        savingsWallet: useSavings ? Number(selectedShortfallWalletId) : undefined,
+        allowNegativeBalance: !useSavings,
+      }),
+    })
+
+    const data = await response.json()
+    if (!response.ok) {
+      setError(data.error || 'Không thể lưu giao dịch.')
+      setLoading(false)
+      return
+    }
+
+    setShortfall(null)
     setShowModal(false)
     setLoading(false)
     resetForm()
@@ -393,7 +461,7 @@ export default function TransactionsClient({
                       <td>{wallet?.name || '—'}</td>
                       <td>{category ? <span className="category-tag">{category.name}</span> : '—'}</td>
                       <td>
-                        <span className="category-tag">{sourceLabels[transaction.sourceType || 'manual'] || 'Nhập tay'}</span>
+                        <span className="category-tag">{sourceLabels[transaction.sourceType || 'manual'] || 'Thủ công'}</span>
                         {receiptUrl && (
                           <a className="receipt-link" href={receiptUrl} target="_blank" rel="noreferrer">
                             <Eye size={14} /> Xem hóa đơn
@@ -455,11 +523,63 @@ export default function TransactionsClient({
             <form onSubmit={handleSubmit}>
               <div className="modal-body">
                 {error && <div className="auth-error">{error}</div>}
+                {shortfall && (
+                  <div className="auth-error" style={{ borderColor: '#f59e0b', background: '#fffbeb', color: '#92400e' }}>
+                    <strong>Số dư ví không đủ.</strong>
+                    <div style={{ marginTop: 8 }}>Còn thiếu {formatCurrency(shortfall.missingAmount)}.</div>
+                    <div className="form-group" style={{ marginTop: 12 }}>
+                      <label className="form-label" htmlFor="shortfall-wallet">
+                        Rút từ ví tiết kiệm
+                      </label>
+                      <select
+                        id="shortfall-wallet"
+                        className="form-select"
+                        value={selectedShortfallWalletId}
+                        onChange={(event) => setSelectedShortfallWalletId(event.target.value)}
+                      >
+                        {shortfall.eligibleSavingsWallets.map((wallet) => (
+                          <option key={wallet.id} value={wallet.id}>
+                            {wallet.name} - {formatCurrency(Number(wallet.balance || 0))}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => handleCompleteShortfall(true)}
+                        disabled={loading || !selectedShortfallWalletId}
+                      >
+                        Dùng tiết kiệm
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => handleCompleteShortfall(false)}
+                        disabled={loading}
+                      >
+                        Để số dư âm
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="segmented-control">
                   <button
                     type="button"
                     className={formData.type === 'expense' ? 'active danger' : ''}
-                    onClick={() => setFormData({ ...formData, type: 'expense', category: '' })}
+                    onClick={() => {
+                      const selectedWallet = wallets.find((wallet) => String(wallet.id) === formData.wallet)
+                      setFormData({
+                        ...formData,
+                        type: 'expense',
+                        category: '',
+                        wallet:
+                          selectedWallet?.walletType === 'savings'
+                            ? defaultSpendableWalletId
+                            : formData.wallet || defaultSpendableWalletId,
+                      })
+                    }}
                   >
                     Chi tiêu
                   </button>
@@ -515,7 +635,7 @@ export default function TransactionsClient({
                       required
                     >
                       <option value="">Chọn ví</option>
-                      {wallets.map((wallet) => (
+                      {transactionWallets.map((wallet) => (
                         <option key={wallet.id} value={wallet.id}>
                           {wallet.name}
                         </option>
@@ -547,19 +667,12 @@ export default function TransactionsClient({
                   <label className="form-label" htmlFor="transaction-source">
                     Nguồn
                   </label>
-                  <select
+                  <input
                     id="transaction-source"
-                    className="form-select"
-                    value={formData.sourceType}
-                    onChange={(event) => setFormData({ ...formData, sourceType: event.target.value })}
-                    disabled={Boolean(editingId)}
-                  >
-                    <option value="manual">Nhập tay</option>
-                    <option value="chatbot">Chatbot</option>
-                    <option value="receipt_ai">OCR</option>
-                    <option value="transfer">Chuyển ví</option>
-                    <option value="adjustment">Điều chỉnh</option>
-                  </select>
+                    className="form-input"
+                    value="Thủ công"
+                    readOnly
+                  />
                 </div>
 
                 <div className="form-group">

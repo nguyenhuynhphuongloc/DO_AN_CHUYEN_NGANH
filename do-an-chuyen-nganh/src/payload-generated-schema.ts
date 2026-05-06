@@ -355,6 +355,45 @@ export const savings_goals_rels = pgTable(
   ],
 )
 
+export const savings_contributions = pgTable(
+  'savings_contributions',
+  {
+    id: serial('id').primaryKey(),
+    user: integer('user_id')
+      .notNull()
+      .references(() => users.id, {
+        onDelete: 'set null',
+      }),
+    goal: integer('goal_id')
+      .notNull()
+      .references(() => savings_goals.id, {
+        onDelete: 'set null',
+      }),
+    sourceWallet: integer('source_wallet_id')
+      .notNull()
+      .references(() => wallets.id, {
+        onDelete: 'set null',
+      }),
+    amount: numeric('amount', { mode: 'number' }).notNull(),
+    date: timestamp('date', { mode: 'string', withTimezone: true, precision: 3 }).notNull(),
+    description: varchar('description'),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => [
+    index('savings_contributions_user_idx').on(columns.user),
+    index('savings_contributions_goal_idx').on(columns.goal),
+    index('savings_contributions_source_wallet_idx').on(columns.sourceWallet),
+    index('savings_contributions_date_idx').on(columns.date),
+    index('savings_contributions_updated_at_idx').on(columns.updatedAt),
+    index('savings_contributions_created_at_idx').on(columns.createdAt),
+  ],
+)
+
 export const notifications = pgTable(
   'notifications',
   {
@@ -651,6 +690,23 @@ export const relations_savings_goals = relations(savings_goals, ({ one, many }) 
     relationName: '_rels',
   }),
 }))
+export const relations_savings_contributions = relations(savings_contributions, ({ one }) => ({
+  user: one(users, {
+    fields: [savings_contributions.user],
+    references: [users.id],
+    relationName: 'user',
+  }),
+  goal: one(savings_goals, {
+    fields: [savings_contributions.goal],
+    references: [savings_goals.id],
+    relationName: 'goal',
+  }),
+  sourceWallet: one(wallets, {
+    fields: [savings_contributions.sourceWallet],
+    references: [wallets.id],
+    relationName: 'sourceWallet',
+  }),
+}))
 export const relations_notifications = relations(notifications, ({ one }) => ({
   recipient: one(users, {
     fields: [notifications.recipient],
@@ -758,6 +814,7 @@ type DatabaseSchema = {
   budgets: typeof budgets
   savings_goals: typeof savings_goals
   savings_goals_rels: typeof savings_goals_rels
+  savings_contributions: typeof savings_contributions
   notifications: typeof notifications
   payload_kv: typeof payload_kv
   payload_locked_documents: typeof payload_locked_documents
@@ -774,6 +831,7 @@ type DatabaseSchema = {
   relations_budgets: typeof relations_budgets
   relations_savings_goals_rels: typeof relations_savings_goals_rels
   relations_savings_goals: typeof relations_savings_goals
+  relations_savings_contributions: typeof relations_savings_contributions
   relations_notifications: typeof relations_notifications
   relations_payload_kv: typeof relations_payload_kv
   relations_payload_locked_documents_rels: typeof relations_payload_locked_documents_rels

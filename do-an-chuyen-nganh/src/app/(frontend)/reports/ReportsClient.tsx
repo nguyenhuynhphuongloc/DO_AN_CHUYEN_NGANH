@@ -30,7 +30,7 @@ const formatCurrency = (value: number, currency = 'VND') => {
 }
 
 const sourceLabels: Record<string, string> = {
-  manual: 'Nhập tay',
+  manual: 'Thủ công',
   chatbot: 'Chatbot',
   receipt_ai: 'OCR',
   receipt_AI: 'OCR',

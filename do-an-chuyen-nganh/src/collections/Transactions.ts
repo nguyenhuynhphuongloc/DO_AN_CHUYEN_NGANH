@@ -34,6 +34,8 @@ export const Transactions: CollectionConfig = {
 
         const transactionUserId = getRelationshipId(data.user) ?? getRelationshipId(originalDoc?.user) ?? req.user.id
 
+        const sourceType = data.sourceType ?? originalDoc?.sourceType ?? 'manual'
+
         if (operation === 'create' && !data.wallet) {
           const defaultWallet = await req.payload.find({
             collection: 'wallets' as any,
@@ -67,6 +69,19 @@ export const Transactions: CollectionConfig = {
           const walletUserId = getRelationshipId((wallet as any).user)
           if (!isAdmin(req.user) && String(walletUserId) !== String(transactionUserId)) {
             throw new Error('Vi khong thuoc nguoi dung hien tai.')
+          }
+
+          const transactionType = data.type ?? originalDoc?.type
+          const isSavingsGoalContribution = Boolean(data.savingsGoal ?? originalDoc?.savingsGoal)
+          const isTransfer = sourceType === 'transfer'
+          if (
+            !isAdmin(req.user) &&
+            transactionType === 'expense' &&
+            (wallet as any).walletType === 'savings' &&
+            !isSavingsGoalContribution &&
+            !isTransfer
+          ) {
+            throw new Error('Ví tiết kiệm không dùng để thanh toán chi tiêu.')
           }
         }
 

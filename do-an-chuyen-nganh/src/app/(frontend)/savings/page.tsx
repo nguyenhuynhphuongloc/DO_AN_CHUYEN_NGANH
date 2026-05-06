@@ -15,7 +15,7 @@ export default async function SavingsPage() {
     redirect('/auth/login')
   }
 
-  const [goals, allUsers, notifications, categories] = await Promise.all([
+  const [goals, allUsers, notifications, categories, wallets, contributions] = await Promise.all([
     payload.find({
       collection: 'savings-goals' as any,
       where: {
@@ -87,6 +87,41 @@ export default async function SavingsPage() {
       },
       overrideAccess: true,
     }),
+    payload.find({
+      collection: 'wallets' as any,
+      where: {
+        and: [{ user: { equals: user.id } }, { isActive: { not_equals: false } }],
+      },
+      sort: '-isDefault,name',
+      limit: 100,
+      depth: 0,
+      select: {
+        id: true,
+        name: true,
+        walletType: true,
+        balance: true,
+        currency: true,
+        isDefault: true,
+      },
+      overrideAccess: true,
+    }),
+    payload.find({
+      collection: 'savings-contributions' as any,
+      where: {
+        user: { equals: user.id },
+      },
+      sort: '-date',
+      limit: 100,
+      depth: 1,
+      select: {
+        id: true,
+        goal: true,
+        sourceWallet: true,
+        amount: true,
+        date: true,
+      },
+      overrideAccess: true,
+    }),
   ])
 
   return (
@@ -99,6 +134,8 @@ export default async function SavingsPage() {
             allUsers={JSON.parse(JSON.stringify(allUsers.docs))}
             initialNotifications={JSON.parse(JSON.stringify(notifications.docs))}
             categories={JSON.parse(JSON.stringify(categories.docs))}
+            wallets={JSON.parse(JSON.stringify(wallets.docs))}
+            contributions={JSON.parse(JSON.stringify(contributions.docs))}
             currentUser={user}
           />
         </div>

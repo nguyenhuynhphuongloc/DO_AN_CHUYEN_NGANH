@@ -12,6 +12,7 @@ import { Transactions } from './collections/Transactions'
 import { Budgets } from './collections/Budgets'
 import { Wallets } from './collections/Wallets'
 import { SavingsGoals } from './collections/SavingsGoals'
+import { SavingsContributions } from './collections/SavingsContributions'
 import { Notifications } from './collections/Notifications'
 
 const filename = fileURLToPath(import.meta.url)
@@ -24,7 +25,7 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Users, Media, Wallets, Categories, Transactions, Budgets, SavingsGoals, Notifications],
+  collections: [Users, Media, Wallets, Categories, Transactions, Budgets, SavingsGoals, SavingsContributions, Notifications],
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: {

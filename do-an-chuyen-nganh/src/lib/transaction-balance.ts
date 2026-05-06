@@ -1,4 +1,6 @@
-import type { Payload } from 'payload'
+import type { Payload, PayloadRequest } from 'payload'
+
+import type { User, Wallet } from '@/payload-types'
 
 type TransactionLike = {
   type?: 'income' | 'expense' | null
@@ -22,34 +24,70 @@ export const getTransactionBalanceEffect = (transaction: TransactionLike): numbe
   return 0
 }
 
-export const applyWalletBalanceDelta = async (payload: Payload, walletId: number | string | undefined, delta: number) => {
+type BalanceMutationOptions = {
+  req?: PayloadRequest
+  user?: User
+}
+
+const accessOptions = (options: BalanceMutationOptions) => {
+  if (options.req) {
+    return {
+      req: options.req,
+      overrideAccess: true,
+    }
+  }
+
+  if (options.user) {
+    return {
+      user: options.user,
+      overrideAccess: false,
+    }
+  }
+
+  return {
+    overrideAccess: true,
+  }
+}
+
+export const applyWalletBalanceDelta = async (
+  payload: Payload,
+  walletId: number | string | undefined,
+  delta: number,
+  options: BalanceMutationOptions = {},
+) => {
   if (!walletId || delta === 0) return
 
-  const wallet = await payload.findByID({
+  const mutationAccess = accessOptions(options)
+  const wallet = (await payload.findByID({
     collection: 'wallets' as any,
     id: walletId,
     depth: 0,
-    overrideAccess: true,
-  })
+    ...mutationAccess,
+  })) as Wallet
 
   await payload.update({
     collection: 'wallets' as any,
     id: walletId,
     data: {
-      balance: Number((wallet as any).balance || 0) + delta,
+      balance: Number(wallet.balance || 0) + delta,
     },
-    overrideAccess: true,
+    ...mutationAccess,
   })
 }
 
-export const applyTransactionCreateBalance = async (payload: Payload, transaction: TransactionLike) => {
-  await applyWalletBalanceDelta(payload, getRelationId(transaction.wallet), getTransactionBalanceEffect(transaction))
+export const applyTransactionCreateBalance = async (
+  payload: Payload,
+  transaction: TransactionLike,
+  options: BalanceMutationOptions = {},
+) => {
+  await applyWalletBalanceDelta(payload, getRelationId(transaction.wallet), getTransactionBalanceEffect(transaction), options)
 }
 
 export const applyTransactionUpdateBalance = async (
   payload: Payload,
   previousTransaction: TransactionLike,
   nextTransaction: TransactionLike,
+  options: BalanceMutationOptions = {},
 ) => {
   const previousWalletId = getRelationId(previousTransaction.wallet)
   const nextWalletId = getRelationId(nextTransaction.wallet)
@@ -57,14 +95,18 @@ export const applyTransactionUpdateBalance = async (
   const nextEffect = getTransactionBalanceEffect(nextTransaction)
 
   if (String(previousWalletId) === String(nextWalletId)) {
-    await applyWalletBalanceDelta(payload, nextWalletId, nextEffect - previousEffect)
+    await applyWalletBalanceDelta(payload, nextWalletId, nextEffect - previousEffect, options)
     return
   }
 
-  await applyWalletBalanceDelta(payload, previousWalletId, -previousEffect)
-  await applyWalletBalanceDelta(payload, nextWalletId, nextEffect)
+  await applyWalletBalanceDelta(payload, previousWalletId, -previousEffect, options)
+  await applyWalletBalanceDelta(payload, nextWalletId, nextEffect, options)
 }
 
-export const applyTransactionDeleteBalance = async (payload: Payload, transaction: TransactionLike) => {
-  await applyWalletBalanceDelta(payload, getRelationId(transaction.wallet), -getTransactionBalanceEffect(transaction))
+export const applyTransactionDeleteBalance = async (
+  payload: Payload,
+  transaction: TransactionLike,
+  options: BalanceMutationOptions = {},
+) => {
+  await applyWalletBalanceDelta(payload, getRelationId(transaction.wallet), -getTransactionBalanceEffect(transaction), options)
 }

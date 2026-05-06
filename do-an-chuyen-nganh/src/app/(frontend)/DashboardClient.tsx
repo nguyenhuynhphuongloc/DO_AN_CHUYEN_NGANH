@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import {
   Bar,
   BarChart,
@@ -22,15 +22,21 @@ import {
   ArrowRight,
   ArrowUp,
   ChartPie,
+  FileBarChart,
+  History,
   PiggyBank,
+  Plus,
   ReceiptText,
-  Target,
   TrendingDown,
+  Wallet,
   WalletCards,
+  X,
 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 import CategoryIcon from '@/components/CategoryIcon'
 import type { FinanceStats } from '@/lib/finance-stats'
+import { formatMoneyInput, parseMoneyInput } from '@/lib/money-input'
 
 type DashboardClientProps = {
   stats: FinanceStats
@@ -43,7 +49,7 @@ const formatCurrency = (value: number, currency = 'VND') => {
 const percentText = (value: number) => `${Math.round(value || 0)}%`
 
 const sourceLabels: Record<string, string> = {
-  manual: 'Nhập tay',
+  manual: 'Thủ công',
   chatbot: 'Chatbot',
   receipt_ai: 'OCR',
   receipt_AI: 'OCR',
@@ -51,14 +57,53 @@ const sourceLabels: Record<string, string> = {
   adjustment: 'Điều chỉnh',
 }
 
-const formatSource = (source?: string | null) => sourceLabels[source || 'manual'] || 'Nhập tay'
+const formatSource = (source?: string | null) => sourceLabels[source || 'manual'] || 'Thủ công'
 
 const COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316']
 
 export default function DashboardClient({ stats }: DashboardClientProps) {
-  const currency = stats.walletSummary.defaultWallet?.currency || 'VND'
-  const remainingLimit = stats.walletSummary.remainingLimit
+  const router = useRouter()
+  const [showDepositModal, setShowDepositModal] = useState(false)
+  const [depositWalletId, setDepositWalletId] = useState(
+    stats.walletSummary.defaultWallet?.id ? String(stats.walletSummary.defaultWallet.id) : '',
+  )
+  const [depositAmount, setDepositAmount] = useState('')
+  const [depositError, setDepositError] = useState('')
+  const [depositLoading, setDepositLoading] = useState(false)
+  const primaryWallet = stats.walletSummary.defaultWallet ?? stats.walletSummary.spendingWallets[0] ?? null
+  const currency = primaryWallet?.currency || 'VND'
   const topJarWarnings = stats.jarUsage.filter((jar) => jar.status !== 'ok').slice(0, 3)
+  const depositWallets = [primaryWallet, ...stats.walletSummary.savingsWallets].filter(
+    (wallet): wallet is NonNullable<typeof wallet> => Boolean(wallet),
+  )
+
+  const handleDeposit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setDepositError('')
+    setDepositLoading(true)
+
+    const response = await fetch('/api/wallets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'deposit',
+        wallet: depositWalletId,
+        amount: parseMoneyInput(depositAmount),
+      }),
+    })
+
+    const data = await response.json()
+    if (!response.ok) {
+      setDepositError(data.error || 'Không thể nạp tiền.')
+      setDepositLoading(false)
+      return
+    }
+
+    setShowDepositModal(false)
+    setDepositAmount('')
+    setDepositLoading(false)
+    router.refresh()
+  }
 
   return (
     <>
@@ -73,33 +118,20 @@ export default function DashboardClient({ stats }: DashboardClientProps) {
           <div className="stat-card-value balance">{formatCurrency(stats.walletSummary.totalBalance, currency)}</div>
         </div>
 
-        <div className="stat-card expense">
+        <div className="stat-card balance">
           <div className="stat-card-header">
-            <span className="stat-card-label">Chi tiêu tháng này</span>
-            <div className="stat-card-icon expense">
-              <TrendingDown size={24} strokeWidth={2.1} />
+            <span className="stat-card-label">Số dư ví {primaryWallet?.name || 'chính'}</span>
+            <div className="stat-card-icon balance">
+              <Wallet size={24} strokeWidth={2.1} />
             </div>
           </div>
-          <div className="stat-card-value expense">{formatCurrency(stats.totals.totalExpense, currency)}</div>
-          <div className="stat-card-note">{percentText(stats.walletSummary.limitPercent)} hạn mức tháng</div>
-        </div>
-
-        <div className="stat-card income">
-          <div className="stat-card-header">
-            <span className="stat-card-label">Hạn mức còn lại</span>
-            <div className="stat-card-icon income">
-              <Target size={24} strokeWidth={2.1} />
-            </div>
-          </div>
-          <div className={remainingLimit >= 0 ? 'stat-card-value income' : 'stat-card-value expense'}>
-            {formatCurrency(remainingLimit, currency)}
-          </div>
-          <div className="stat-card-note">Hạn mức: {formatCurrency(stats.walletSummary.monthlySpendingLimit, currency)}</div>
+          <div className="stat-card-value balance">{formatCurrency(primaryWallet?.balance || 0, currency)}</div>
+          <div className="stat-card-note">Ví chi tiêu mặc định</div>
         </div>
 
         <div className="stat-card balance">
           <div className="stat-card-header">
-            <span className="stat-card-label">Tiết kiệm</span>
+            <span className="stat-card-label">Số dư tiết kiệm</span>
             <div className="stat-card-icon balance">
               <PiggyBank size={24} strokeWidth={2.1} />
             </div>
@@ -107,12 +139,47 @@ export default function DashboardClient({ stats }: DashboardClientProps) {
           <div className="stat-card-value balance">{formatCurrency(stats.walletSummary.savingsBalance, currency)}</div>
           <div className="stat-card-note">{stats.walletSummary.savingsWallets.length} ví tiết kiệm</div>
         </div>
+
+        <div className="stat-card income">
+          <div className="stat-card-header">
+            <span className="stat-card-label">Thu nhập trong tháng</span>
+            <div className="stat-card-icon income">
+              <ArrowUp size={24} strokeWidth={2.1} />
+            </div>
+          </div>
+          <div className="stat-card-value income">{formatCurrency(stats.totals.totalIncome, currency)}</div>
+        </div>
+
+        <div className="stat-card expense">
+          <div className="stat-card-header">
+            <span className="stat-card-label">Chi tiêu trong tháng</span>
+            <div className="stat-card-icon expense">
+              <TrendingDown size={24} strokeWidth={2.1} />
+            </div>
+          </div>
+          <div className="stat-card-value expense">{formatCurrency(stats.totals.totalExpense, currency)}</div>
+        </div>
+      </div>
+
+      <div className="dashboard-actions card">
+        <button className="btn btn-primary" onClick={() => setShowDepositModal(true)}>
+          <Plus size={18} /> Nạp tiền
+        </button>
+        <a className="btn btn-secondary" href="/transactions">
+          <History size={18} /> Lịch sử giao dịch
+        </a>
+        <a className="btn btn-secondary" href="/reports">
+          <FileBarChart size={18} /> Báo cáo thu chi
+        </a>
+        <a className="btn btn-secondary" href="/savings">
+          <WalletCards size={18} /> Quản lý ví
+        </a>
       </div>
 
       {topJarWarnings.length > 0 && (
         <div className="card finance-warning-card">
           <div className="card-header">
-            <h3 className="card-title">Cảnh báo hũ chi tiêu</h3>
+            <h3 className="card-title">Cảnh báo ngân sách danh mục</h3>
             <AlertTriangle size={20} color="var(--expense-color)" />
           </div>
           <div className="jar-warning-list">
@@ -259,6 +326,65 @@ export default function DashboardClient({ stats }: DashboardClientProps) {
           </div>
         )}
       </div>
+
+      {showDepositModal && (
+        <div className="modal-overlay" onClick={() => setShowDepositModal(false)}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">Nạp tiền</h2>
+              <button className="modal-close" onClick={() => setShowDepositModal(false)} aria-label="Đóng">
+                <X size={22} />
+              </button>
+            </div>
+            <form onSubmit={handleDeposit}>
+              <div className="modal-body">
+                {depositError && <div className="auth-error">{depositError}</div>}
+                <div className="form-group">
+                  <label className="form-label" htmlFor="deposit-wallet">
+                    Ví nhận tiền
+                  </label>
+                  <select
+                    id="deposit-wallet"
+                    className="form-select"
+                    value={depositWalletId}
+                    onChange={(event) => setDepositWalletId(event.target.value)}
+                    required
+                  >
+                    <option value="">Chọn ví</option>
+                    {depositWallets.map((wallet) => (
+                      <option key={wallet.id} value={wallet.id}>
+                        {wallet.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="deposit-amount">
+                    Số tiền nạp
+                  </label>
+                  <input
+                    id="deposit-amount"
+                    className="form-input"
+                    inputMode="numeric"
+                    value={depositAmount}
+                    onChange={(event) => setDepositAmount(formatMoneyInput(event.target.value))}
+                    required
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowDepositModal(false)}>
+                  Hủy
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={depositLoading}>
+                  {depositLoading ? 'Đang nạp...' : 'Nạp tiền'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   )
 }

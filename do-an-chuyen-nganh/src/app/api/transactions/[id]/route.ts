@@ -3,6 +3,7 @@ import { getPayload } from 'payload'
 
 import config from '@payload-config'
 import { applyTransactionDeleteBalance, applyTransactionUpdateBalance } from '@/lib/transaction-balance'
+import { assertOrdinaryTransactionWallet, assertOwnedWallet, getPrimaryWallet } from '@/lib/wallets'
 
 type RouteContext = {
   params: Promise<{ id: string }>
@@ -29,13 +30,26 @@ export async function PATCH(request: Request, context: RouteContext) {
   const amount = toNumber(body.amount)
   const type = body.type === 'income' || body.type === 'expense' ? body.type : null
   const category = Number(body.category)
-  const wallet = body.wallet ? Number(body.wallet) : undefined
+  const requestedWallet = body.wallet ? Number(body.wallet) : undefined
 
   if (!type || amount <= 0 || !category) {
     return Response.json({ error: 'Loại, số tiền và danh mục là bắt buộc.' }, { status: 400 })
   }
 
   try {
+    const primaryWallet = await getPrimaryWallet(payload, user.id)
+    const sourceType = typeof body.sourceType === 'string' && body.sourceType.trim() ? body.sourceType : 'manual'
+    const wallet = requestedWallet || primaryWallet?.id
+    if (!wallet) {
+      return Response.json({ error: 'Người dùng chưa có ví chính.' }, { status: 400 })
+    }
+
+    if (type === 'expense' && sourceType !== 'transfer' && !body.savingsGoal) {
+      await assertOrdinaryTransactionWallet(payload, user, wallet)
+    } else {
+      await assertOwnedWallet(payload, user, wallet)
+    }
+
     const previousTransaction = await payload.findByID({
       collection: 'transactions' as any,
       id,
@@ -60,7 +74,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       overrideAccess: false,
     })
 
-    await applyTransactionUpdateBalance(payload, previousTransaction as any, transaction as any)
+    await applyTransactionUpdateBalance(payload, previousTransaction as any, transaction as any, { user })
 
     return Response.json(transaction)
   } catch (error) {
@@ -94,7 +108,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
     overrideAccess: false,
   })
 
-  await applyTransactionDeleteBalance(payload, previousTransaction as any)
+  await applyTransactionDeleteBalance(payload, previousTransaction as any, { user })
 
   return Response.json({ ok: true })
 }

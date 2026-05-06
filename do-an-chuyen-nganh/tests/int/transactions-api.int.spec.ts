@@ -33,16 +33,40 @@ describe('transactions API and validation', () => {
   it('creates a transaction and applies its balance effect to the wallet', async () => {
     const mockPayload = {
       auth: vi.fn().mockResolvedValue({ user: { id: 5, role: 'user' } }),
+      find: vi
+        .fn()
+        .mockResolvedValueOnce({
+          docs: [{ id: 2, user: 5, walletType: 'main', balance: 1000000, isDefault: true }],
+        })
+        .mockResolvedValueOnce({
+          docs: [{ id: 2, user: 5, walletType: 'main', balance: 1000000, isDefault: true }],
+        }),
       create: vi.fn().mockResolvedValue({
         id: 21,
         type: 'expense',
         amount: 120000,
         wallet: 2,
       }),
-      findByID: vi.fn().mockResolvedValue({
-        id: 2,
-        balance: 1000000,
-      }),
+      findByID: vi
+        .fn()
+        .mockResolvedValueOnce({
+          id: 2,
+          user: 5,
+          walletType: 'main',
+          balance: 1000000,
+        })
+        .mockResolvedValueOnce({
+          id: 2,
+          user: 5,
+          walletType: 'main',
+          balance: 1000000,
+        })
+        .mockResolvedValueOnce({
+          id: 2,
+          user: 5,
+          walletType: 'main',
+          balance: 1000000,
+        }),
       update: vi.fn().mockResolvedValue({ id: 2, balance: 880000 }),
     }
     mockGetPayload.mockResolvedValue(mockPayload)
@@ -82,7 +106,76 @@ describe('transactions API and validation', () => {
         data: {
           balance: 880000,
         },
-        overrideAccess: true,
+        overrideAccess: false,
+      }),
+    )
+  })
+
+  it('creates an income transaction against the selected wallet', async () => {
+    const mockPayload = {
+      auth: vi.fn().mockResolvedValue({ user: { id: 5, role: 'user' } }),
+      find: vi.fn().mockResolvedValue({
+        docs: [{ id: 2, user: 5, walletType: 'main', balance: 1000000, isDefault: true }],
+      }),
+      create: vi.fn().mockResolvedValue({
+        id: 22,
+        type: 'income',
+        amount: 2000000,
+        wallet: 4,
+      }),
+      findByID: vi
+        .fn()
+        .mockResolvedValueOnce({
+          id: 4,
+          user: 5,
+          walletType: 'bank',
+          balance: 3000000,
+        })
+        .mockResolvedValueOnce({
+          id: 4,
+          user: 5,
+          walletType: 'bank',
+          balance: 3000000,
+        }),
+      update: vi.fn().mockResolvedValue({ id: 4, balance: 5000000 }),
+    }
+    mockGetPayload.mockResolvedValue(mockPayload)
+
+    const { POST } = await import('@/app/api/transactions/route')
+    const response = await POST(
+      new Request('http://localhost/api/transactions', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'income',
+          amount: 2000000,
+          wallet: 4,
+          category: 8,
+          date: '2026-05-01T00:00:00.000Z',
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockPayload.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: 'transactions',
+        data: expect.objectContaining({
+          type: 'income',
+          amount: 2000000,
+          wallet: 4,
+          category: 8,
+        }),
+        overrideAccess: false,
+      }),
+    )
+    expect(mockPayload.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: 'wallets',
+        id: 4,
+        data: {
+          balance: 5000000,
+        },
+        overrideAccess: false,
       }),
     )
   })
@@ -90,8 +183,17 @@ describe('transactions API and validation', () => {
   it('updates wallet balance by the edit delta for the same wallet', async () => {
     const mockPayload = {
       auth: vi.fn().mockResolvedValue({ user: { id: 5, role: 'user' } }),
+      find: vi.fn().mockResolvedValue({
+        docs: [{ id: 2, user: 5, walletType: 'main', balance: 900000, isDefault: true }],
+      }),
       findByID: vi
         .fn()
+        .mockResolvedValueOnce({
+          id: 2,
+          user: 5,
+          walletType: 'main',
+          balance: 900000,
+        })
         .mockResolvedValueOnce({
           id: 21,
           type: 'expense',
@@ -199,6 +301,68 @@ describe('transactions API and validation', () => {
         },
       }),
     ).rejects.toThrow('Vi khong thuoc nguoi dung hien tai.')
+  })
+
+  it('rejects a savings wallet as an ordinary expense payment wallet', async () => {
+    await expect(
+      runTransactionBeforeValidate({
+        operation: 'create',
+        data: {
+          user: 5,
+          wallet: 2,
+          category: 7,
+          type: 'expense',
+          sourceType: 'manual',
+        },
+        req: {
+          user: { id: 5, role: 'user' },
+          payload: {
+            findByID: vi
+              .fn()
+              .mockResolvedValueOnce({ id: 2, user: 5, walletType: 'savings' })
+              .mockResolvedValueOnce({ id: 7, type: 'expense', isDefault: true }),
+          },
+        },
+      }),
+    ).rejects.toThrow('Ví tiết kiệm không dùng để thanh toán chi tiêu.')
+  })
+
+  it('returns a shortfall response when savings can cover the missing primary wallet amount', async () => {
+    const mockPayload = {
+      auth: vi.fn().mockResolvedValue({ user: { id: 5, role: 'user' } }),
+      find: vi
+        .fn()
+        .mockResolvedValueOnce({
+          docs: [{ id: 2, user: 5, walletType: 'main', balance: 100000, isDefault: true }],
+        })
+        .mockResolvedValueOnce({
+          docs: [{ id: 3, user: 5, walletType: 'savings', name: 'Tiet kiem', balance: 500000 }],
+        }),
+      findByID: vi.fn().mockResolvedValue({ id: 2, user: 5, walletType: 'main', balance: 100000 }),
+      create: vi.fn(),
+      update: vi.fn(),
+    }
+    mockGetPayload.mockResolvedValue(mockPayload)
+
+    const { POST } = await import('@/app/api/transactions/route')
+    const response = await POST(
+      new Request('http://localhost/api/transactions', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'expense',
+          amount: 250000,
+          category: 7,
+          date: '2026-05-01T00:00:00.000Z',
+        }),
+      }),
+    )
+    const data = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(data.code).toBe('PRIMARY_WALLET_SHORTFALL')
+    expect(data.missingAmount).toBe(150000)
+    expect(data.eligibleSavingsWallets).toHaveLength(1)
+    expect(mockPayload.create).not.toHaveBeenCalled()
   })
 
   it('rejects a category that does not match transaction type', async () => {

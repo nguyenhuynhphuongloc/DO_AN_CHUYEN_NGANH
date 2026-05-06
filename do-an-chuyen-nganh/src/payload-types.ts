@@ -74,6 +74,7 @@ export interface Config {
     transactions: Transaction;
     budgets: Budget;
     'savings-goals': SavingsGoal;
+    'savings-contributions': SavingsContribution;
     notifications: Notification;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
@@ -89,6 +90,7 @@ export interface Config {
     transactions: TransactionsSelect<false> | TransactionsSelect<true>;
     budgets: BudgetsSelect<false> | BudgetsSelect<true>;
     'savings-goals': SavingsGoalsSelect<false> | SavingsGoalsSelect<true>;
+    'savings-contributions': SavingsContributionsSelect<false> | SavingsContributionsSelect<true>;
     notifications: NotificationsSelect<false> | NotificationsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -278,6 +280,21 @@ export interface Budget {
     | null;
   isActive?: boolean | null;
   user: number | User;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "savings-contributions".
+ */
+export interface SavingsContribution {
+  id: number;
+  user: number | User;
+  goal: number | SavingsGoal;
+  sourceWallet: number | Wallet;
+  amount: number;
+  date: string;
+  description?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -522,6 +539,20 @@ export interface SavingsGoalsSelect<T extends boolean = true> {
   color?: T;
   owner?: T;
   participants?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "savings-contributions_select".
+ */
+export interface SavingsContributionsSelect<T extends boolean = true> {
+  user?: T;
+  goal?: T;
+  sourceWallet?: T;
+  amount?: T;
+  date?: T;
+  description?: T;
   updatedAt?: T;
   createdAt?: T;
 }

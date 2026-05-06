@@ -30,6 +30,15 @@ export const getUserId = (user: number | User): number => {
   return typeof user === 'number' ? user : user.id
 }
 
+export const getRelationId = (value: unknown): number | string | undefined => {
+  if (typeof value === 'number' || typeof value === 'string') return value
+  if (value && typeof value === 'object' && 'id' in value) {
+    const id = (value as { id?: number | string }).id
+    if (typeof id === 'number' || typeof id === 'string') return id
+  }
+  return undefined
+}
+
 export const normalizeMoneyValue = (value: unknown): number => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0
   if (typeof value !== 'string') return 0
@@ -95,7 +104,7 @@ export const listUserWallets = async (payload: Payload, userId: number): Promise
   return wallets.docs as Wallet[]
 }
 
-export const getDefaultWallet = async (payload: Payload, userId: number): Promise<Wallet | null> => {
+export const getPrimaryWallet = async (payload: Payload, userId: number): Promise<Wallet | null> => {
   const wallets = await payload.find({
     collection: 'wallets',
     where: {
@@ -111,6 +120,94 @@ export const getDefaultWallet = async (payload: Payload, userId: number): Promis
   })
 
   return (wallets.docs[0] as Wallet | undefined) ?? null
+}
+
+export const getDefaultWallet = getPrimaryWallet
+
+export const listSavingsWallets = async (payload: Payload, userId: number): Promise<Wallet[]> => {
+  const wallets = await payload.find({
+    collection: 'wallets',
+    where: {
+      and: [
+        { user: { equals: userId } },
+        { walletType: { equals: 'savings' } },
+        { isActive: { not_equals: false } },
+      ],
+    },
+    depth: 0,
+    sort: 'name',
+    limit: 100,
+    overrideAccess: true,
+  })
+
+  return wallets.docs as Wallet[]
+}
+
+export const normalizePrimaryWallets = async (payload: Payload, user: User): Promise<void> => {
+  const userId = getUserId(user)
+  const wallets = await listUserWallets(payload, userId)
+  const primaryWallets = wallets
+    .filter((wallet) => wallet.isDefault)
+    .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
+
+  const primaryWallet = primaryWallets[0] ?? wallets.find((wallet) => wallet.walletType !== 'savings') ?? null
+  if (!primaryWallet) return
+
+  await payload.update({
+    collection: 'wallets',
+    id: primaryWallet.id,
+    data: {
+      walletType: primaryWallet.walletType === 'savings' ? 'main' : primaryWallet.walletType,
+      isDefault: true,
+      isActive: true,
+    },
+    user,
+    overrideAccess: false,
+  })
+
+  for (const wallet of wallets) {
+    if (wallet.id === primaryWallet.id || !wallet.isDefault) continue
+
+    await payload.update({
+      collection: 'wallets',
+      id: wallet.id,
+      data: {
+        isDefault: false,
+      },
+      user,
+      overrideAccess: false,
+    })
+  }
+}
+
+export const assertOwnedWallet = async (payload: Payload, user: User, walletId: number | string): Promise<Wallet> => {
+  const wallet = (await payload.findByID({
+    collection: 'wallets',
+    id: walletId,
+    depth: 0,
+    user,
+    overrideAccess: false,
+  })) as Wallet
+
+  const walletUserId = getRelationId(wallet.user)
+  if (String(walletUserId) !== String(getUserId(user))) {
+    throw new Error('Ví không thuộc người dùng hiện tại.')
+  }
+
+  return wallet
+}
+
+export const assertOrdinaryTransactionWallet = async (
+  payload: Payload,
+  user: User,
+  walletId: number | string,
+): Promise<Wallet> => {
+  const wallet = await assertOwnedWallet(payload, user, walletId)
+  if (wallet.walletType === 'savings') {
+    throw new Error('Ví tiết kiệm không dùng để thanh toán chi tiêu.')
+  }
+
+  return wallet
 }
 
 export const getWalletSetupState = async (payload: Payload, userId: number) => {
