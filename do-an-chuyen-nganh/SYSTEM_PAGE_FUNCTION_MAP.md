@@ -391,6 +391,57 @@ Performance notes:
 | `/api/ai/ocr/receipt/confirm` | Scan | Confirm OCR and create transaction |
 | `/api/stats`, `/api/stats/chart` | Legacy/stats routes | Stats endpoints retained for compatibility |
 
+## Admin Operations
+
+The rebuilt admin surface is a role-gated, user-centric finance operations workspace. Normal users use the finance app routes; only users with `role = admin` can access `/admin` and `/api/admin/*`.
+
+Admin support must start from a selected user before viewing user-owned finance details. Global admin pages may show aggregate KPI cards and data-quality counts, but they must not browse full wallets, transactions, receipts, notifications, or AI/chat rows across all users.
+
+| Admin Route | Module | Main Purpose | Data/API Dependencies |
+| --- | --- | --- | --- |
+| `/admin` | Finance Overview | Subtitle-free KPI cards and data-warning links only | `GET /api/admin/overview`, Payload users/wallets/transactions/budgets/savings/media |
+| `/admin/finance/users` | Users | Full-width user list with filters, setup state, wallet/transaction counts, workspace link, reviewed role changes | `GET /api/admin/users`, `POST /api/admin/users/:id/role` |
+| `/admin/finance/users/:userId` | User Workspace Overview | Two-pane admin view: left chat-like user list, right selected user's profile, finance KPIs, scoped warning links | `GET /api/admin/users/:id/profile`, `GET /api/admin/users/:id/finance-summary` |
+| `/admin/finance/users/:userId/wallets` | User Wallets | Wallets belonging only to the selected user | `GET /api/admin/users/:id/wallets` |
+| `/admin/finance/users/:userId/transactions` | User Transactions | Transactions belonging only to the selected user, with scoped filters | `GET /api/admin/users/:id/transactions` |
+| `/admin/finance/users/:userId/categories` | User Categories | System categories plus selected user's custom categories; no other users' custom categories | `GET /api/admin/users/:id/categories` |
+| `/admin/finance/users/:userId/budgets` | User Hũ Chi / Budgets | Selected user's budget jar usage, limits, remaining values, warning states | `GET /api/admin/users/:id/budgets` |
+| `/admin/finance/users/:userId/savings` | User Savings | Savings goals where selected user is owner or participant | `GET /api/admin/users/:id/savings` |
+| `/admin/finance/users/:userId/receipts` | User Receipts/OCR | OCR-created receipt transactions owned by selected user | `GET /api/admin/users/:id/receipts` |
+| `/admin/finance/users/:userId/ai` | User AI/Chat Logs | Redacted AI/advisor/chat logs for selected user only | `GET /api/admin/users/:id/ai-logs` |
+| `/admin/finance/users/:userId/notifications` | User Notifications | Notifications sent to selected user only | `GET /api/admin/users/:id/notifications` |
+| `/admin/finance/data-quality` | Data Quality | Warning table plus compact user-impact map, linked to user workspace where possible | `GET /api/admin/data-quality`, `POST /api/admin/data-quality/recheck` |
+
+Deprecated primary admin flow:
+
+- `/admin/finance/wallets`, `/admin/finance/transactions`, `/admin/finance/categories`, `/admin/finance/savings`, `/admin/finance/receipts`, `/admin/finance/ai`, and `/admin/finance/notifications` must not render full global detail tables in the primary UI.
+- If those routes are opened directly, the UI should tell the admin to select a user first and link to `/admin/finance/users`.
+- Admin page headers are label/action only; do not add long subtitles under admin titles.
+- The selected-user admin route changes `/admin/finance/users` from a full list into a two-pane workspace: the user list stays on the left and the chosen user's finance modules render on the right.
+
+Admin performance notes:
+
+- Admin table APIs are paginated and should keep `limit` bounded.
+- Admin aggregation can be slower on remote Postgres/Neon; overview and data-quality checks should avoid unbounded client-side joins.
+- Admin APIs intentionally return summary rows rather than full Payload documents to reduce accidental exposure of sensitive personal finance data.
+- AI/chat admin responses are redacted by default and should not expose raw private prompts/responses through the standard user workspace tab.
+- Admin and normal user sessions currently share Payload's `payload-token` cookie on the same domain. Same-browser simultaneous use of separate admin and normal-user accounts is not guaranteed until cookie/domain separation is redesigned.
+
+### User-Scoped Admin API Summary
+
+| API Route | Purpose |
+| --- | --- |
+| `GET /api/admin/users/:id/profile` | Support-safe selected user profile |
+| `GET /api/admin/users/:id/finance-summary` | Selected user's finance KPIs and warning counts |
+| `GET /api/admin/users/:id/wallets` | Selected user's wallets only |
+| `GET /api/admin/users/:id/transactions` | Selected user's transactions only |
+| `GET /api/admin/users/:id/categories` | System categories plus selected user's custom categories |
+| `GET /api/admin/users/:id/budgets` | Selected user's budgets/hũ chi only |
+| `GET /api/admin/users/:id/savings` | Selected user's owned/participating savings goals |
+| `GET /api/admin/users/:id/receipts` | Selected user's OCR receipt transactions only |
+| `GET /api/admin/users/:id/notifications` | Selected user's notifications only |
+| `GET /api/admin/users/:id/ai-logs` | Selected user's redacted AI/chat logs only |
+
 ## Maintenance Rule
 
 When a change adds, removes, renames, or materially changes a primary page, update this file in the same change. The update should include route purpose, visible functions, interactions, APIs, data dependencies, and performance notes.

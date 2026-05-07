@@ -1,0 +1,202 @@
+
+> do-an-chuyen-nganh@1.0.0 dev
+> cross-env NODE_OPTIONS="--no-deprecation --max-old-space-size=4096" next dev
+
+   ▲ Next.js 15.4.11
+   - Local:        http://localhost:3000
+   - Network:      http://172.16.0.48:3000
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 2.4s
+ ✓ Compiled /middleware in 448ms (108 modules)
+ ○ Compiling /api/[...slug] ...
+ ✓ Compiled /api/[...slug] in 1898ms (1081 modules)
+[19:57:16] [33mWARN[39m: [36mNo email adapter provided. Email will be written to console. More info at https://payloadcms.com/docs/email/overview.[39m
+ POST /api/users/login 200 in 8722ms
+ ○ Compiling /api/admin/[...path] ...
+ ✓ Compiled /api/admin/[...path] in 1294ms (1088 modules)
+ GET /api/admin/users?limit=1 200 in 3803ms
+ ○ Compiling /admin/[[...segments]] ...
+ ⚠ ./src/app/(payload)/custom.scss.webpack[javascript/auto]!=!./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[11].use[2]!./node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[13].oneOf[11].use[3]!./node_modules/next/dist/build/webpack/loaders/resolve-url-loader/index.js??ruleSet[1].rules[13].oneOf[11].use[4]!./node_modules/next/dist/compiled/sass-loader/cjs.js??ruleSet[1].rules[13].oneOf[11].use[5]!./src/app/(payload)/custom.scss
+Warning
+
+(446:3) autoprefixer: end value has mixed support, consider using flex-end instead
+
+Import trace for requested module:
+./src/app/(payload)/custom.scss.webpack[javascript/auto]!=!./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[11].use[2]!./node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[13].oneOf[11].use[3]!./node_modules/next/dist/build/webpack/loaders/resolve-url-loader/index.js??ruleSet[1].rules[13].oneOf[11].use[4]!./node_modules/next/dist/compiled/sass-loader/cjs.js??ruleSet[1].rules[13].oneOf[11].use[5]!./src/app/(payload)/custom.scss
+./src/app/(payload)/custom.scss
+<w> [webpack.cache.PackFileCacheStrategy] Skipped not serializable cache item 'Compilation/modules|D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\build\webpack\loaders\css-loader\src\index.js??ruleSet[1].rules[13].oneOf[11].use[2]!D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\build\webpack\loaders\postcss-loader\src\index.js??ruleSet[1].rules[13].oneOf[11].use[3]!D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\build\webpack\loaders\resolve-url-loader\index.js??ruleSet[1].rules[13].oneOf[11].use[4]!D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\compiled\sass-loader\cjs.js??ruleSet[1].rules[13].oneOf[11].use[5]!D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\src\app\(payload)\custom.scss': No serializer registered for Warning
+<w> while serializing webpack/lib/cache/PackFileCacheStrategy.PackContentItems -> webpack/lib/NormalModule -> Array { 1 items } -> webpack/lib/ModuleWarning -> Warning
+ GET /admin 200 in 18143ms
+ GET /admin/finance/users 200 in 3514ms
+ GET /admin/finance/users/47/transactions 200 in 3658ms
+[19:58:03] [31mERROR[39m: [36mInvalid JSON[39m
+    err: {
+      "type": "APIError",
+      "message": "Invalid JSON",
+      "stack":
+          APIError: Invalid JSON
+              at addDataAndFileToRequest (file:///D:/School_Proj/DoAnChuyenNganh/DO_AN_CHUYEN_NGANH/do-an-chuyen-nganh/node_modules/payload/dist/utilities/addDataAndFileToRequest.js:23:27)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async endpoint.handler (file:///D:/School_Proj/DoAnChuyenNganh/DO_AN_CHUYEN_NGANH/do-an-chuyen-nganh/node_modules/payload/dist/utilities/wrapInternalEndpoints.js:11:17)
+              at async handleEndpoints (file:///D:/School_Proj/DoAnChuyenNganh/DO_AN_CHUYEN_NGANH/do-an-chuyen-nganh/node_modules/payload/dist/utilities/handleEndpoints.js:198:26)
+              at async eval (webpack-internal:///(rsc)/./node_modules/@payloadcms/next/dist/routes/rest/index.js:32:20)
+              at async AppRouteRouteModule.do (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:5:38782)
+              at async AppRouteRouteModule.handle (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:5:45984)
+              at async responseGenerator (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&page=%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&appPaths=&pagePath=private-next-app-dir%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute.ts&appDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh%5Csrc%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=standalone&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:206:38)
+              at async AppRouteRouteModule.handleResponse (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:1:183692)
+              at async handleResponse (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&page=%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&appPaths=&pagePath=private-next-app-dir%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute.ts&appDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh%5Csrc%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=standalone&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:268:32)
+              at async handler (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&page=%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&appPaths=&pagePath=private-next-app-dir%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute.ts&appDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh%5Csrc%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=standalone&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:320:13)
+              at async doRender (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:1592:34)
+              at async DevServer.renderToResponseWithComponentsImpl (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:1934:13)
+              at async DevServer.renderPageComponent (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:2400:24)
+              at async DevServer.renderToResponseImpl (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:2440:32)
+              at async DevServer.pipeImpl (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:1035:25)
+              at async NextNodeServer.handleCatchallRenderRequest (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\next-server.js:393:17)
+              at async DevServer.handleRequestImpl (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:925:17)
+              at async D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\dev\next-dev-server.js:398:20
+              at async Span.traceAsyncFn (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\trace\trace.js:157:20)
+              at async DevServer.handleRequest (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\dev\next-dev-server.js:394:24)
+              at async invokeRender (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\lib\router-server.js:239:21)
+              at async handleRequest (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\lib\router-server.js:436:24)
+              at async requestHandlerImpl (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\lib\router-server.js:464:13)
+              at async Server.requestListener (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\lib\start-server.js:218:13)
+      "data": null,
+      "isOperational": true,
+      "isPublic": true,
+      "status": 400,
+      "name": "APIError"
+    }
+ POST /api/users/login 400 in 46ms
+ GET /admin 200 in 65ms
+ GET /admin/finance/users 200 in 45ms
+ GET /admin/finance/users/47/transactions 200 in 50ms
+[19:58:22] [31mERROR[39m: [36mInvalid JSON[39m
+    err: {
+      "type": "APIError",
+      "message": "Invalid JSON",
+      "stack":
+          APIError: Invalid JSON
+              at addDataAndFileToRequest (file:///D:/School_Proj/DoAnChuyenNganh/DO_AN_CHUYEN_NGANH/do-an-chuyen-nganh/node_modules/payload/dist/utilities/addDataAndFileToRequest.js:23:27)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async endpoint.handler (file:///D:/School_Proj/DoAnChuyenNganh/DO_AN_CHUYEN_NGANH/do-an-chuyen-nganh/node_modules/payload/dist/utilities/wrapInternalEndpoints.js:11:17)
+              at async handleEndpoints (file:///D:/School_Proj/DoAnChuyenNganh/DO_AN_CHUYEN_NGANH/do-an-chuyen-nganh/node_modules/payload/dist/utilities/handleEndpoints.js:198:26)
+              at async eval (webpack-internal:///(rsc)/./node_modules/@payloadcms/next/dist/routes/rest/index.js:32:20)
+              at async AppRouteRouteModule.do (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:5:38782)
+              at async AppRouteRouteModule.handle (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:5:45984)
+              at async responseGenerator (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&page=%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&appPaths=&pagePath=private-next-app-dir%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute.ts&appDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh%5Csrc%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=standalone&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:206:38)
+              at async AppRouteRouteModule.handleResponse (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:1:183692)
+              at async handleResponse (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&page=%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&appPaths=&pagePath=private-next-app-dir%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute.ts&appDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh%5Csrc%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=standalone&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:268:32)
+              at async handler (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&page=%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&appPaths=&pagePath=private-next-app-dir%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute.ts&appDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh%5Csrc%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=standalone&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:320:13)
+              at async doRender (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:1592:34)
+              at async DevServer.renderToResponseWithComponentsImpl (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:1934:13)
+              at async DevServer.renderPageComponent (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:2400:24)
+              at async DevServer.renderToResponseImpl (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:2440:32)
+              at async DevServer.pipeImpl (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:1035:25)
+              at async NextNodeServer.handleCatchallRenderRequest (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\next-server.js:393:17)
+              at async DevServer.handleRequestImpl (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:925:17)
+              at async D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\dev\next-dev-server.js:398:20
+              at async Span.traceAsyncFn (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\trace\trace.js:157:20)
+              at async DevServer.handleRequest (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\dev\next-dev-server.js:394:24)
+              at async invokeRender (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\lib\router-server.js:239:21)
+              at async handleRequest (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\lib\router-server.js:436:24)
+              at async requestHandlerImpl (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\lib\router-server.js:464:13)
+              at async Server.requestListener (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\lib\start-server.js:218:13)
+      "data": null,
+      "isOperational": true,
+      "isPublic": true,
+      "status": 400,
+      "name": "APIError"
+    }
+ POST /api/users/login 400 in 19ms
+ ⚠ ./src/app/(payload)/custom.scss.webpack[javascript/auto]!=!./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[11].use[2]!./node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[13].oneOf[11].use[3]!./node_modules/next/dist/build/webpack/loaders/resolve-url-loader/index.js??ruleSet[1].rules[13].oneOf[11].use[4]!./node_modules/next/dist/compiled/sass-loader/cjs.js??ruleSet[1].rules[13].oneOf[11].use[5]!./src/app/(payload)/custom.scss
+Warning
+
+(446:3) autoprefixer: end value has mixed support, consider using flex-end instead
+
+Import trace for requested module:
+./src/app/(payload)/custom.scss.webpack[javascript/auto]!=!./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[13].oneOf[11].use[2]!./node_modules/next/dist/build/webpack/loaders/postcss-loader/src/index.js??ruleSet[1].rules[13].oneOf[11].use[3]!./node_modules/next/dist/build/webpack/loaders/resolve-url-loader/index.js??ruleSet[1].rules[13].oneOf[11].use[4]!./node_modules/next/dist/compiled/sass-loader/cjs.js??ruleSet[1].rules[13].oneOf[11].use[5]!./src/app/(payload)/custom.scss
+./src/app/(payload)/custom.scss
+ ✓ Compiled /dashboard in 5.9s (8280 modules)
+ GET /dashboard 307 in 6532ms
+ ○ Compiling /auth/login ...
+ ✓ Compiled /auth/login in 1283ms (8285 modules)
+ GET /auth/login 200 in 1492ms
+[19:58:42] [31mERROR[39m: [36mInvalid JSON[39m
+    err: {
+      "type": "APIError",
+      "message": "Invalid JSON",
+      "stack":
+          APIError: Invalid JSON
+              at addDataAndFileToRequest (file:///D:/School_Proj/DoAnChuyenNganh/DO_AN_CHUYEN_NGANH/do-an-chuyen-nganh/node_modules/payload/dist/utilities/addDataAndFileToRequest.js:23:27)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async endpoint.handler (file:///D:/School_Proj/DoAnChuyenNganh/DO_AN_CHUYEN_NGANH/do-an-chuyen-nganh/node_modules/payload/dist/utilities/wrapInternalEndpoints.js:11:17)
+              at async handleEndpoints (file:///D:/School_Proj/DoAnChuyenNganh/DO_AN_CHUYEN_NGANH/do-an-chuyen-nganh/node_modules/payload/dist/utilities/handleEndpoints.js:198:26)
+              at async eval (webpack-internal:///(rsc)/./node_modules/@payloadcms/next/dist/routes/rest/index.js:32:20)
+              at async AppRouteRouteModule.do (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:5:38782)
+              at async AppRouteRouteModule.handle (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:5:45984)
+              at async responseGenerator (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&page=%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&appPaths=&pagePath=private-next-app-dir%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute.ts&appDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh%5Csrc%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=standalone&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:206:38)
+              at async AppRouteRouteModule.handleResponse (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:1:183692)
+              at async handleResponse (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&page=%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&appPaths=&pagePath=private-next-app-dir%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute.ts&appDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh%5Csrc%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=standalone&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:268:32)
+              at async handler (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.js?name=app%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&page=%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute&appPaths=&pagePath=private-next-app-dir%2F(payload)%2Fapi%2F%5B...slug%5D%2Froute.ts&appDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh%5Csrc%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CSchool_Proj%5CDoAnChuyenNganh%5CDO_AN_CHUYEN_NGANH%5Cdo-an-chuyen-nganh&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=standalone&preferredRegion=&middlewareConfig=e30%3D&isGlobalNotFoundEnabled=!:320:13)
+              at async doRender (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:1592:34)
+              at async DevServer.renderToResponseWithComponentsImpl (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:1934:13)
+              at async DevServer.renderPageComponent (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:2400:24)
+              at async DevServer.renderToResponseImpl (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:2440:32)
+              at async DevServer.pipeImpl (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:1035:25)
+              at async NextNodeServer.handleCatchallRenderRequest (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\next-server.js:393:17)
+              at async DevServer.handleRequestImpl (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\base-server.js:925:17)
+              at async D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\dev\next-dev-server.js:398:20
+              at async Span.traceAsyncFn (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\trace\trace.js:157:20)
+              at async DevServer.handleRequest (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\dev\next-dev-server.js:394:24)
+              at async invokeRender (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\lib\router-server.js:239:21)
+              at async handleRequest (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\lib\router-server.js:436:24)
+              at async requestHandlerImpl (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\lib\router-server.js:464:13)
+              at async Server.requestListener (D:\School_Proj\DoAnChuyenNganh\DO_AN_CHUYEN_NGANH\do-an-chuyen-nganh\node_modules\next\dist\server\lib\start-server.js:218:13)
+      "data": null,
+      "isOperational": true,
+      "isPublic": true,
+      "status": 400,
+      "name": "APIError"
+    }
+ POST /api/users/login 400 in 191ms
+ GET /dashboard 307 in 63ms
+ ○ Compiling / ...
+ ✓ Compiled / in 3.4s (3916 modules)
+ GET / 307 in 3975ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 892ms (3382 modules)
+ GET /dashboard 307 in 1610ms
+ ✓ Compiled /auth/login in 339ms (3388 modules)
+ GET /auth/login 200 in 548ms
+ ○ Compiling /admin/[[...segments]] ...
+ ✓ Compiled /admin/[[...segments]] in 1706ms (4643 modules)
+ GET /admin 200 in 3487ms
+ ○ Compiling /api/[...slug] ...
+ ✓ Compiled /api/[...slug] in 2.1s (4681 modules)
+ GET /api/users/me 200 in 2718ms
+ GET /api/payload-preferences/nav 200 in 367ms
+ GET /api/payload-preferences/nav 200 in 12ms
+ GET /admin/login 200 in 1483ms
+ GET /admin/login 200 in 1109ms
+ POST /api/users/login 200 in 1842ms
+ GET /admin 200 in 2633ms
+ POST /api/users/login 200 in 475ms
+ GET /admin 200 in 1844ms
+ GET /admin/finance/users 200 in 2280ms
+ GET /admin/finance/users/47 200 in 4509ms
+ GET /admin/finance/users 200 in 2984ms
+ GET /admin/finance/users 200 in 1800ms
+ GET /admin/finance/users 200 in 1810ms
+ GET /admin/finance/data-quality 200 in 3028ms
+ GET /admin/finance/users 200 in 3709ms
+ GET /admin/finance/users 200 in 3337ms
+ GET /admin/finance/users 200 in 3628ms
+ GET /admin/finance/users 200 in 4459ms
+ GET /admin/finance/users 200 in 1985ms
+ GET /admin/finance/users 200 in 1973ms
+ GET /admin/finance/data-quality 200 in 1734ms
+ GET /admin 200 in 3565ms
+ GET /admin/finance/users 200 in 2226ms
+[?25h

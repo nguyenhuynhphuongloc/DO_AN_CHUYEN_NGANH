@@ -14,6 +14,7 @@ import { Wallets } from './collections/Wallets'
 import { SavingsGoals } from './collections/SavingsGoals'
 import { SavingsContributions } from './collections/SavingsContributions'
 import { Notifications } from './collections/Notifications'
+import { AIChatLogs } from './collections/AIChatLogs'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -24,8 +25,28 @@ export default buildConfig({
     importMap: {
       baseDir: path.resolve(dirname),
     },
+    components: {
+      afterNavLinks: ['/components/admin/FinanceAdminNavLinks#FinanceAdminNavLinks'],
+      views: {
+        dashboard: {
+          Component: '/components/admin/FinanceAdminDashboard',
+        },
+        financeUserSection: {
+          Component: '/components/admin/FinanceAdminDashboard',
+          path: '/finance/users/:userId/:userSection',
+        },
+        financeUser: {
+          Component: '/components/admin/FinanceAdminDashboard',
+          path: '/finance/users/:userId',
+        },
+        finance: {
+          Component: '/components/admin/FinanceAdminDashboard',
+          path: '/finance/:section',
+        },
+      },
+    },
   },
-  collections: [Users, Media, Wallets, Categories, Transactions, Budgets, SavingsGoals, SavingsContributions, Notifications],
+  collections: [Users, Media, Wallets, Categories, Transactions, Budgets, SavingsGoals, SavingsContributions, Notifications, AIChatLogs],
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: {

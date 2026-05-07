@@ -7,7 +7,7 @@ export const SavingsContributions: CollectionConfig = {
   admin: {
     useAsTitle: 'description',
     defaultColumns: ['goal', 'sourceWallet', 'amount', 'date'],
-    hidden: true,
+    group: 'Finance Operations',
   },
   lockDocuments: false,
   access: {

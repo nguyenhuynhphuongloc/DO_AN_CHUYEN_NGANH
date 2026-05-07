@@ -5,7 +5,7 @@ export const SavingsGoals: CollectionConfig = {
   admin: {
     useAsTitle: 'title',
     defaultColumns: ['title', 'targetAmount', 'currentAmount', 'status'],
-    hidden: true,
+    group: 'Finance Operations',
   },
   access: {
     read: ({ req: { user } }) => {

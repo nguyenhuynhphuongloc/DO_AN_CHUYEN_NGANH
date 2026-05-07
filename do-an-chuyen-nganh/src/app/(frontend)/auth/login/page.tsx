@@ -32,6 +32,14 @@ export default function LoginPage() {
         return
       }
 
+      const data = await res.json()
+      if (data?.user?.role === 'admin') {
+        await fetch('/api/users/logout', { method: 'POST' })
+        setError('Tài khoản quản trị chỉ dùng tại /admin. Vui lòng đăng nhập ở trang quản trị.')
+        setLoading(false)
+        return
+      }
+
       router.push('/dashboard')
       router.refresh()
     } catch {

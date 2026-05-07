@@ -5,6 +5,7 @@ import { adminFieldOnly, adminOnly, adminOnlyBoolean, adminOrSelf, isAdmin } fro
 export const Users: CollectionConfig = {
   slug: 'users',
   admin: {
+    group: 'Finance Operations',
     useAsTitle: 'email',
   },
   auth: true,
@@ -40,6 +41,7 @@ export const Users: CollectionConfig = {
       type: 'select',
       defaultValue: 'user',
       required: true,
+      saveToJWT: true,
       options: [
         { label: 'Admin', value: 'admin' },
         { label: 'User', value: 'user' },
@@ -55,15 +57,15 @@ export const Users: CollectionConfig = {
     {
       name: 'name',
       type: 'text',
-      label: 'Họ và tên',
+      label: 'Ho va ten',
     },
     {
       name: 'currency',
       type: 'select',
-      label: 'Đơn vị tiền tệ',
+      label: 'Don vi tien te',
       options: [
-        { label: 'VND (₫)', value: 'VND' },
-        { label: 'USD ($)', value: 'USD' },
+        { label: 'VND', value: 'VND' },
+        { label: 'USD', value: 'USD' },
       ],
       defaultValue: 'VND',
     },
@@ -71,7 +73,7 @@ export const Users: CollectionConfig = {
       name: 'avatar',
       type: 'upload',
       relationTo: 'media',
-      label: 'Ảnh đại diện',
+      label: 'Anh dai dien',
     },
   ],
 }

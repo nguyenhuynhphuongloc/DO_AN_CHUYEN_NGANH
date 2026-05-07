@@ -76,6 +76,7 @@ export interface Config {
     'savings-goals': SavingsGoal;
     'savings-contributions': SavingsContribution;
     notifications: Notification;
+    'ai-chat-logs': AiChatLog;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -92,6 +93,7 @@ export interface Config {
     'savings-goals': SavingsGoalsSelect<false> | SavingsGoalsSelect<true>;
     'savings-contributions': SavingsContributionsSelect<false> | SavingsContributionsSelect<true>;
     notifications: NotificationsSelect<false> | NotificationsSelect<true>;
+    'ai-chat-logs': AiChatLogsSelect<false> | AiChatLogsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -314,6 +316,63 @@ export interface Notification {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ai-chat-logs".
+ */
+export interface AiChatLog {
+  id: number;
+  /**
+   * The user associated with this chat/advisor interaction.
+   */
+  user: number | User;
+  /**
+   * The type of AI interaction (advisor, chatbot, etc).
+   */
+  kind: 'advisor' | 'chatbot' | 'other';
+  /**
+   * Whether this is a user message (incoming) or AI response (outgoing).
+   */
+  direction: 'incoming' | 'outgoing';
+  /**
+   * Whether the interaction succeeded or errored.
+   */
+  status: 'success' | 'error';
+  /**
+   * Redacted or summarized text for admin visibility. Sensitive PII removed.
+   */
+  redactedText?: string | null;
+  /**
+   * Full raw text. Only visible to admins with advanced permissions.
+   */
+  rawText?: string | null;
+  /**
+   * Detected intent or category of the message (e.g., "spending_inquiry", "advice_request").
+   */
+  intent?: string | null;
+  /**
+   * If the chat/advisor interaction resulted in a transaction creation, link it here.
+   */
+  linkedTransaction?: (number | null) | Transaction;
+  /**
+   * Additional structured data (request/response tokens, model used, etc).
+   */
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * If status is error, capture the error message for debugging.
+   */
+  errorMessage?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -367,6 +426,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'notifications';
         value: number | Notification;
+      } | null)
+    | ({
+        relationTo: 'ai-chat-logs';
+        value: number | AiChatLog;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -566,6 +629,24 @@ export interface NotificationsSelect<T extends boolean = true> {
   type?: T;
   read?: T;
   link?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ai-chat-logs_select".
+ */
+export interface AiChatLogsSelect<T extends boolean = true> {
+  user?: T;
+  kind?: T;
+  direction?: T;
+  status?: T;
+  redactedText?: T;
+  rawText?: T;
+  intent?: T;
+  linkedTransaction?: T;
+  metadata?: T;
+  errorMessage?: T;
   updatedAt?: T;
   createdAt?: T;
 }
