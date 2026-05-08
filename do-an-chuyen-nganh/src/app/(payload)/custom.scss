@@ -135,10 +135,7 @@ body,
 }
 
 @media (min-width: 1024px) {
-  .template-default__wrap {
-    margin-left: 275px;
-    max-width: calc(100vw - 275px);
-  }
+  /* Layout handled by Payload's built-in nav + content structure */
 }
 
 .btn--style-primary {
@@ -882,16 +879,25 @@ option {
   min-height: 42px;
   padding: 0 12px;
   background: #ffffff !important;
-  border-color: #cbd5e1 !important;
-  border-radius: 8px;
-  color: #111827 !important;
+  border: 1px solid #cbd5e1 !important;
   border-radius: 14px;
-  min-height: 50px;
-  padding: 0 16px;
+  color: #111827 !important;
+  font-size: 15px;
 }
 
 .login__form input::placeholder {
-  color: #64748b !important;
+  color: #9ca3af !important;
+  opacity: 1;
+}
+
+/* Fix browser autofill text color */
+.login__form input:-webkit-autofill,
+.login__form input:-webkit-autofill:hover,
+.login__form input:-webkit-autofill:focus,
+.login__form input:-webkit-autofill:active {
+  -webkit-text-fill-color: #111827 !important;
+  -webkit-box-shadow: 0 0 0px 1000px #ffffff inset !important;
+  transition: background-color 5000s ease-in-out 0s;
 }
 
 .login__form .btn {
@@ -1096,7 +1102,7 @@ option {
 
 .fin-admin-navlinks__secondary {
   display: grid;
-  gap: 4px;
+  gap: 5px;
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--fin-admin-border);
@@ -1282,10 +1288,11 @@ option {
 .fin-admin-user-sidebar__list {
   display: grid;
   align-content: start;
-  gap: 4px;
+  gap: 5px;
   min-height: 0;
   overflow-y: auto;
   padding: 0 8px 10px;
+  width: 100%;
 }
 
 .fin-admin-user-sidebar-row {
@@ -1297,8 +1304,11 @@ option {
   padding: 9px;
   border: 1px solid transparent;
   border-radius: var(--fin-admin-radius);
+  background: var(--fin-admin-surface);
   color: var(--fin-admin-text);
   text-decoration: none;
+  transition: background-color 180ms ease, border-color 180ms ease;
+  overflow: hidden;
 }
 
 .fin-admin-user-sidebar-row:hover,
@@ -1312,9 +1322,12 @@ option {
 }
 
 .fin-admin-user-sidebar-row__main {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  gap: 4px;
+  max-width: 100%;
+  gap: 0px;
+  overflow: hidden;
 }
 
 .fin-admin-user-sidebar-row__main strong,
@@ -1337,6 +1350,8 @@ option {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .fin-admin-workspace {
