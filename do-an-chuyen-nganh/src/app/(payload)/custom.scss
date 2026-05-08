@@ -784,7 +784,7 @@ option {
   min-height: 100vh;
   overflow-x: clip;
   background:
-    linear-gradient(180deg, #ffffff 0%, #f6f8fb 100%),
+    linear-gradient(180deg, #eef4ff 0%, #f6f8fb 100%),
     #f6f8fb !important;
   color: #111827 !important;
 }
@@ -802,9 +802,9 @@ option {
   padding: 28px;
   overflow: hidden;
   background: #ffffff;
-  border: 1px solid var(--fin-admin-border);
-  border-radius: 12px;
-  box-shadow: var(--fin-admin-shadow-strong);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 24px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.12);
 }
 
 .login {
@@ -820,12 +820,14 @@ option {
 
 .login__brand .graphic-logo,
 .login__brand .graphic-icon {
-  color: #000000 !important;
+  width: 64px;
+  height: 64px;
+  color: var(--fin-admin-primary) !important;
 }
 
 .login__brand .graphic-logo path,
 .login__brand .graphic-icon path {
-  fill: #000000 !important;
+  fill: var(--fin-admin-primary) !important;
 }
 
 .login__form,
@@ -835,7 +837,12 @@ option {
 .login__form .field-description,
 .login__form .field-error,
 .login__form a {
-  color: #111827 !important;
+  color: #0f172a !important;
+}
+
+.login__form {
+  display: grid;
+  gap: 18px;
 }
 
 .login__form {
@@ -878,6 +885,9 @@ option {
   border-color: #cbd5e1 !important;
   border-radius: 8px;
   color: #111827 !important;
+  border-radius: 14px;
+  min-height: 50px;
+  padding: 0 16px;
 }
 
 .login__form input::placeholder {
@@ -888,6 +898,23 @@ option {
   min-height: 42px;
   border-radius: 8px;
   color: #ffffff !important;
+  background: linear-gradient(135deg, var(--fin-admin-primary), var(--fin-admin-primary-dark)) !important;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.18);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.login__form .btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 28px rgba(37, 99, 235, 0.22);
+}
+
+.login__form .field-input {
+  border-radius: 14px;
+}
+
+.login__form .btn:focus-visible,
+.login__form input:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.24) !important;
 }
 
 .login__form .btn *,
