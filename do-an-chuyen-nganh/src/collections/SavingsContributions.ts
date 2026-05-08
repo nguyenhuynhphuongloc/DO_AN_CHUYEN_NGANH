@@ -75,6 +75,19 @@ export const SavingsContributions: CollectionConfig = {
       },
     },
     {
+      name: 'movementType',
+      type: 'select',
+      defaultValue: 'contribution',
+      options: [
+        { label: 'Nạp tiền', value: 'contribution' },
+        { label: 'Rút tiền', value: 'withdrawal' },
+      ],
+      label: 'Loại giao dịch',
+      admin: {
+        description: 'Phân biệt nạp tiền và rút tiền khỏi mục tiêu.',
+      },
+    },
+    {
       name: 'description',
       type: 'text',
       label: 'Mo ta',

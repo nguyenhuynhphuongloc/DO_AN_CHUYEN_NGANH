@@ -4,7 +4,7 @@ import { getPayload } from 'payload'
 
 import config from '@payload-config'
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000'
+const AI_CHATBOT_URL = process.env.AI_CHATBOT_SERVICE_URL || process.env.AI_SERVICE_URL || 'http://localhost:8000'
 const ALLOWED_AI_PROXY_PATHS = new Set(['nlp/parse'])
 
 export async function POST(
@@ -24,7 +24,7 @@ export async function POST(
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const url = `${AI_SERVICE_URL}/api/${path}`
+  const url = `${AI_CHATBOT_URL}/api/${path}`
 
   try {
     const body = await request.blob()
@@ -36,7 +36,18 @@ export async function POST(
       body: body,
     })
 
-    const data = await response.json()
+    const rawBody = await response.text()
+    let data: unknown
+    try {
+      data = rawBody ? JSON.parse(rawBody) : {}
+    } catch {
+      data = {
+        error: response.ok
+          ? 'AI Service returned an invalid response'
+          : `AI Service returned ${response.status}: ${rawBody || response.statusText}`,
+      }
+    }
+
     return Response.json(data, { status: response.status })
   } catch (error) {
     console.error('Proxy error:', error)

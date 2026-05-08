@@ -219,9 +219,16 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
         return
       }
 
+      const savedTransaction = data.transaction
+      const transactionDate = savedTransaction?.date ? new Date(savedTransaction.date) : new Date()
+      const year = transactionDate.getFullYear()
+      const month = transactionDate.getMonth() + 1
+      const transactionMonth = `${year}-${String(month).padStart(2, '0')}`
+      const successLink = `/transactions?month=${transactionMonth}&source=receipt_ai`
+
       const message = data.message || 'Lưu giao dịch thành công.'
       setSaveSuccess(message)
-      showNotification('success', 'Lưu giao dịch thành công', message)
+      showNotification('success', 'Lưu giao dịch thành công', `${message}\n\nNgày giao dịch: ${transactionDate.toLocaleDateString('vi-VN')}\nXem giao dịch: ${successLink}`)
       resetScanState({ preserveSuccess: true })
     } catch (error) {
       console.error(error)
@@ -255,6 +262,8 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
             icon: <TriangleAlert size={24} color="var(--danger)" />,
           }
 
+  const isSuccessWithLink = notification?.type === 'success' && notification.message.includes('/transactions')
+
   return (
     <>
       <div className="page-header">
@@ -269,7 +278,7 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
             className="modal"
             onClick={(event) => event.stopPropagation()}
             style={{
-              maxWidth: '420px',
+              maxWidth: '480px',
               overflow: 'hidden',
               borderTop: `4px solid ${notificationTone.accent}`,
             }}
@@ -302,21 +311,33 @@ export default function ScanClient({ user, categories }: { user: UserSummary; ca
                 <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px', color: notificationTone.color }}>
                   {notification.title}
                 </h2>
-                <p style={{ lineHeight: 1.55, color: 'var(--text-secondary)', fontSize: '14px' }}>
+                <p style={{ lineHeight: 1.55, color: 'var(--text-secondary)', fontSize: '14px', whiteSpace: 'pre-line' }}>
                   {notification.message}
                 </p>
+                {isSuccessWithLink && (
+                  <div style={{ marginTop: '12px' }}>
+                    <a
+                      href="/transactions"
+                      className="btn btn-primary"
+                      style={{ fontSize: '14px', padding: '8px 16px' }}
+                      onClick={() => setNotification(null)}
+                    >
+                      Xem danh sách giao dịch
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
             <div
               className="modal-footer"
               style={{
-                justifyContent: 'flex-end',
+                justifyContent: isSuccessWithLink ? 'flex-start' : 'flex-end',
                 padding: '10px 22px 22px',
                 background: '#ffffff',
               }}
             >
               <button className="btn btn-primary" onClick={() => setNotification(null)}>
-                Quay lại
+                {isSuccessWithLink ? 'Quay lại' : 'Đóng'}
               </button>
             </div>
           </div>

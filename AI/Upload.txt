@@ -1,9 +1,0 @@
-Upload
-→ Save file
-→ Preprocess image
-→ PaddleOCR (đọc text)
-→ Save OCR result
-→ Extract (regex)
-→ Save structured data
-→ Review UI
-→ Confirm → Finance Service

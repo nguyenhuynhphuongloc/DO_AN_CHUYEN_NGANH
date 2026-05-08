@@ -296,6 +296,10 @@ export interface SavingsContribution {
   sourceWallet: number | Wallet;
   amount: number;
   date: string;
+  /**
+   * Phân biệt nạp tiền và rút tiền khỏi mục tiêu.
+   */
+  movementType?: ('contribution' | 'withdrawal') | null;
   description?: string | null;
   updatedAt: string;
   createdAt: string;
@@ -615,6 +619,7 @@ export interface SavingsContributionsSelect<T extends boolean = true> {
   sourceWallet?: T;
   amount?: T;
   date?: T;
+  movementType?: T;
   description?: T;
   updatedAt?: T;
   createdAt?: T;

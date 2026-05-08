@@ -55,6 +55,16 @@ export const enum_notifications_type = pgEnum('enum_notifications_type', [
   'completion',
   'system',
 ])
+export const enum_ai_chat_logs_kind = pgEnum('enum_ai_chat_logs_kind', [
+  'advisor',
+  'chatbot',
+  'other',
+])
+export const enum_ai_chat_logs_direction = pgEnum('enum_ai_chat_logs_direction', [
+  'incoming',
+  'outgoing',
+])
+export const enum_ai_chat_logs_status = pgEnum('enum_ai_chat_logs_status', ['success', 'error'])
 
 export const users_sessions = pgTable(
   'users_sessions',
@@ -421,6 +431,41 @@ export const notifications = pgTable(
   ],
 )
 
+export const ai_chat_logs = pgTable(
+  'ai_chat_logs',
+  {
+    id: serial('id').primaryKey(),
+    user: integer('user_id')
+      .notNull()
+      .references(() => users.id, {
+        onDelete: 'set null',
+      }),
+    kind: enum_ai_chat_logs_kind('kind').notNull(),
+    direction: enum_ai_chat_logs_direction('direction').notNull(),
+    status: enum_ai_chat_logs_status('status').notNull(),
+    redactedText: varchar('redacted_text'),
+    rawText: varchar('raw_text'),
+    intent: varchar('intent'),
+    linkedTransaction: integer('linked_transaction_id').references(() => transactions.id, {
+      onDelete: 'set null',
+    }),
+    metadata: jsonb('metadata'),
+    errorMessage: varchar('error_message'),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => [
+    index('ai_chat_logs_user_idx').on(columns.user),
+    index('ai_chat_logs_linked_transaction_idx').on(columns.linkedTransaction),
+    index('ai_chat_logs_updated_at_idx').on(columns.updatedAt),
+    index('ai_chat_logs_created_at_idx').on(columns.createdAt),
+  ],
+)
+
 export const payload_kv = pgTable(
   'payload_kv',
   {
@@ -465,6 +510,7 @@ export const payload_locked_documents_rels = pgTable(
     budgetsID: integer('budgets_id'),
     'savings-goalsID': integer('savings_goals_id'),
     notificationsID: integer('notifications_id'),
+    'ai-chat-logsID': integer('ai_chat_logs_id'),
   },
   (columns) => [
     index('payload_locked_documents_rels_order_idx').on(columns.order),
@@ -478,6 +524,7 @@ export const payload_locked_documents_rels = pgTable(
     index('payload_locked_documents_rels_budgets_id_idx').on(columns.budgetsID),
     index('payload_locked_documents_rels_savings_goals_id_idx').on(columns['savings-goalsID']),
     index('payload_locked_documents_rels_notifications_id_idx').on(columns.notificationsID),
+    index('payload_locked_documents_rels_ai_chat_logs_id_idx').on(columns['ai-chat-logsID']),
     foreignKey({
       columns: [columns['parent']],
       foreignColumns: [payload_locked_documents.id],
@@ -522,6 +569,11 @@ export const payload_locked_documents_rels = pgTable(
       columns: [columns['notificationsID']],
       foreignColumns: [notifications.id],
       name: 'payload_locked_documents_rels_notifications_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [columns['ai-chat-logsID']],
+      foreignColumns: [ai_chat_logs.id],
+      name: 'payload_locked_documents_rels_ai_chat_logs_fk',
     }).onDelete('cascade'),
   ],
 )
@@ -714,6 +766,18 @@ export const relations_notifications = relations(notifications, ({ one }) => ({
     relationName: 'recipient',
   }),
 }))
+export const relations_ai_chat_logs = relations(ai_chat_logs, ({ one }) => ({
+  user: one(users, {
+    fields: [ai_chat_logs.user],
+    references: [users.id],
+    relationName: 'user',
+  }),
+  linkedTransaction: one(transactions, {
+    fields: [ai_chat_logs.linkedTransaction],
+    references: [transactions.id],
+    relationName: 'linkedTransaction',
+  }),
+}))
 export const relations_payload_kv = relations(payload_kv, () => ({}))
 export const relations_payload_locked_documents_rels = relations(
   payload_locked_documents_rels,
@@ -763,6 +827,11 @@ export const relations_payload_locked_documents_rels = relations(
       references: [notifications.id],
       relationName: 'notifications',
     }),
+    'ai-chat-logsID': one(ai_chat_logs, {
+      fields: [payload_locked_documents_rels['ai-chat-logsID']],
+      references: [ai_chat_logs.id],
+      relationName: 'ai-chat-logs',
+    }),
   }),
 )
 export const relations_payload_locked_documents = relations(
@@ -805,6 +874,9 @@ type DatabaseSchema = {
   enum_budgets_period: typeof enum_budgets_period
   enum_savings_goals_status: typeof enum_savings_goals_status
   enum_notifications_type: typeof enum_notifications_type
+  enum_ai_chat_logs_kind: typeof enum_ai_chat_logs_kind
+  enum_ai_chat_logs_direction: typeof enum_ai_chat_logs_direction
+  enum_ai_chat_logs_status: typeof enum_ai_chat_logs_status
   users_sessions: typeof users_sessions
   users: typeof users
   media: typeof media
@@ -816,6 +888,7 @@ type DatabaseSchema = {
   savings_goals_rels: typeof savings_goals_rels
   savings_contributions: typeof savings_contributions
   notifications: typeof notifications
+  ai_chat_logs: typeof ai_chat_logs
   payload_kv: typeof payload_kv
   payload_locked_documents: typeof payload_locked_documents
   payload_locked_documents_rels: typeof payload_locked_documents_rels
@@ -833,6 +906,7 @@ type DatabaseSchema = {
   relations_savings_goals: typeof relations_savings_goals
   relations_savings_contributions: typeof relations_savings_contributions
   relations_notifications: typeof relations_notifications
+  relations_ai_chat_logs: typeof relations_ai_chat_logs
   relations_payload_kv: typeof relations_payload_kv
   relations_payload_locked_documents_rels: typeof relations_payload_locked_documents_rels
   relations_payload_locked_documents: typeof relations_payload_locked_documents

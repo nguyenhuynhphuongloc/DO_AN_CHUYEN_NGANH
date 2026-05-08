@@ -10,15 +10,18 @@ services:
       - .env
     environment:
       NODE_ENV: development
-      AI_SERVICE_URL: http://receipt-ai:8000
       NEXT_TELEMETRY_DISABLED: "1"
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
+      AI_CHATBOT_SERVICE_URL: http://ai-chatbot:8000
+      AI_SERVICE_URL: http://receipt-ai:8001
     command: npm run dev
     ports:
       - '3000:3000'
     depends_on:
       receipt-ai:
+        condition: service_healthy
+      ai-chatbot:
         condition: service_healthy
     volumes:
       - .:/app
@@ -49,13 +52,16 @@ services:
       - .env
     environment:
       NODE_ENV: production
-      AI_SERVICE_URL: http://receipt-ai:8000
       NEXT_TELEMETRY_DISABLED: "1"
+      AI_CHATBOT_SERVICE_URL: http://ai-chatbot:8000
+      AI_SERVICE_URL: http://receipt-ai:8001
     command: sh -c "npm run build && npm run start"
     ports:
       - '3001:3000'
     depends_on:
       receipt-ai:
+        condition: service_healthy
+      ai-chatbot:
         condition: service_healthy
     volumes:
       - .:/app
@@ -80,11 +86,29 @@ services:
     container_name: do-an-chuyen-nganh-receipt-ai
     env_file:
       - .env
-    command: uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app:app --host 0.0.0.0 --port 8001
+    ports:
+      - '8001:8001'
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/health').status == 200 else 1)\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  ai-chatbot:
+    build:
+      context: .
+      dockerfile: services/ai-chatbot/Dockerfile
+    container_name: do-an-chuyen-nganh-ai-chatbot
+    env_file:
+      - .env
     ports:
       - '8000:8000'
-    volumes:
-      - ./services/receipt-ai:/app
     healthcheck:
       test:
         [
@@ -94,7 +118,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
-      start_period: 20s
+      start_period: 120s
 
 volumes:
   web-node-modules:

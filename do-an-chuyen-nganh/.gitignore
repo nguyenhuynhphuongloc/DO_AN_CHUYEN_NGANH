@@ -46,3 +46,16 @@ node_modules/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Archive (non-system, read-only, reference docs)
+_archive/
+
+# IDE / AI tooling (non-system)
+.claude/
+.vscode/
+
+# Test / temp data (non-system)
+image/
+img/
+test_bill/
+tmp/

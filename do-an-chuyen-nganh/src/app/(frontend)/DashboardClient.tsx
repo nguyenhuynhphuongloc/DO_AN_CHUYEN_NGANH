@@ -68,6 +68,8 @@ export default function DashboardClient({ stats }: DashboardClientProps) {
     stats.walletSummary.defaultWallet?.id ? String(stats.walletSummary.defaultWallet.id) : '',
   )
   const [depositAmount, setDepositAmount] = useState('')
+  const [depositSource, setDepositSource] = useState<'external_bank' | 'savings_wallet'>('external_bank')
+  const [depositSavingsSourceId, setDepositSavingsSourceId] = useState('')
   const [depositError, setDepositError] = useState('')
   const [depositLoading, setDepositLoading] = useState(false)
   const primaryWallet = stats.walletSummary.defaultWallet ?? stats.walletSummary.spendingWallets[0] ?? null
@@ -81,6 +83,34 @@ export default function DashboardClient({ stats }: DashboardClientProps) {
     event.preventDefault()
     setDepositError('')
     setDepositLoading(true)
+
+    if (depositSource === 'savings_wallet') {
+      const response = await fetch('/api/wallets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'transfer',
+          sourceWallet: depositSavingsSourceId,
+          destinationWallet: depositWalletId,
+          amount: parseMoneyInput(depositAmount),
+        }),
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        setDepositError(data.error || 'Không thể chuyển tiền.')
+        setDepositLoading(false)
+        return
+      }
+
+      setShowDepositModal(false)
+      setDepositAmount('')
+      setDepositSource('external_bank')
+      setDepositSavingsSourceId('')
+      setDepositLoading(false)
+      router.refresh()
+      return
+    }
 
     const response = await fetch('/api/wallets', {
       method: 'POST',
@@ -101,8 +131,18 @@ export default function DashboardClient({ stats }: DashboardClientProps) {
 
     setShowDepositModal(false)
     setDepositAmount('')
+    setDepositSource('external_bank')
+    setDepositSavingsSourceId('')
     setDepositLoading(false)
     router.refresh()
+  }
+
+  const openDepositModal = () => {
+    setDepositWalletId(stats.walletSummary.defaultWallet?.id ? String(stats.walletSummary.defaultWallet.id) : '')
+    setDepositSource('external_bank')
+    setDepositSavingsSourceId('')
+    setDepositError('')
+    setShowDepositModal(true)
   }
 
   return (
@@ -162,7 +202,7 @@ export default function DashboardClient({ stats }: DashboardClientProps) {
       </div>
 
       <div className="dashboard-actions card">
-        <button className="btn btn-primary" onClick={() => setShowDepositModal(true)}>
+        <button className="btn btn-primary" onClick={openDepositModal}>
           <Plus size={18} /> Nạp tiền
         </button>
         <a className="btn btn-secondary" href="/transactions">
@@ -359,6 +399,54 @@ export default function DashboardClient({ stats }: DashboardClientProps) {
                   </select>
                 </div>
                 <div className="form-group">
+                  <label className="form-label">Nguồn tiền</label>
+                  <div className="radio-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="depositSource"
+                        value="external_bank"
+                        checked={depositSource === 'external_bank'}
+                        onChange={() => setDepositSource('external_bank')}
+                      />
+                      <span>Ngân hàng ngoài (nạp tiền mặt / chuyển khoản)</span>
+                    </label>
+                    {stats.walletSummary.savingsWallets.length > 0 && (
+                      <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="depositSource"
+                          value="savings_wallet"
+                          checked={depositSource === 'savings_wallet'}
+                          onChange={() => setDepositSource('savings_wallet')}
+                        />
+                        <span>Chuyển từ ví tiết kiệm</span>
+                      </label>
+                    )}
+                  </div>
+                </div>
+                {depositSource === 'savings_wallet' && (
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="deposit-savings-source">
+                      Ví tiết kiệm nguồn
+                    </label>
+                    <select
+                      id="deposit-savings-source"
+                      className="form-select"
+                      value={depositSavingsSourceId}
+                      onChange={(event) => setDepositSavingsSourceId(event.target.value)}
+                      required={depositSource === 'savings_wallet'}
+                    >
+                      <option value="">Chọn ví tiết kiệm</option>
+                      {stats.walletSummary.savingsWallets.map((wallet) => (
+                        <option key={wallet.id} value={wallet.id}>
+                          {wallet.name} - {formatCurrency(wallet.balance, currency)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="form-group">
                   <label className="form-label" htmlFor="deposit-amount">
                     Số tiền nạp
                   </label>
@@ -377,8 +465,8 @@ export default function DashboardClient({ stats }: DashboardClientProps) {
                 <button type="button" className="btn btn-secondary" onClick={() => setShowDepositModal(false)}>
                   Hủy
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={depositLoading}>
-                  {depositLoading ? 'Đang nạp...' : 'Nạp tiền'}
+                <button type="submit" className="btn btn-primary" disabled={depositLoading || (depositSource === 'savings_wallet' && !depositSavingsSourceId)}>
+                  {depositLoading ? 'Đang xử lý...' : 'Nạp tiền'}
                 </button>
               </div>
             </form>

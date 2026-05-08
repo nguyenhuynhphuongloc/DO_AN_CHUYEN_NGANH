@@ -7,10 +7,10 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from receipt_ai.advisor_service import get_financial_advice
-from receipt_ai.nlp_service import extract_transaction_info
-from receipt_ai.ocr_service import process_receipt_image
-from receipt_ai.receipt_intelligence import ReceiptOcrRequestMetadata
+from receipt_core.advisor_service import get_financial_advice
+from receipt_core.nlp_service import extract_transaction_info
+from receipt_core.ocr_service import process_receipt_image
+from receipt_core.receipt_intelligence import ReceiptOcrRequestMetadata
 
 app = FastAPI(title="FinTrack Embedded AI Service")
 

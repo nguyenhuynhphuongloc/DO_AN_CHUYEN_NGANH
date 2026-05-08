@@ -6,7 +6,7 @@ import { buildFinanceAdvisorContext, getFinanceStats } from '@/lib/finance-stats
 import { createAiAuditLog, summarizeAiText } from '@/lib/ai-chat-audit'
 import config from '@payload-config'
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000'
+const AI_CHATBOT_URL = process.env.AI_CHATBOT_SERVICE_URL || process.env.AI_SERVICE_URL || 'http://localhost:8000'
 
 export async function POST(request: NextRequest) {
   const headers = await getHeaders()
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       intent: 'user_query',
     })
 
-    const response = await fetch(`${AI_SERVICE_URL}/api/ai/advisor`, {
+    const response = await fetch(`${AI_CHATBOT_URL}/api/ai/advisor`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

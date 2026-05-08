@@ -5,7 +5,7 @@ import config from '@payload-config'
 
 import { buildAllowedExpenseCategories, type RawCategoryCandidate, type ReceiptOcrRequestMetadata } from '@/lib/receipt-ocr'
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000'
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8001'
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp'])
 const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp'])

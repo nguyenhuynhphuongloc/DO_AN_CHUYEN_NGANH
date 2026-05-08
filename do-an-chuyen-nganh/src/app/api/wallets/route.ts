@@ -3,7 +3,8 @@ import { getPayload } from 'payload'
 
 import config from '@payload-config'
 import { applyWalletBalanceDelta } from '@/lib/transaction-balance'
-import { assertOwnedWallet, getPrimaryWallet } from '@/lib/wallets'
+import { assertOwnedWallet, getPrimaryWallet, listUserWallets } from '@/lib/wallets'
+import { transferBetweenWallets } from '@/lib/wallet-balance-service'
 
 const toNumber = (value: unknown) => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0
@@ -33,9 +34,40 @@ export async function POST(request: Request) {
       }
 
       const wallet = await assertOwnedWallet(payload, user, walletId)
+
       await applyWalletBalanceDelta(payload, wallet.id, amount, { user })
 
-      return Response.json({ ok: true })
+      return Response.json({ ok: true, source: 'external_bank', walletId: wallet.id, amount })
+    }
+
+    if (action === 'transfer') {
+      const sourceWalletId = Number(body.sourceWallet || body.sourceWalletId)
+      const destinationWalletId = Number(body.destinationWallet || body.destinationWalletId)
+      const amount = toNumber(body.amount)
+
+      if (!sourceWalletId || !destinationWalletId || amount <= 0) {
+        return Response.json({ error: 'Ví nguồn, ví đích và số tiền là bắt buộc.' }, { status: 400 })
+      }
+
+      const result = await transferBetweenWallets({
+        payload,
+        user,
+        sourceWalletId,
+        destinationWalletId,
+        amount,
+      })
+
+      return Response.json({
+        ok: true,
+        sourceWalletId: result.sourceWallet.id,
+        destinationWalletId: result.destinationWallet.id,
+        amount,
+      })
+    }
+
+    if (action === 'list-wallets') {
+      const wallets = await listUserWallets(payload, user.id)
+      return Response.json({ wallets })
     }
 
     const primaryWallet = await getPrimaryWallet(payload, user.id)

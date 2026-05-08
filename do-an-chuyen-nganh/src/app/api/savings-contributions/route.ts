@@ -2,7 +2,7 @@ import { headers as getHeaders } from 'next/headers.js'
 import { getPayload } from 'payload'
 
 import config from '@payload-config'
-import { createSavingsGoalContribution } from '@/lib/wallet-balance-service'
+import { createSavingsGoalContribution, createSavingsGoalWithdrawal } from '@/lib/wallet-balance-service'
 
 const toNumber = (value: unknown) => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0
@@ -21,26 +21,54 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const amount = toNumber(body.amount)
-  const goalId = Number(body.goal || body.goalId)
-  const sourceWalletId = Number(body.sourceWallet || body.sourceWalletId)
-
-  if (!goalId || !sourceWalletId || amount <= 0) {
-    return Response.json({ error: 'Mục tiêu, ví nạp và số tiền là bắt buộc.' }, { status: 400 })
-  }
+  const action = body.action || 'contribute'
 
   try {
-    const contribution = await createSavingsGoalContribution({
-      payload,
-      user,
-      goalId,
-      sourceWalletId,
-      amount,
-      date: body.date || new Date().toISOString(),
-      description: body.description,
-    })
+    if (action === 'contribute') {
+      const amount = toNumber(body.amount)
+      const goalId = Number(body.goal || body.goalId)
+      const sourceWalletId = Number(body.sourceWallet || body.sourceWalletId)
 
-    return Response.json({ contribution })
+      if (!goalId || !sourceWalletId || amount <= 0) {
+        return Response.json({ error: 'Mục tiêu, ví nạp và số tiền là bắt buộc.' }, { status: 400 })
+      }
+
+      const contribution = await createSavingsGoalContribution({
+        payload,
+        user,
+        goalId,
+        sourceWalletId,
+        amount,
+        date: body.date || new Date().toISOString(),
+        description: body.description,
+      })
+
+      return Response.json({ contribution })
+    }
+
+    if (action === 'withdraw') {
+      const amount = toNumber(body.amount)
+      const goalId = Number(body.goal || body.goalId)
+      const destinationWalletId = Number(body.destinationWallet || body.destinationWalletId)
+
+      if (!goalId || !destinationWalletId || amount <= 0) {
+        return Response.json({ error: 'Mục tiêu, ví nhận tiền và số tiền là bắt buộc.' }, { status: 400 })
+      }
+
+      const result = await createSavingsGoalWithdrawal({
+        payload,
+        user,
+        goalId,
+        destinationWalletId,
+        amount,
+        date: body.date || new Date().toISOString(),
+        description: body.description,
+      })
+
+      return Response.json(result)
+    }
+
+    return Response.json({ error: 'Hành động không hợp lệ.' }, { status: 400 })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Không thể nạp vào mục tiêu tiết kiệm.'
     return Response.json({ error: message }, { status: 400 })

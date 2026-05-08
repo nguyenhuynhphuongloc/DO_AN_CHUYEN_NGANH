@@ -568,6 +568,7 @@ async function UserWorkspace({
 
   return (
     <main className="fin-admin-shell fin-admin-shell--workspace">
+      <ModuleNav active="users" />
       <div className="fin-admin-two-pane">
         <UserListSidebar activeSection={section} activeUserId={userId} users={users.docs} />
         <section className="fin-admin-workspace">

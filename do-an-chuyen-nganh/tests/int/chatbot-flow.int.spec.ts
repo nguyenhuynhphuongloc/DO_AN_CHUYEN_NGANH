@@ -32,8 +32,18 @@ describe('chatbot flow API safeguards', () => {
         wallet: 2,
         sourceType: 'chatbot',
       }),
+      find: vi
+        .fn()
+        .mockResolvedValueOnce({
+          docs: [{ id: 2, user: 5, walletType: 'main', balance: 500000, isDefault: true }],
+        })
+        .mockResolvedValueOnce({
+          docs: [],
+        }),
       findByID: vi.fn().mockResolvedValue({
         id: 2,
+        user: 5,
+        walletType: 'main',
         balance: 500000,
       }),
       update: vi.fn().mockResolvedValue({ id: 2, balance: 450000 }),

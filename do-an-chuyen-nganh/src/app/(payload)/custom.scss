@@ -31,6 +31,7 @@
   --fin-admin-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
   --fin-admin-shadow-strong: 0 18px 45px rgba(15, 23, 42, 0.1);
   --fin-admin-radius: 8px;
+  --fin-admin-focus: 0 0 0 3px rgba(37, 99, 235, 0.18);
 }
 
 html,
@@ -60,6 +61,77 @@ body,
   position: relative;
   z-index: 1;
   background: transparent !important;
+}
+
+.template-default *,
+.template-default *::before,
+.template-default *::after {
+  box-sizing: border-box;
+}
+
+.template-default {
+  --theme-border-color: var(--fin-admin-border);
+  --theme-baseline: 24px;
+}
+
+.template-default .app-header {
+  border-bottom: 1px solid var(--fin-admin-border) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(10px);
+}
+
+.template-default .doc-header,
+.template-default .collection-list,
+.template-default .list-controls,
+.template-default .render-fields,
+.template-default .document-fields,
+.template-default .dashboard__wrap,
+.template-default .card,
+.template-default .field-type,
+.template-default .upload,
+.template-default .drawer__content,
+.template-default .where-builder,
+.template-default .tabs-field,
+.template-default .array-field,
+.template-default .blocks-field {
+  border-color: var(--fin-admin-border) !important;
+  border-radius: var(--fin-admin-radius) !important;
+}
+
+.template-default .collection-list,
+.template-default .list-controls,
+.template-default .render-fields,
+.template-default .document-fields,
+.template-default .dashboard__wrap,
+.template-default .card,
+.template-default .drawer__content,
+.template-default .where-builder,
+.template-default .array-field,
+.template-default .blocks-field {
+  background: var(--fin-admin-surface) !important;
+  box-shadow: var(--fin-admin-shadow);
+}
+
+.template-default .field-type {
+  min-width: 0;
+}
+
+.template-default .table,
+.template-default table {
+  border-color: var(--fin-admin-border) !important;
+}
+
+.template-default table th,
+.template-default table td {
+  max-width: 320px;
+  overflow-wrap: anywhere;
+}
+
+.template-default .pill,
+.template-default .btn,
+.template-default button,
+.template-default a {
+  max-width: 100%;
 }
 
 @media (min-width: 1024px) {
@@ -95,9 +167,18 @@ input,
 select,
 textarea,
 .payload-rich-text {
+  box-sizing: border-box;
+  max-width: 100%;
   background: var(--fin-admin-surface) !important;
   border-color: var(--fin-admin-border-strong) !important;
   color: var(--fin-admin-text) !important;
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='file']),
+select,
+textarea,
+.payload-rich-text {
+  width: 100%;
 }
 
 input::placeholder,
@@ -110,7 +191,7 @@ input:focus,
 select:focus,
 textarea:focus {
   border-color: var(--fin-admin-primary) !important;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16) !important;
+  box-shadow: var(--fin-admin-focus) !important;
   outline: none !important;
 }
 
@@ -700,20 +781,40 @@ option {
 }
 
 .template-minimal {
+  min-height: 100vh;
+  overflow-x: clip;
   background:
     linear-gradient(180deg, #ffffff 0%, #f6f8fb 100%),
     #f6f8fb !important;
   color: #111827 !important;
 }
 
+.template-minimal *,
+.template-minimal *::before,
+.template-minimal *::after {
+  box-sizing: border-box;
+}
+
 .template-minimal__wrap {
+  width: min(100% - 32px, 440px);
+  max-width: 440px;
+  margin-inline: auto;
+  padding: 28px;
+  overflow: hidden;
   background: #ffffff;
   border: 1px solid var(--fin-admin-border);
   border-radius: 12px;
   box-shadow: var(--fin-admin-shadow-strong);
 }
 
+.login {
+  width: 100%;
+  min-width: 0;
+}
+
 .login__brand {
+  max-width: 100%;
+  margin-bottom: 18px;
   color: #000000 !important;
 }
 
@@ -730,8 +831,37 @@ option {
 .login__form,
 .login__form label,
 .login__form .field-label,
+.login__form .label,
+.login__form .field-description,
+.login__form .field-error,
 .login__form a {
   color: #111827 !important;
+}
+
+.login__form {
+  display: grid;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  gap: 14px;
+}
+
+.login__form .field-type,
+.login__form .form-submit,
+.login__form .btn {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.login__form label,
+.login__form .field-label,
+.login__form .label {
+  display: block;
+  margin-bottom: 6px;
+  color: #1f2937 !important;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .login__form a {
@@ -739,8 +869,14 @@ option {
 }
 
 .login__form input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 12px;
   background: #ffffff !important;
   border-color: #cbd5e1 !important;
+  border-radius: 8px;
   color: #111827 !important;
 }
 
@@ -749,7 +885,20 @@ option {
 }
 
 .login__form .btn {
+  min-height: 42px;
+  border-radius: 8px;
   color: #ffffff !important;
+}
+
+.login__form .btn *,
+.login__form button * {
+  color: inherit !important;
+}
+
+.login__form .error,
+.login__form .field-error,
+.login__form .form-error {
+  color: #b91c1c !important;
 }
 
 @media (max-width: 900px) {
