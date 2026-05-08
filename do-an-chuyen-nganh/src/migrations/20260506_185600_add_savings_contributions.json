@@ -2114,6 +2114,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": false
+        },
+        "ai_chat_logs_id": {
+          "name": "ai_chat_logs_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -2281,6 +2287,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "payload_locked_documents_rels_ai_chat_logs_id_idx": {
+          "name": "payload_locked_documents_rels_ai_chat_logs_id_idx",
+          "columns": [
+            {
+              "expression": "ai_chat_logs_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2394,6 +2415,19 @@
           "tableTo": "notifications",
           "columnsFrom": [
             "notifications_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "payload_locked_documents_rels_ai_chat_logs_fk": {
+          "name": "payload_locked_documents_rels_ai_chat_logs_fk",
+          "tableFrom": "payload_locked_documents_rels",
+          "tableTo": "ai_chat_logs",
+          "columnsFrom": [
+            "ai_chat_logs_id"
           ],
           "columnsTo": [
             "id"

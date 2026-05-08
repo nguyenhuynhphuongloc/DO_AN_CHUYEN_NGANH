@@ -82,8 +82,7 @@ export const AIChatLogs: CollectionConfig = {
       name: 'rawText',
       type: 'textarea',
       admin: {
-        condition: ({ siblingData }) => siblingData?.role === 'admin',
-        description: 'Full raw text. Only visible to admins with advanced permissions.',
+        description: 'Full raw text. Only visible to admins.',
       },
     },
     {

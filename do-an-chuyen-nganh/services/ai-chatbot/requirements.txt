@@ -5,14 +5,13 @@ pydantic
 
 # === DATA / UTIL ===
 python-dotenv
+httpx
+unidecode
 
-# === AI / NLP ===
-torch
-transformers
-accelerate
-bitsandbytes
-underthesea
-sentence-transformers
+# === AI / NLP (via Groq API - no local models needed) ===
+# Removed: torch, transformers, accelerate, bitsandbytes
+# Removed: sentence-transformers (embedding fallback still available if needed)
+# Removed: underthesea
 
 # === EVALUATION / PLOTTING ===
 matplotlib

@@ -875,7 +875,7 @@ async function UserWorkspaceContent({
             {
               label: 'Loại',
               name: 'kind',
-              options: ['advisor', 'receipt', 'system'].map((value) => ({ label: value, value })),
+              options: ['advisor', 'chatbot', 'other'].map((value) => ({ label: value, value })),
               placeholder: 'Tất cả',
               type: 'select',
             },

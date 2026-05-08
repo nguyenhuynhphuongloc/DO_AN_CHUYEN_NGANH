@@ -38,5 +38,9 @@ env/
 .DS_Store
 Thumbs.db
 
+# Environment variables (contains secrets)
+.env
+.env.local
+
 # Models cache (downloaded from HuggingFace)
 models/

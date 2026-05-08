@@ -1,4 +1,7 @@
 # syntax=docker/dockerfile:1
+# Lightweight Dockerfile for FinTrack AI Chatbot using Groq API
+# No local ML models needed - all inference via Groq cloud API
+
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -11,38 +14,16 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential curl git wget libsndfile1 \
+    curl \
   && rm -rf /var/lib/apt/lists/* \
   && apt-get clean
 
 # Copy requirements first for better caching
 COPY services/ai-chatbot/requirements.txt .
 
-# Install Python dependencies in layers
+# Install Python dependencies
 RUN pip install --no-cache-dir --timeout=300 --retries=5 \
-    fastapi uvicorn[standard] pydantic python-dotenv httpx python-multipart
-
-# Install PyTorch CPU (avoid CUDA)
-RUN pip install --no-cache-dir --timeout=600 --retries=5 \
-    torch==2.1.0 --index-url https://download.pytorch.org/whl/cpu || \
-    pip install --no-cache-dir --timeout=900 --retries=3 \
-    torch --index-url https://download.pytorch.org/whl/cpu
-
-# Fix huggingface_hub version for sentence-transformers compatibility
-RUN pip install --no-cache-dir --timeout=300 --retries=5 \
-    huggingface_hub==0.19.4
-
-# Install ML/NLP packages
-RUN pip install --no-cache-dir --timeout=600 --retries=5 \
-    sentence-transformers==2.2.2 \
-    transformers==4.36.2 \
-    accelerate==0.25.0 \
-    bitsandbytes==0.41.3 \
-    underthesea==1.3.5
-
-# Install utilities
-RUN pip install --no-cache-dir --timeout=300 --retries=5 \
-    pandas matplotlib tabulate python-docx
+    -r requirements.txt
 
 # Copy application code
 COPY services/ai-chatbot/ /app/

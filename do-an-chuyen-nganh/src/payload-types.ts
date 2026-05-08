@@ -345,7 +345,7 @@ export interface AiChatLog {
    */
   redactedText?: string | null;
   /**
-   * Full raw text. Only visible to admins with advanced permissions.
+   * Full raw text. Only visible to admins.
    */
   rawText?: string | null;
   /**

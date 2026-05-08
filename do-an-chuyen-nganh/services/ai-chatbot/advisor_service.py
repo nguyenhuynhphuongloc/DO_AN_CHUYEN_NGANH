@@ -1,52 +1,15 @@
-import os
+"""
+Financial advisor service using Groq API (gpt-oss-120b).
+Replaces the local Qwen 2.5-3B-Instruct model with Groq's cloud API.
+"""
 
-import torch
-from dotenv import load_dotenv
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from __future__ import annotations
 
-load_dotenv()
+import json
+import re
+from typing import Any
 
-HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
-BASE_MODEL = "Qwen/Qwen2.5-3B-Instruct"
-
-_tokenizer = None
-_model = None
-
-
-def _get_model():
-    global _tokenizer, _model
-    if _model is None:
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True,
-        )
-
-        _tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, token=HF_TOKEN, trust_remote_code=True)
-        if _tokenizer.pad_token is None:
-            _tokenizer.pad_token = _tokenizer.eos_token
-
-        _model = AutoModelForCausalLM.from_pretrained(
-            BASE_MODEL,
-            quantization_config=bnb_config,
-            device_map="auto",
-            token=HF_TOKEN,
-            trust_remote_code=True,
-            torch_dtype=torch.float16,
-        )
-
-        lora_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", "fin_advisor_lora")
-        if os.path.exists(lora_path):
-            try:
-                from peft import PeftModel
-                print(f"🔄 Đang ghép nối bộ não huấn luyện (LoRA) từ: {lora_path}")
-                _model = PeftModel.from_pretrained(_model, lora_path)
-                print("✅ Ghép nối LoRA thành công!")
-            except Exception as e:
-                print(f"❌ Lỗi khi tải LoRA: {e}")
-
-    return _tokenizer, _model
+from groq_client import get_groq_client
 
 
 # Semantic mapping: normalized query keywords → category names
@@ -76,9 +39,9 @@ def _find_mentioned_category(query_lower: str, breakdown: list[dict]) -> dict | 
     return None
 
 
-def get_financial_advice(query: str, context: dict):
+def get_financial_advice(query: str, context: dict) -> dict[str, str]:
     try:
-        tokenizer, model = _get_model()
+        client = get_groq_client()
 
         total_income = context.get('totalIncome', 0)
         total_expense = context.get('totalExpense', 0)
@@ -150,25 +113,16 @@ def get_financial_advice(query: str, context: dict):
             {"role": "user", "content": user_content_prompt}
         ]
 
-        full_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        inputs = tokenizer(full_prompt, return_tensors='pt').to(model.device)
-
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=512,
-                do_sample=True,
-                temperature=0.4,
-                top_p=0.85,
-                pad_token_id=tokenizer.pad_token_id,
-                repetition_penalty=1.05
-            )
-
-        advice = tokenizer.decode(outputs[0][len(inputs["input_ids"][0]):], skip_special_tokens=True)
+        advice = client.chat(
+            messages,
+            max_tokens=512,
+            temperature=0.4,
+            top_p=0.85,
+        )
 
         cleaned_advice = advice.strip()
 
-        import re
+        # Strip any Chinese characters that may slip through
         cleaned_advice = re.sub(r'[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]', '', cleaned_advice)
         cleaned_advice = cleaned_advice.replace('Reasoning:', '').replace('Define:', '')
 
@@ -192,43 +146,41 @@ def get_financial_advice(query: str, context: dict):
                 f"Dữ liệu: Thu {context.get('totalIncome', 0):,.0f} | "
                 f"Chi {context.get('totalExpense', 0):,.0f} | "
                 f"Dư {context.get('balance', 0):,.0f} VND. "
-                "Chatbot đang nạp bộ não AI (Qwen 3B), vui lòng đợi một chút."
+                "Chatbot AI đang xử lý, vui lòng đợi một chút."
             )
         }
 
 
-def parse_transaction_with_ai(text: str):
+def parse_transaction_with_ai(text: str) -> dict | None:
+    """
+    Parse natural language transaction into structured data using Groq API.
+    """
     try:
-        tokenizer, model = _get_model()
+        client = get_groq_client()
 
-        prompt = (
-            "<|im_start|>system\n"
+        system_prompt = (
             "Bạn là chuyên gia bóc tách dữ liệu tài chính. Hãy trích xuất thông tin từ câu nói của người dùng thành định dạng JSON.\n"
             "Yêu cầu quan trọng:\n"
             "1. Chỉ trả về duy nhất 1 đối tượng JSON.\n"
             "2. Các trường: amount (number), category (string), type ('income' hoặc 'expense'), date ('YYYY-MM-DD').\n"
             "3. Nếu không tìm thấy số tiền rõ ràng trong câu, hãy đặt amount là 0. TUYỆT ĐỐI không lấy năm (vd: 2026) hoặc ngày (vd: 18) làm số tiền.\n"
             "4. Nếu không biết ngày, hãy để trống hoặc dùng ngày hiện tại nếu có từ khóa 'hôm nay'.\n"
-            "5. Danh mục (category) phải là tiếng Việt có dấu, súc tích.\n"
-            "<|im_end|>\n"
-            f"<|im_start|>user\nCâu: '{text}'\nJSON:<|im_end|>\n"
-            "<|im_start|>assistant\n"
+            "5. Danh mục (category) phải là tiếng Việt có dấu, súc tích."
         )
 
-        inputs = tokenizer(prompt, return_tensors='pt').to(model.device)
+        user_prompt = f"Câu: '{text}'"
 
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=128,
-                temperature=0.1,
-                do_sample=False,
-                pad_token_id=tokenizer.pad_token_id
-            )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
 
-        result_text = tokenizer.decode(outputs[0][len(inputs["input_ids"][0]):], skip_special_tokens=True)
+        result_text = client.chat(
+            messages,
+            max_tokens=128,
+            temperature=0.1,
+        )
 
-        import json
         json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
         if json_match:
             return json.loads(json_match.group(0))

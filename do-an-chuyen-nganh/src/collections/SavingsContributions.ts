@@ -4,6 +4,7 @@ import { ownerOnly } from '../access/roles'
 
 export const SavingsContributions: CollectionConfig = {
   slug: 'savings-contributions',
+  tableName: 'savings_contributions',
   admin: {
     useAsTitle: 'description',
     defaultColumns: ['goal', 'sourceWallet', 'amount', 'date'],

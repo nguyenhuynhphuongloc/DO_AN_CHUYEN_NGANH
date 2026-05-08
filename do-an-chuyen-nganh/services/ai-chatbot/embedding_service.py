@@ -1,8 +1,15 @@
 import json
 import os
-import numpy as np
-import torch
-from sentence_transformers import SentenceTransformer, util
+
+try:
+    import numpy as np
+    import torch
+    from sentence_transformers import SentenceTransformer, util
+    _EMBEDDINGS_AVAILABLE = True
+except ImportError:
+    _EMBEDDINGS_AVAILABLE = False
+    SentenceTransformer = None
+    util = None
 
 
 class EmbeddingService:
@@ -21,6 +28,8 @@ class EmbeddingService:
         self.load_categories_only()
 
     def _get_model(self):
+        if not _EMBEDDINGS_AVAILABLE:
+            return None
         if self.model is None:
             print(f"Loading Embedding Model: {self.model_name}...")
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -52,6 +61,8 @@ class EmbeddingService:
         pass
 
     def classify(self, text, threshold=0.35):
+        if not _EMBEDDINGS_AVAILABLE:
+            return None, 0.0
         try:
             model = self._get_model()
 

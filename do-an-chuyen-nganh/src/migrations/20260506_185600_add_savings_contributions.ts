@@ -9,6 +9,7 @@ export async function up({ db }: MigrateUpArgs): Promise<void> {
       "source_wallet_id" integer NOT NULL,
       "amount" numeric NOT NULL,
       "date" timestamp(3) with time zone NOT NULL,
+      "movement_type" varchar DEFAULT 'contribution' NOT NULL,
       "description" varchar,
       "updated_at" timestamp(3) with time zone DEFAULT now() NOT NULL,
       "created_at" timestamp(3) with time zone DEFAULT now() NOT NULL
