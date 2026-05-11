@@ -43,11 +43,15 @@ def get_financial_advice(query: str, context: dict) -> dict[str, str]:
     try:
         client = get_groq_client()
 
-        total_income = context.get('totalIncome', 0)
-        total_expense = context.get('totalExpense', 0)
-        balance = context.get('balance', 0)
+        totals = context.get('totals', {})
+        total_income = totals.get('totalIncome', 0)
+        total_expense = totals.get('totalExpense', 0)
+        
+        wallet_summary = context.get('walletSummary', {})
+        balance = wallet_summary.get('totalBalance', 0)
+        
         breakdown = context.get('categoryBreakdown', [])
-        monthly_stats = context.get('monthlyStats', {})
+        monthly_stats = context.get('monthlyStats', [])
         period = context.get('period', 'tháng này')
         query_lower = query.lower() if query else ""
 
@@ -74,8 +78,9 @@ def get_financial_advice(query: str, context: dict) -> dict[str, str]:
                 trend_txt = ""
                 if monthly_stats:
                     trend_txt = "\nXu hướng chi tiêu các tháng gần đây:\n"
-                    for month, stats in sorted(monthly_stats.items()):
-                        trend_txt += f"- Tháng {month}: Thu {stats['income']:,.0f} | Chi {stats['expense']:,.0f}\n"
+                    # monthly_stats is a list of dicts: {"month": "T4/2026", "income": 0, "expense": 0, "balance": 0}
+                    for stats in monthly_stats:
+                        trend_txt += f"- Tháng {stats.get('month', '')}: Thu {stats.get('income', 0):,.0f} | Chi {stats.get('expense', 0):,.0f}\n"
                 stats_txt = (
                     f"Dữ liệu tài chính ({period}):\n"
                     f"- Tổng Thu nhập: {total_income:,.0f} VND\n"
@@ -141,11 +146,16 @@ def get_financial_advice(query: str, context: dict) -> dict[str, str]:
         return {"advice": cleaned_advice.strip()}
 
     except Exception:
+        totals = context.get('totals', {})
+        total_income = totals.get('totalIncome', 0)
+        total_expense = totals.get('totalExpense', 0)
+        wallet_summary = context.get('walletSummary', {})
+        balance = wallet_summary.get('totalBalance', 0)
         return {
             "advice": (
-                f"Dữ liệu: Thu {context.get('totalIncome', 0):,.0f} | "
-                f"Chi {context.get('totalExpense', 0):,.0f} | "
-                f"Dư {context.get('balance', 0):,.0f} VND. "
+                f"Dữ liệu: Thu {total_income:,.0f} | "
+                f"Chi {total_expense:,.0f} | "
+                f"Dư {balance:,.0f} VND. "
                 "Chatbot AI đang xử lý, vui lòng đợi một chút."
             )
         }
