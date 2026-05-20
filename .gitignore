@@ -4,3 +4,8 @@ AI/models/
 
 # Archive
 do-an-chuyen-nganh/_archive/
+
+# Environment files
+**/.env
+**/.env.*
+!**/.env.example
