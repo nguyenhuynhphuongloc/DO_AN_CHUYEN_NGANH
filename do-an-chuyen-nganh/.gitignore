@@ -57,3 +57,10 @@ image/
 img/
 test_bill/
 tmp/
+
+# env files (non-system, sensitive)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
